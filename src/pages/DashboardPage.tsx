@@ -310,7 +310,7 @@ function IncentiveCard({
   className?: string
 }) {
   const pct = Math.min(100, Math.round(incentive.progress * 100))
-  const ruleText = `RM ${MONTHLY_INCENTIVE.rewardPerTier} per ${MONTHLY_INCENTIVE.carsPerTier} delivered`
+  const ruleText = `Deliver ${MONTHLY_INCENTIVE.targetCars}+ cars in a month → RM ${MONTHLY_INCENTIVE.reward}`
 
   return (
     <section
@@ -325,13 +325,9 @@ function IncentiveCard({
             {formatMYR(incentive.earned)}
           </div>
           <div className="mt-1 text-sm text-gray-600">
-            earned this month
-            {incentive.tiersAchieved > 0 && (
-              <>
-                {' '}· {incentive.tiersAchieved}× tier{' '}
-                {incentive.tiersAchieved === 1 ? '' : 's'}
-              </>
-            )}
+            {incentive.achieved
+              ? '🎉 Target hit this month'
+              : 'not yet — keep going'}
           </div>
         </div>
         <div className="text-right">
@@ -346,7 +342,7 @@ function IncentiveCard({
             {incentive.delivered} delivered this month
           </span>
           <span className="tabular-nums text-gray-500">
-            {incentive.delivered} / {incentive.nextTierAt}
+            {incentive.delivered} / {incentive.targetCars}
           </span>
         </div>
         <div className="h-3 overflow-hidden rounded-full bg-amber-100">
@@ -356,16 +352,19 @@ function IncentiveCard({
           />
         </div>
         <div className="mt-2 text-xs text-gray-600">
-          {incentive.carsToNext === 0 ? (
-            <>🎉 Just unlocked!</>
+          {incentive.achieved ? (
+            <>
+              ✅ <strong>{formatMYR(incentive.reward)}</strong> earned. Extra
+              deliveries this month don't add more.
+            </>
           ) : (
             <>
               Deliver{' '}
               <strong>
-                {incentive.carsToNext} more car
-                {incentive.carsToNext === 1 ? '' : 's'}
+                {incentive.carsToTarget} more car
+                {incentive.carsToTarget === 1 ? '' : 's'}
               </strong>{' '}
-              to unlock <strong>{formatMYR(incentive.nextTierReward)}</strong>.
+              to unlock <strong>{formatMYR(incentive.reward)}</strong>.
             </>
           )}
         </div>

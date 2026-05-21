@@ -1,14 +1,12 @@
 // Sales incentive rules — edit here when the company changes policy.
-// Rule: every N delivered cars earns the salesperson RM X in the same month.
-// e.g. with carsPerTier=3 and rewardPerTier=800:
-//   3 delivered → RM 800
-//   6 delivered → RM 1,600
-//   9 delivered → RM 2,400
-//   …
+//
+// Rule (threshold-based, NOT cumulative):
+//   Deliver `targetCars` or more in a single calendar month → earn `reward`.
+//   The reward does not stack: 3 delivered = RM 800; 6 delivered = still RM 800.
 
 export const MONTHLY_INCENTIVE = {
-  carsPerTier: 3,
-  rewardPerTier: 800,
+  targetCars: 3,
+  reward: 800,
   currency: 'MYR' as const,
 } as const
 
@@ -16,22 +14,19 @@ export const MONTHLY_INCENTIVE = {
  * Compute incentive numbers for a given count of cars delivered in the month.
  */
 export function computeIncentive(delivered: number) {
-  const { carsPerTier, rewardPerTier } = MONTHLY_INCENTIVE
-  const tiersAchieved = Math.floor(delivered / carsPerTier)
-  const earned = tiersAchieved * rewardPerTier
-
-  const nextTierAt = (tiersAchieved + 1) * carsPerTier
-  const nextTierReward = (tiersAchieved + 1) * rewardPerTier
-  const carsToNext = nextTierAt - delivered
-  const progress = nextTierAt > 0 ? delivered / nextTierAt : 0
+  const { targetCars, reward } = MONTHLY_INCENTIVE
+  const achieved = delivered >= targetCars
+  const earned = achieved ? reward : 0
+  const carsToTarget = Math.max(0, targetCars - delivered)
+  const progress = Math.min(1, delivered / targetCars)
 
   return {
     delivered,
     earned,
-    tiersAchieved,
-    nextTierAt,
-    nextTierReward,
-    carsToNext,
+    targetCars,
+    reward,
+    carsToTarget,
     progress,
+    achieved,
   }
 }
