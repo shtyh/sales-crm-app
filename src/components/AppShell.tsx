@@ -29,9 +29,13 @@ export function AppShell({ children }: { children: ReactNode }) {
             </span>
           </Link>
           <div className="flex items-center gap-3 text-sm">
-            <span className="hidden text-gray-600 sm:inline">
+            <Link
+              to="/account"
+              className="hidden text-gray-600 hover:text-gray-900 sm:inline"
+              title="Account settings"
+            >
               {displayName}
-            </span>
+            </Link>
             <button
               onClick={handleSignOut}
               className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 transition hover:bg-gray-50"

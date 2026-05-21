@@ -4,6 +4,7 @@ import { DashboardPage } from './pages/DashboardPage'
 import { BookingsPage } from './pages/BookingsPage'
 import { NewBookingPage } from './pages/NewBookingPage'
 import { BookingDetailPage } from './pages/BookingDetailPage'
+import { AccountPage } from './pages/AccountPage'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import './App.css'
 
@@ -43,6 +44,14 @@ function App() {
         element={
           <ProtectedRoute>
             <BookingDetailPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/account"
+        element={
+          <ProtectedRoute>
+            <AccountPage />
           </ProtectedRoute>
         }
       />
