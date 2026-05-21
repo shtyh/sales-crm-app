@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
 import { listBookings } from '../lib/bookings'
 import { formatError } from '../lib/errors'
@@ -29,6 +29,7 @@ function formatDate(iso: string) {
 }
 
 export function BookingsPage() {
+  const navigate = useNavigate()
   const [bookings, setBookings] = useState<Booking[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -111,7 +112,11 @@ export function BookingsPage() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {bookings.map((b) => (
-                  <tr key={b.id} className="hover:bg-gray-50">
+                  <tr
+                    key={b.id}
+                    onClick={() => navigate(`/bookings/${b.id}`)}
+                    className="cursor-pointer hover:bg-gray-50"
+                  >
                     <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-gray-600">
                       {b.code}
                     </td>
@@ -154,39 +159,41 @@ export function BookingsPage() {
           {/* Mobile cards */}
           <ul className="space-y-3 sm:hidden">
             {bookings.map((b) => (
-              <li
-                key={b.id}
-                className="rounded-2xl border border-gray-200 bg-white p-4"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <div className="font-medium text-gray-900">
-                      {b.customer_name}
+              <li key={b.id}>
+                <Link
+                  to={`/bookings/${b.id}`}
+                  className="block rounded-2xl border border-gray-200 bg-white p-4 transition active:bg-gray-50"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="font-medium text-gray-900">
+                        {b.customer_name}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {b.customer_phone}
+                      </div>
                     </div>
-                    <div className="text-xs text-gray-500">
-                      {b.customer_phone}
+                    <span
+                      className={`inline-flex shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[b.status]}`}
+                    >
+                      {b.status}
+                    </span>
+                  </div>
+                  <div className="mt-3 flex items-end justify-between">
+                    <div>
+                      <div className="text-sm text-gray-900">
+                        {b.vehicle_model}
+                        {b.vehicle_variant ? ` · ${b.vehicle_variant}` : ''}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {b.code} · {formatDate(b.booking_date)}
+                      </div>
+                    </div>
+                    <div className="text-right tabular-nums font-medium text-gray-900">
+                      {formatMYR(b.otr_price)}
                     </div>
                   </div>
-                  <span
-                    className={`inline-flex shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[b.status]}`}
-                  >
-                    {b.status}
-                  </span>
-                </div>
-                <div className="mt-3 flex items-end justify-between">
-                  <div>
-                    <div className="text-sm text-gray-900">
-                      {b.vehicle_model}
-                      {b.vehicle_variant ? ` · ${b.vehicle_variant}` : ''}
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      {b.code} · {formatDate(b.booking_date)}
-                    </div>
-                  </div>
-                  <div className="text-right tabular-nums font-medium text-gray-900">
-                    {formatMYR(b.otr_price)}
-                  </div>
-                </div>
+                </Link>
               </li>
             ))}
           </ul>

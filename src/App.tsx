@@ -3,6 +3,7 @@ import { LoginPage } from './pages/LoginPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { BookingsPage } from './pages/BookingsPage'
 import { NewBookingPage } from './pages/NewBookingPage'
+import { BookingDetailPage } from './pages/BookingDetailPage'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import './App.css'
 
@@ -34,6 +35,14 @@ function App() {
         element={
           <ProtectedRoute>
             <NewBookingPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/bookings/:id"
+        element={
+          <ProtectedRoute>
+            <BookingDetailPage />
           </ProtectedRoute>
         }
       />
