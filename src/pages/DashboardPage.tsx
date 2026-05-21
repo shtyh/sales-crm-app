@@ -55,11 +55,6 @@ export function DashboardPage() {
   const stats = useMemo(() => {
     if (!bookings) return null
 
-    const active = bookings.filter((b) => b.status !== 'cancelled')
-    const pipelineValue = active
-      .filter((b) => b.status !== 'delivered')
-      .reduce((sum, b) => sum + Number(b.otr_price), 0)
-
     const thisMonthCount = bookings.filter((b) =>
       isThisMonth(b.booking_date),
     ).length
@@ -75,8 +70,6 @@ export function DashboardPage() {
 
     const incentive = computeIncentive(deliveredThisMonth)
 
-    const pendingCount = bookings.filter((b) => b.status === 'pending').length
-
     // Status breakdown (over ALL bookings, not just active)
     const total = bookings.length
     const byStatus = STATUS_ORDER.map((s) => {
@@ -84,27 +77,12 @@ export function DashboardPage() {
       return { status: s, count, pct: total > 0 ? count / total : 0 }
     })
 
-    // Model breakdown — top 5 by count (active bookings only)
-    const modelCounts = new Map<string, number>()
-    active.forEach((b) => {
-      modelCounts.set(b.vehicle_model, (modelCounts.get(b.vehicle_model) ?? 0) + 1)
-    })
-    const sortedModels = [...modelCounts.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-    const maxModelCount = sortedModels[0]?.[1] ?? 0
-
     const recent = bookings.slice(0, 5)
 
     return {
       thisMonthCount,
-      pipelineValue,
-      pendingCount,
-      deliveredThisMonth,
       incentive,
       byStatus,
-      models: sortedModels,
-      maxModelCount,
       recent,
       total,
     }
@@ -162,37 +140,20 @@ export function DashboardPage() {
 
       {stats && stats.total > 0 && (
         <>
-          {/* ---------- Top stat cards ---------- */}
-          <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {/* ---------- This-month stat ---------- */}
+          <div className="mb-6 max-w-xs">
             <StatCard
               label="This month"
               value={stats.thisMonthCount.toString()}
               hint="bookings"
-            />
-            <StatCard
-              label="Pipeline value"
-              value={formatMYR(stats.pipelineValue, { compact: true })}
-              hint="active, not yet delivered"
-            />
-            <StatCard
-              label="Pending"
-              value={stats.pendingCount.toString()}
-              hint="awaiting confirmation"
-              tone={stats.pendingCount > 0 ? 'warn' : 'neutral'}
-            />
-            <StatCard
-              label="Delivered"
-              value={stats.deliveredThisMonth.toString()}
-              hint="this month"
-              tone="success"
             />
           </div>
 
           {/* ---------- Monthly incentive hero ---------- */}
           <IncentiveCard incentive={stats.incentive} className="mb-6" />
 
-          {/* ---------- Breakdown row ---------- */}
-          <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {/* ---------- Status breakdown ---------- */}
+          <div className="mb-6">
             <BreakdownCard title="By status">
               <ul className="space-y-2.5">
                 {stats.byStatus.map((s) => (
@@ -217,37 +178,6 @@ export function DashboardPage() {
                   </li>
                 ))}
               </ul>
-            </BreakdownCard>
-
-            <BreakdownCard title="By model (active)">
-              {stats.models.length === 0 ? (
-                <p className="text-sm text-gray-500">
-                  No active bookings yet.
-                </p>
-              ) : (
-                <ul className="space-y-2.5">
-                  {stats.models.map(([model, count]) => (
-                    <li key={model}>
-                      <div className="mb-1 flex items-center justify-between text-xs">
-                        <span className="text-gray-700">{model}</span>
-                        <span className="text-gray-500">{count}</span>
-                      </div>
-                      <div className="h-2 overflow-hidden rounded-full bg-gray-100">
-                        <div
-                          className="h-full bg-gray-700 transition-all"
-                          style={{
-                            width: `${
-                              stats.maxModelCount > 0
-                                ? (count / stats.maxModelCount) * 100
-                                : 0
-                            }%`,
-                          }}
-                        />
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
             </BreakdownCard>
           </div>
 
