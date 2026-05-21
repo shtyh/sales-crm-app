@@ -70,6 +70,15 @@ create trigger trg_bookings_updated_at
   for each row execute function public.set_updated_at();
 
 -- ============================================================================
+-- Grants — table is read/written by signed-in users (RLS narrows by row).
+-- Without these, you get "permission denied for table bookings" even if
+-- RLS would otherwise allow the row.
+-- ============================================================================
+grant usage on schema public to authenticated;
+grant usage on type public.booking_status to authenticated;
+grant select, insert, update, delete on public.bookings to authenticated;
+
+-- ============================================================================
 -- RLS — each salesperson sees / writes only their own bookings.
 -- ============================================================================
 alter table public.bookings enable row level security;
