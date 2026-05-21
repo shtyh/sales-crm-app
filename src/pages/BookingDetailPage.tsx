@@ -407,24 +407,28 @@ export function BookingDetailPage() {
       <div className="mt-6 space-y-4">
         <AttachmentSection
           bookingId={booking.id}
+          bookingCode={booking.code}
           kind="bank_transaction"
           title="🏦 Bank transaction"
           description="Deposit / payment slips, online transfer screenshots, etc."
         />
         <AttachmentSection
           bookingId={booking.id}
+          bookingCode={booking.code}
           kind="bank_statement"
           title="💳 Bank statement"
           description="3~6 month bank statements submitted for loan approval."
         />
         <AttachmentSection
           bookingId={booking.id}
+          bookingCode={booking.code}
           kind="lou"
           title="📃 Letter of Undertaking (LOU)"
           description="Employer LOU, loan undertaking, guarantor letter, etc."
         />
         <AttachmentSection
           bookingId={booking.id}
+          bookingCode={booking.code}
           kind="cancellation_form"
           title="❌ Cancellation form"
           description="Signed cancellation form if the customer backs out."

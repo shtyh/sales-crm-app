@@ -19,16 +19,20 @@ export async function listAttachments(bookingId: string) {
  * Upload a file to Supabase Storage AND create a matching row in
  * `booking_attachments`. If the DB insert fails we remove the storage object
  * so we don't leak orphan files.
+ *
+ * The storage path is prefixed with the booking *code* (e.g. `BK-260521-abc123`)
+ * so files are easy to identify when browsing the bucket in the Supabase UI.
  */
 export async function uploadAttachment(
   bookingId: string,
+  bookingCode: string,
   kind: AttachmentKind,
   file: File,
 ): Promise<Attachment> {
   // Strip anything other than letters/digits/dash/dot so the storage path
   // never breaks on weird filenames.
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
-  const path = `${bookingId}/${kind}/${Date.now()}-${safeName}`
+  const path = `${bookingCode}/${kind}/${Date.now()}-${safeName}`
 
   const { error: uploadErr } = await supabase.storage
     .from(BUCKET)

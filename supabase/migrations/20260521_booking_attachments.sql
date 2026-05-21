@@ -87,16 +87,20 @@ on conflict (id) do update
       allowed_mime_types = excluded.allowed_mime_types,
       public = excluded.public;
 
--- Storage policies: object name has shape `<booking_id>/<kind>/<filename>`.
--- We check that the first path segment matches a booking owned by the user.
+-- Storage policies: object name has shape `<booking_code-or-id>/<kind>/<filename>`.
+-- New uploads use the booking *code* (e.g. `BK-260521-abc123`) for human
+-- readability in the Storage UI. Older uploads (created when paths used the
+-- booking UUID) still work because we match either form.
 
 drop policy if exists bf_select_own on storage.objects;
 create policy bf_select_own on storage.objects
   for select to authenticated
   using (
     bucket_id = 'booking-files'
-    and split_part(name, '/', 1) in (
-      select id::text from public.bookings where owner_id = (select auth.uid())
+    and exists (
+      select 1 from public.bookings b
+      where b.owner_id = (select auth.uid())
+        and split_part(storage.objects.name, '/', 1) in (b.code, b.id::text)
     )
   );
 
@@ -105,8 +109,10 @@ create policy bf_insert_own on storage.objects
   for insert to authenticated
   with check (
     bucket_id = 'booking-files'
-    and split_part(name, '/', 1) in (
-      select id::text from public.bookings where owner_id = (select auth.uid())
+    and exists (
+      select 1 from public.bookings b
+      where b.owner_id = (select auth.uid())
+        and split_part(storage.objects.name, '/', 1) in (b.code, b.id::text)
     )
   );
 
@@ -115,7 +121,9 @@ create policy bf_delete_own on storage.objects
   for delete to authenticated
   using (
     bucket_id = 'booking-files'
-    and split_part(name, '/', 1) in (
-      select id::text from public.bookings where owner_id = (select auth.uid())
+    and exists (
+      select 1 from public.bookings b
+      where b.owner_id = (select auth.uid())
+        and split_part(storage.objects.name, '/', 1) in (b.code, b.id::text)
     )
   );

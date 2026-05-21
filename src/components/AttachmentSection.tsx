@@ -25,6 +25,8 @@ function isImage(mime: string | null) {
 
 type Props = {
   bookingId: string
+  /** Booking code, used as the human-readable folder name in Storage. */
+  bookingCode: string
   kind: AttachmentKind
   title: string
   description?: string
@@ -32,6 +34,7 @@ type Props = {
 
 export function AttachmentSection({
   bookingId,
+  bookingCode,
   kind,
   title,
   description,
@@ -65,7 +68,7 @@ export function AttachmentSection({
     }
     setUploading(true)
     try {
-      await uploadAttachment(bookingId, kind, file)
+      await uploadAttachment(bookingId, bookingCode, kind, file)
       await refresh()
     } catch (e) {
       setError(formatError(e))
