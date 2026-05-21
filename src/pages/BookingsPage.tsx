@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
 import { listBookings } from '../lib/bookings'
+import { formatError } from '../lib/errors'
 import type { Booking, BookingStatus } from '../lib/types'
 
 const STATUS_STYLES: Record<BookingStatus, string> = {
@@ -38,7 +39,7 @@ export function BookingsPage() {
         if (alive) setBookings(rows)
       })
       .catch((e: unknown) => {
-        if (alive) setError(e instanceof Error ? e.message : String(e))
+        if (alive) setError(formatError(e))
       })
     return () => {
       alive = false

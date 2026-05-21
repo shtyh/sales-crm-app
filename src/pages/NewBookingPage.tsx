@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
 import { createBooking } from '../lib/bookings'
+import { formatError } from '../lib/errors'
 import { PROTON_MODELS, variantsFor } from '../data/proton-models'
 import type { BookingStatus } from '../lib/types'
 
@@ -68,7 +69,7 @@ export function NewBookingPage() {
         state: { justCreated: created.code },
       })
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      setError(formatError(e))
     } finally {
       setSubmitting(false)
     }
