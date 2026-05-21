@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
+import { AttachmentSection } from '../components/AttachmentSection'
 import { getBooking, updateBooking, deleteBooking } from '../lib/bookings'
 import { formatError } from '../lib/errors'
 import { PROTON_MODELS, variantsFor } from '../data/proton-models'
@@ -401,6 +402,22 @@ export function BookingDetailPage() {
           </button>
         </div>
       </form>
+
+      {/* Attachments live outside the booking form — they're independent. */}
+      <div className="mt-6 space-y-4">
+        <AttachmentSection
+          bookingId={booking.id}
+          kind="bank_transaction"
+          title="🏦 Bank transaction"
+          description="Deposit / payment slips, online transfer screenshots, etc."
+        />
+        <AttachmentSection
+          bookingId={booking.id}
+          kind="lou"
+          title="📃 Letter of Undertaking (LOU)"
+          description="Employer LOU, loan undertaking, guarantor letter, etc."
+        />
+      </div>
     </AppShell>
   )
 }
