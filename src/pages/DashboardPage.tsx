@@ -4,8 +4,7 @@ import { AppShell } from '../components/AppShell'
 import { useAuth } from '../lib/auth'
 import { listBookings } from '../lib/bookings'
 import { formatError } from '../lib/errors'
-import { formatMYR, isThisMonth } from '../lib/format'
-import { MONTHLY_INCENTIVE, computeIncentive } from '../data/incentives'
+import { formatMYR } from '../lib/format'
 import type { Booking, BookingStatus } from '../lib/types'
 
 const STATUS_ORDER: BookingStatus[] = [
@@ -55,17 +54,6 @@ export function DashboardPage() {
   const stats = useMemo(() => {
     if (!bookings) return null
 
-    // Use the dedicated delivered_at timestamp (set automatically when status
-    // flips to 'delivered'). Falls back to booking_date for any legacy rows
-    // that don't yet have delivered_at populated.
-    const deliveredThisMonth = bookings.filter(
-      (b) =>
-        b.status === 'delivered' &&
-        isThisMonth(b.delivered_at ?? b.booking_date),
-    ).length
-
-    const incentive = computeIncentive(deliveredThisMonth)
-
     // Status breakdown (over ALL bookings, not just active)
     const total = bookings.length
     const byStatus = STATUS_ORDER.map((s) => {
@@ -76,7 +64,6 @@ export function DashboardPage() {
     const recent = bookings.slice(0, 5)
 
     return {
-      incentive,
       byStatus,
       recent,
       total,
@@ -135,9 +122,6 @@ export function DashboardPage() {
 
       {stats && stats.total > 0 && (
         <>
-          {/* ---------- Monthly incentive hero ---------- */}
-          <IncentiveCard incentive={stats.incentive} className="mb-6" />
-
           {/* ---------- Status breakdown ---------- */}
           <div className="mb-6">
             <BreakdownCard title="By status">
@@ -213,95 +197,6 @@ export function DashboardPage() {
         </>
       )}
     </AppShell>
-  )
-}
-
-// ----- monthly incentive hero ----------------------------------------------
-
-function IncentiveCard({
-  incentive,
-  className = '',
-}: {
-  incentive: ReturnType<typeof computeIncentive>
-  className?: string
-}) {
-  const pct = Math.min(100, Math.round(incentive.progress * 100))
-  const ruleText = `Deliver ${MONTHLY_INCENTIVE.targetCars}+ cars in a month → RM ${MONTHLY_INCENTIVE.reward}`
-
-  // Which month we're counting + how many days are left in it. Counter resets
-  // automatically at midnight on the 1st because the dashboard always queries
-  // by *current* calendar month.
-  const now = new Date()
-  const monthLabel = now.toLocaleDateString('en-MY', {
-    month: 'long',
-    year: 'numeric',
-  })
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-  const daysLeft =
-    Math.floor((lastDayOfMonth.getTime() - startOfToday.getTime()) / 86_400_000) + 1
-
-  return (
-    <section
-      className={`overflow-hidden rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white p-5 sm:p-6 ${className}`}
-    >
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-amber-700">
-            <span>💰 Monthly incentive</span>
-            <span className="rounded-full bg-white/70 px-2 py-0.5 text-[10px] text-amber-800">
-              {monthLabel} · {daysLeft} day{daysLeft === 1 ? '' : 's'} left
-            </span>
-          </div>
-          <div className="mt-2 text-3xl font-bold tabular-nums text-gray-900 sm:text-4xl">
-            {formatMYR(incentive.earned)}
-          </div>
-          <div className="mt-1 text-sm text-gray-600">
-            {incentive.achieved
-              ? '🎉 Target hit this month'
-              : 'not yet — keep going'}
-          </div>
-        </div>
-        <div className="text-right">
-          <div className="text-xs text-gray-500">Rule</div>
-          <div className="mt-1 text-sm text-gray-700">{ruleText}</div>
-        </div>
-      </div>
-
-      <div className="mt-5">
-        <div className="mb-1.5 flex items-center justify-between text-xs">
-          <span className="text-gray-700">
-            {incentive.delivered} delivered this month
-          </span>
-          <span className="tabular-nums text-gray-500">
-            {incentive.delivered} / {incentive.targetCars}
-          </span>
-        </div>
-        <div className="h-3 overflow-hidden rounded-full bg-amber-100">
-          <div
-            className="h-full bg-amber-500 transition-all"
-            style={{ width: `${pct}%` }}
-          />
-        </div>
-        <div className="mt-2 text-xs text-gray-600">
-          {incentive.achieved ? (
-            <>
-              ✅ <strong>{formatMYR(incentive.reward)}</strong> earned. Extra
-              deliveries this month don't add more.
-            </>
-          ) : (
-            <>
-              Deliver{' '}
-              <strong>
-                {incentive.carsToTarget} more car
-                {incentive.carsToTarget === 1 ? '' : 's'}
-              </strong>{' '}
-              to unlock <strong>{formatMYR(incentive.reward)}</strong>.
-            </>
-          )}
-        </div>
-      </div>
-    </section>
   )
 }
 
