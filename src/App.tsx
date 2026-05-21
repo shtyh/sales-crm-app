@@ -1,6 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { LoginPage } from './pages/LoginPage'
-import { SignUpPage } from './pages/SignUpPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import './App.css'
@@ -9,7 +8,8 @@ function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/signup" element={<SignUpPage />} />
+      {/* Public sign-up is disabled — accounts are created by invitation. */}
+      <Route path="/signup" element={<Navigate to="/login" replace />} />
       <Route
         path="/"
         element={

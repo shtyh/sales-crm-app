@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 
 export function LoginPage() {
@@ -110,14 +110,10 @@ export function LoginPage() {
           </button>
         </form>
 
-        <p className="mt-6 text-center text-sm text-gray-600">
-          New here?{' '}
-          <Link
-            to="/signup"
-            className="font-medium text-gray-900 underline-offset-2 hover:underline"
-          >
-            Sign up
-          </Link>
+        <p className="mt-6 text-center text-xs text-gray-500">
+          Accounts are created by invitation only.
+          <br />
+          Contact your administrator to get access.
         </p>
       </div>
     </div>
