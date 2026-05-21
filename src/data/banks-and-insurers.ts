@@ -19,19 +19,8 @@ export const LOAN_BANKS = [
 
 export const INSURERS = [
   'Allianz',
-  'Tokio Marine',
-  'AmGeneral',
-  'AIA General',
-  'Etiqa',
-  'MSIG',
-  'RHB Insurance',
-  'Berjaya Sompo',
-  'Liberty Insurance',
-  'Lonpac Insurance',
-  'Zurich Malaysia',
-  'AXA Affin General',
-  'Pacific & Orient',
-  'Tune Protect',
+  'Liberty',
+  'Zurich Takaful',
 ] as const
 
 export type LoanBank = (typeof LOAN_BANKS)[number]
