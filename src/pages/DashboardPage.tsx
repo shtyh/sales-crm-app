@@ -312,14 +312,30 @@ function IncentiveCard({
   const pct = Math.min(100, Math.round(incentive.progress * 100))
   const ruleText = `Deliver ${MONTHLY_INCENTIVE.targetCars}+ cars in a month → RM ${MONTHLY_INCENTIVE.reward}`
 
+  // Which month we're counting + how many days are left in it. Counter resets
+  // automatically at midnight on the 1st because the dashboard always queries
+  // by *current* calendar month.
+  const now = new Date()
+  const monthLabel = now.toLocaleDateString('en-MY', {
+    month: 'long',
+    year: 'numeric',
+  })
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+  const daysLeft =
+    Math.floor((lastDayOfMonth.getTime() - startOfToday.getTime()) / 86_400_000) + 1
+
   return (
     <section
       className={`overflow-hidden rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white p-5 sm:p-6 ${className}`}
     >
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <div className="text-xs font-medium uppercase tracking-wider text-amber-700">
-            💰 Monthly incentive
+          <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-amber-700">
+            <span>💰 Monthly incentive</span>
+            <span className="rounded-full bg-white/70 px-2 py-0.5 text-[10px] text-amber-800">
+              {monthLabel} · {daysLeft} day{daysLeft === 1 ? '' : 's'} left
+            </span>
           </div>
           <div className="mt-2 text-3xl font-bold tabular-nums text-gray-900 sm:text-4xl">
             {formatMYR(incentive.earned)}
