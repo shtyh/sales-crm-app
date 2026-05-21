@@ -11,6 +11,33 @@ alter table public.bookings add column if not exists loan_bank         text;
 alter table public.bookings add column if not exists insurance_company text;
 
 -- ----------------------------------------------------------------------------
+-- Trigger: only an admin may change loan_bank or insurance_company.
+-- RLS lets SAs UPDATE their own bookings, but those two columns are off-limits.
+-- ----------------------------------------------------------------------------
+create or replace function public.guard_admin_only_booking_fields()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if (new.loan_bank is distinct from old.loan_bank
+      or new.insurance_company is distinct from old.insurance_company)
+     and not public.is_admin() then
+    raise exception
+      'Only admin can change loan_bank or insurance_company'
+      using errcode = '42501';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_bookings_guard_admin_fields on public.bookings;
+create trigger trg_bookings_guard_admin_fields
+  before update on public.bookings
+  for each row execute function public.guard_admin_only_booking_fields();
+
+-- ----------------------------------------------------------------------------
 -- Bookings — admin can SELECT and UPDATE every booking.
 -- The existing "_own" policies stay; PostgreSQL OR-combines policies, so SAs
 -- still see only their own.
