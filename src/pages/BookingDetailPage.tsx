@@ -417,7 +417,7 @@ export function BookingDetailPage() {
           bookingCode={booking.code}
           kind="bank_statement"
           title="💳 Bank statement"
-          description="3~6 month bank statements submitted for loan approval."
+          description="Customer bank statement — only needed for cancellation refunds."
         />
         <AttachmentSection
           bookingId={booking.id}
