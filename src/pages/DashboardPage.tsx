@@ -55,10 +55,6 @@ export function DashboardPage() {
   const stats = useMemo(() => {
     if (!bookings) return null
 
-    const thisMonthCount = bookings.filter((b) =>
-      isThisMonth(b.booking_date),
-    ).length
-
     // Use the dedicated delivered_at timestamp (set automatically when status
     // flips to 'delivered'). Falls back to booking_date for any legacy rows
     // that don't yet have delivered_at populated.
@@ -80,7 +76,6 @@ export function DashboardPage() {
     const recent = bookings.slice(0, 5)
 
     return {
-      thisMonthCount,
       incentive,
       byStatus,
       recent,
@@ -140,15 +135,6 @@ export function DashboardPage() {
 
       {stats && stats.total > 0 && (
         <>
-          {/* ---------- This-month stat ---------- */}
-          <div className="mb-6 max-w-xs">
-            <StatCard
-              label="This month"
-              value={stats.thisMonthCount.toString()}
-              hint="bookings"
-            />
-          </div>
-
           {/* ---------- Monthly incentive hero ---------- */}
           <IncentiveCard incentive={stats.incentive} className="mb-6" />
 
@@ -320,37 +306,6 @@ function IncentiveCard({
 }
 
 // ----- small layout helpers -------------------------------------------------
-
-type Tone = 'neutral' | 'warn' | 'success'
-const TONE_STYLES: Record<Tone, string> = {
-  neutral: 'text-gray-900',
-  warn: 'text-amber-700',
-  success: 'text-green-700',
-}
-
-function StatCard({
-  label,
-  value,
-  hint,
-  tone = 'neutral',
-}: {
-  label: string
-  value: string
-  hint?: string
-  tone?: Tone
-}) {
-  return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-4">
-      <div className="text-xs font-medium text-gray-500">{label}</div>
-      <div className={`mt-1 text-2xl font-semibold ${TONE_STYLES[tone]}`}>
-        {value}
-      </div>
-      {hint && (
-        <div className="mt-0.5 text-xs text-gray-400">{hint}</div>
-      )}
-    </div>
-  )
-}
 
 function BreakdownCard({
   title,
