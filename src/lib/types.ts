@@ -7,6 +7,12 @@ export type BookingStatus =
   | 'delivered'
   | 'cancelled'
 
+export type LoanStatus =
+  | 'not_applicable'
+  | 'pending'
+  | 'approved'
+  | 'rejected'
+
 export type Booking = {
   id: string
   code: string
@@ -30,6 +36,10 @@ export type Booking = {
   // Admin-managed fields (SA reads, Admin writes)
   loan_bank: string | null
   insurance_company: string | null
+
+  // Shared fields — SA + Admin both edit
+  loan_status: LoanStatus
+  loan_notes: string | null
 
   status: BookingStatus
   notes: string | null
@@ -85,4 +95,6 @@ export type BookingInsert = {
   notes?: string | null
   loan_bank?: string | null
   insurance_company?: string | null
+  loan_status?: LoanStatus
+  loan_notes?: string | null
 }

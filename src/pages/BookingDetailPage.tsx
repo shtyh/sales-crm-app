@@ -7,7 +7,7 @@ import { getBooking, updateBooking } from '../lib/bookings'
 import { formatError } from '../lib/errors'
 import { PROTON_MODELS, variantsFor } from '../data/proton-models'
 import { LOAN_BANKS, INSURERS } from '../data/banks-and-insurers'
-import type { Booking, BookingStatus } from '../lib/types'
+import type { Booking, BookingStatus, LoanStatus } from '../lib/types'
 
 const STATUSES: { value: BookingStatus; label: string }[] = [
   { value: 'pending', label: 'Pending' },
@@ -15,6 +15,27 @@ const STATUSES: { value: BookingStatus; label: string }[] = [
   { value: 'delivered', label: 'Delivered' },
   { value: 'cancelled', label: 'Cancelled' },
 ]
+
+const LOAN_STATUSES: { value: LoanStatus; label: string }[] = [
+  { value: 'not_applicable', label: 'Not applicable (cash deal)' },
+  { value: 'pending', label: 'Pending' },
+  { value: 'approved', label: 'Approved' },
+  { value: 'rejected', label: 'Rejected' },
+]
+
+const LOAN_BADGE: Record<LoanStatus, string> = {
+  not_applicable: 'bg-gray-100 text-gray-600',
+  pending: 'bg-amber-100 text-amber-800',
+  approved: 'bg-green-100 text-green-800',
+  rejected: 'bg-red-100 text-red-800',
+}
+
+const LOAN_LABEL: Record<LoanStatus, string> = {
+  not_applicable: 'Cash / N/A',
+  pending: '⏳ Loan pending',
+  approved: '✓ Loan approved',
+  rejected: '✗ Loan rejected',
+}
 
 const STATUS_BADGE: Record<BookingStatus, string> = {
   pending: 'bg-amber-100 text-amber-800',
@@ -56,6 +77,8 @@ export function BookingDetailPage() {
   const [notes, setNotes] = useState('')
   const [loanBank, setLoanBank] = useState('')
   const [insuranceCompany, setInsuranceCompany] = useState('')
+  const [loanStatus, setLoanStatus] = useState<LoanStatus>('not_applicable')
+  const [loanNotes, setLoanNotes] = useState('')
 
   const [saving, setSaving] = useState(false)
   const [cancelling, setCancelling] = useState(false)
@@ -87,6 +110,8 @@ export function BookingDetailPage() {
         setNotes(b.notes ?? '')
         setLoanBank(b.loan_bank ?? '')
         setInsuranceCompany(b.insurance_company ?? '')
+        setLoanStatus(b.loan_status ?? 'not_applicable')
+        setLoanNotes(b.loan_notes ?? '')
       })
       .catch((e) => {
         if (alive) setLoadError(formatError(e))
@@ -126,8 +151,12 @@ export function BookingDetailPage() {
         booking_date: bookingDate,
         status,
         notes: notes.trim() || null,
+        // SA + Admin can both write these (SA's job to update after bank reply)
+        loan_status: loanStatus,
+        loan_notes: loanNotes.trim() || null,
         // Admin-only fields — only included when caller is admin so SAs can't
-        // accidentally overwrite them with the form's "" defaults.
+        // accidentally overwrite them with the form's "" defaults. The DB
+        // trigger also blocks any non-admin from changing them.
         ...(isAdmin
           ? {
               loan_bank: loanBank || null,
@@ -218,6 +247,14 @@ export function BookingDetailPage() {
             {booking.status !== 'cancelled' && (
               <DepositBadge status={booking.status} />
             )}
+            {booking.status !== 'cancelled' &&
+              booking.loan_status !== 'not_applicable' && (
+                <span
+                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${LOAN_BADGE[booking.loan_status]}`}
+                >
+                  {LOAN_LABEL[booking.loan_status]}
+                </span>
+              )}
           </div>
         </div>
         {booking.status !== 'cancelled' && (
@@ -385,11 +422,11 @@ export function BookingDetailPage() {
           </div>
         </Section>
 
-        {/* ---------- Admin: Loan & Insurance ---------- */}
+        {/* ---------- Admin: Loan & Insurance setup ---------- */}
         <section className="rounded-xl border border-purple-200 bg-purple-50/50 p-4 sm:p-5">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-purple-900">
-              🏛️ Admin · Loan & Insurance
+              🏛️ Loan & Insurance setup
             </h2>
             {!isAdmin && (
               <span className="text-xs text-gray-500">🔒 Admin-only</span>
@@ -397,12 +434,12 @@ export function BookingDetailPage() {
           </div>
 
           <div className="mb-3 text-xs text-gray-600">
-            Status:{' '}
+            Deposit:{' '}
             {booking.status === 'confirmed' || booking.status === 'delivered'
-              ? '✅ Deposit received'
+              ? '✅ received'
               : booking.status === 'cancelled'
-                ? '— Booking cancelled'
-                : '⏳ Awaiting admin to collect deposit'}
+                ? '— booking cancelled'
+                : '⏳ awaiting admin to collect'}
           </div>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -421,7 +458,6 @@ export function BookingDetailPage() {
                     {b}
                   </option>
                 ))}
-                {/* If the saved value isn't in the predefined list, still show it */}
                 {loanBank &&
                   !LOAN_BANKS.includes(loanBank as (typeof LOAN_BANKS)[number]) && (
                     <option value={loanBank}>{loanBank}</option>
@@ -453,6 +489,59 @@ export function BookingDetailPage() {
               </select>
             </Field>
           </div>
+        </section>
+
+        {/* ---------- Loan application status (SA + Admin both edit) ---------- */}
+        <section className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-gray-900">
+              📋 Loan application status
+            </h2>
+            <span className="text-xs text-gray-500">
+              SA updates after the bank decides
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Field label="Loan status">
+              <select
+                value={loanStatus}
+                onChange={(e) => setLoanStatus(e.target.value as LoanStatus)}
+                className={inputClass}
+              >
+                {LOAN_STATUSES.map((s) => (
+                  <option key={s.value} value={s.value}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Loan notes">
+              <input
+                type="text"
+                value={loanNotes}
+                onChange={(e) => setLoanNotes(e.target.value)}
+                className={inputClass}
+                placeholder={
+                  loanStatus === 'rejected'
+                    ? 'Why rejected? Next bank to try?'
+                    : 'Any context to remember'
+                }
+              />
+            </Field>
+          </div>
+
+          {loanStatus === 'approved' && (
+            <div className="mt-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-800">
+              ✅ Loan approved. Admin can now proceed with JPJ.
+            </div>
+          )}
+          {loanStatus === 'rejected' && (
+            <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
+              ✗ Loan rejected. SA: notify customer, pick another bank, ask
+              admin to update Loan bank, then change status back to Pending.
+            </div>
+          )}
         </section>
 
         {/* ---------- Meta ---------- */}

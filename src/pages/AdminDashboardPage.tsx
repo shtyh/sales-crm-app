@@ -47,6 +47,31 @@ export function AdminDashboardPage() {
     [bookings],
   )
 
+  // Bookings whose loan was approved + not yet delivered → admin's JPJ queue.
+  const readyForJpj = useMemo(
+    () =>
+      bookings
+        ?.filter(
+          (b) =>
+            b.loan_status === 'approved' &&
+            b.status !== 'delivered' &&
+            b.status !== 'cancelled',
+        )
+        .slice(0, 5) ?? [],
+    [bookings],
+  )
+
+  // Bookings whose loan got rejected and the deal isn't dead yet.
+  const loanRejected = useMemo(
+    () =>
+      bookings
+        ?.filter(
+          (b) => b.loan_status === 'rejected' && b.status !== 'cancelled',
+        )
+        .slice(0, 5) ?? [],
+    [bookings],
+  )
+
   const stats = useMemo(() => {
     if (!profiles) return null
     return {
@@ -161,6 +186,28 @@ export function AdminDashboardPage() {
             </section>
           )}
 
+          {/* ---------- Ready for JPJ (loans approved) ---------- */}
+          {readyForJpj.length > 0 && (
+            <BookingListWidget
+              tone="green"
+              icon="✅"
+              title="Loans approved — ready for JPJ"
+              bookings={readyForJpj}
+              profileById={profileById}
+            />
+          )}
+
+          {/* ---------- Loan rejected ---------- */}
+          {loanRejected.length > 0 && (
+            <BookingListWidget
+              tone="red"
+              icon="✗"
+              title="Loans rejected — needs follow-up"
+              bookings={loanRejected}
+              profileById={profileById}
+            />
+          )}
+
           {/* ---------- Quick actions ---------- */}
           <section className="mb-6 rounded-2xl border border-gray-200 bg-white p-5">
             <h2 className="mb-3 text-sm font-semibold text-gray-900">
@@ -233,6 +280,95 @@ export function AdminDashboardPage() {
 }
 
 // ----- small helpers --------------------------------------------------------
+
+const TONES = {
+  amber: {
+    border: 'border-amber-200',
+    bg: 'bg-amber-50/30',
+    text: 'text-amber-900',
+    divide: 'divide-amber-200',
+    hover: 'hover:bg-amber-100/40',
+  },
+  green: {
+    border: 'border-green-200',
+    bg: 'bg-green-50/40',
+    text: 'text-green-900',
+    divide: 'divide-green-200',
+    hover: 'hover:bg-green-100/40',
+  },
+  red: {
+    border: 'border-red-200',
+    bg: 'bg-red-50/40',
+    text: 'text-red-900',
+    divide: 'divide-red-200',
+    hover: 'hover:bg-red-100/40',
+  },
+} as const
+
+function BookingListWidget({
+  tone,
+  icon,
+  title,
+  bookings,
+  profileById,
+}: {
+  tone: keyof typeof TONES
+  icon: string
+  title: string
+  bookings: Booking[]
+  profileById: Map<string, Profile>
+}) {
+  const t = TONES[tone]
+  return (
+    <section
+      className={`mb-6 rounded-2xl border ${t.border} ${t.bg} p-5`}
+    >
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className={`text-sm font-semibold ${t.text}`}>
+          {icon} {title}
+        </h2>
+        <Link
+          to="/bookings"
+          className={`text-xs font-medium ${t.text} hover:underline`}
+        >
+          See all →
+        </Link>
+      </div>
+      <ul className={`divide-y ${t.divide}`}>
+        {bookings.map((b) => {
+          const owner = profileById.get(b.owner_id)
+          return (
+            <li key={b.id}>
+              <Link
+                to={`/bookings/${b.id}`}
+                className={`flex items-center gap-3 py-2.5 first:pt-0 last:pb-0 ${t.hover}`}
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium text-gray-900">
+                    {b.customer_name}
+                  </div>
+                  <div className="truncate text-xs text-gray-500">
+                    {b.vehicle_model}
+                    {b.vehicle_variant ? ` · ${b.vehicle_variant}` : ''} · by{' '}
+                    <span className="font-medium">
+                      {owner?.full_name || owner?.email || '—'}
+                    </span>
+                  </div>
+                </div>
+                <div className="shrink-0 text-right">
+                  <div className="tabular-nums text-sm text-gray-900">
+                    {formatMYR(b.otr_price)}
+                  </div>
+                  <div className="text-[10px] text-gray-500">{b.code}</div>
+                </div>
+              </Link>
+            </li>
+          )
+        })}
+      </ul>
+    </section>
+  )
+}
 
 function StatCard({
   label,
