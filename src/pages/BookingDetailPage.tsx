@@ -413,9 +413,21 @@ export function BookingDetailPage() {
         />
         <AttachmentSection
           bookingId={booking.id}
+          kind="bank_statement"
+          title="💳 Bank statement"
+          description="3~6 month bank statements submitted for loan approval."
+        />
+        <AttachmentSection
+          bookingId={booking.id}
           kind="lou"
           title="📃 Letter of Undertaking (LOU)"
           description="Employer LOU, loan undertaking, guarantor letter, etc."
+        />
+        <AttachmentSection
+          bookingId={booking.id}
+          kind="cancellation_form"
+          title="❌ Cancellation form"
+          description="Signed cancellation form if the customer backs out."
         />
       </div>
     </AppShell>

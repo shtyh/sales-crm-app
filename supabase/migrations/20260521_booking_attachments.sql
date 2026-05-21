@@ -7,10 +7,16 @@
 do $$ begin
   create type public.attachment_kind as enum (
     'bank_transaction',
+    'bank_statement',
     'lou',
+    'cancellation_form',
     'other'
   );
 exception when duplicate_object then null; end $$;
+
+-- If the type already existed with fewer values (earlier migration), top up.
+alter type public.attachment_kind add value if not exists 'bank_statement';
+alter type public.attachment_kind add value if not exists 'cancellation_form';
 
 -- ---------- booking_attachments table -------------------------------------
 create table if not exists public.booking_attachments (

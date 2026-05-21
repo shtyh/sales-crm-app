@@ -37,7 +37,12 @@ export type Booking = {
  * Fields the user supplies when creating a booking. `code`, `owner_id`,
  * and timestamps are filled in by the database defaults.
  */
-export type AttachmentKind = 'bank_transaction' | 'lou' | 'other'
+export type AttachmentKind =
+  | 'bank_transaction'
+  | 'bank_statement'
+  | 'lou'
+  | 'cancellation_form'
+  | 'other'
 
 export type Attachment = {
   id: string
