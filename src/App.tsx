@@ -5,6 +5,7 @@ import { BookingsPage } from './pages/BookingsPage'
 import { NewBookingPage } from './pages/NewBookingPage'
 import { BookingDetailPage } from './pages/BookingDetailPage'
 import { AccountPage } from './pages/AccountPage'
+import { AdminUsersPage } from './pages/AdminUsersPage'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import './App.css'
 
@@ -52,6 +53,14 @@ function App() {
         element={
           <ProtectedRoute>
             <AccountPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/users"
+        element={
+          <ProtectedRoute>
+            <AdminUsersPage />
           </ProtectedRoute>
         }
       />

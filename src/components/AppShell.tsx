@@ -8,7 +8,7 @@ import { useAuth, signOut } from '../lib/auth'
  * inside the `<main>` slot.
  */
 export function AppShell({ children }: { children: ReactNode }) {
-  const { user } = useAuth()
+  const { user, isAdmin } = useAuth()
   const navigate = useNavigate()
   const displayName =
     (user?.user_metadata?.full_name as string | undefined) ?? user?.email ?? ''
@@ -29,6 +29,15 @@ export function AppShell({ children }: { children: ReactNode }) {
             </span>
           </Link>
           <div className="flex items-center gap-3 text-sm">
+            {isAdmin && (
+              <Link
+                to="/admin/users"
+                className="rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-medium text-purple-800 hover:bg-purple-200"
+                title="Admin tools"
+              >
+                ☆ Admin
+              </Link>
+            )}
             <Link
               to="/account"
               className="hidden text-gray-600 hover:text-gray-900 sm:inline"
