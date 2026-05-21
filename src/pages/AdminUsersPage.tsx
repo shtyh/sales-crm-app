@@ -1,9 +1,8 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
 import { useAuth } from '../lib/auth'
 import { listProfiles, updateProfile } from '../lib/profiles'
-import { supabase } from '../lib/supabase'
 import { formatError } from '../lib/errors'
 import type { Profile } from '../lib/types'
 
@@ -16,10 +15,6 @@ export function AdminUsersPage() {
   const [editing, setEditing] = useState<{ id: string; value: string } | null>(
     null,
   )
-
-  const [inviteEmail, setInviteEmail] = useState('')
-  const [inviting, setInviting] = useState(false)
-  const [inviteSuccess, setInviteSuccess] = useState<string | null>(null)
 
   async function refresh() {
     try {
@@ -70,34 +65,6 @@ export function AdminUsersPage() {
     }
   }
 
-  async function handleInvite(e: FormEvent) {
-    e.preventDefault()
-    const email = inviteEmail.trim().toLowerCase()
-    if (!email) return
-
-    setInviting(true)
-    setError(null)
-    setInviteSuccess(null)
-    try {
-      const { data, error } = await supabase.functions.invoke('invite-user', {
-        body: {
-          email,
-          redirectTo: `${window.location.origin}/login`,
-        },
-      })
-      if (error) throw error
-      if (data?.error) throw new Error(data.error)
-
-      setInviteEmail('')
-      setInviteSuccess(`Invitation sent to ${email}.`)
-      await refresh()
-    } catch (e) {
-      setError(formatError(e))
-    } finally {
-      setInviting(false)
-    }
-  }
-
   async function handleSaveName(p: Profile, newName: string) {
     const trimmed = newName.trim()
     if (!trimmed) {
@@ -139,37 +106,6 @@ export function AdminUsersPage() {
           {profiles?.length ?? 0} user{profiles?.length === 1 ? '' : 's'}
         </div>
       </div>
-
-      {/* ---------- Invite new user ---------- */}
-      <form
-        onSubmit={handleInvite}
-        className="mb-4 flex flex-col gap-2 rounded-2xl border border-gray-200 bg-white p-4 sm:flex-row sm:items-center"
-      >
-        <div className="text-sm font-medium text-gray-700 sm:mr-2">
-          + Invite
-        </div>
-        <input
-          type="email"
-          required
-          value={inviteEmail}
-          onChange={(e) => setInviteEmail(e.target.value)}
-          placeholder="newhire@swlmotors.my"
-          className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10"
-        />
-        <button
-          type="submit"
-          disabled={inviting}
-          className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-gray-800 disabled:opacity-60"
-        >
-          {inviting ? 'Sending…' : 'Send invitation'}
-        </button>
-      </form>
-
-      {inviteSuccess && (
-        <div className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
-          {inviteSuccess}
-        </div>
-      )}
 
       {error && (
         <div
