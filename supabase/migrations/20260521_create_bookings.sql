@@ -99,7 +99,7 @@ create policy bookings_update_own
   using (owner_id = (select auth.uid()))
   with check (owner_id = (select auth.uid()));
 
+-- Intentionally no DELETE policy: bookings are legal records. Users
+-- "cancel" them via a status change instead. Drop the old policy if it
+-- existed from an earlier run of this migration.
 drop policy if exists bookings_delete_own on public.bookings;
-create policy bookings_delete_own
-  on public.bookings for delete to authenticated
-  using (owner_id = (select auth.uid()));

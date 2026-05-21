@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
 import { AttachmentSection } from '../components/AttachmentSection'
-import { getBooking, updateBooking, deleteBooking } from '../lib/bookings'
+import { getBooking, updateBooking } from '../lib/bookings'
 import { formatError } from '../lib/errors'
 import { PROTON_MODELS, variantsFor } from '../data/proton-models'
 import type { Booking, BookingStatus } from '../lib/types'
@@ -54,7 +54,7 @@ export function BookingDetailPage() {
   const [notes, setNotes] = useState('')
 
   const [saving, setSaving] = useState(false)
-  const [deleting, setDeleting] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [savedAt, setSavedAt] = useState<number | null>(null)
 
@@ -130,22 +130,25 @@ export function BookingDetailPage() {
     }
   }
 
-  async function handleDelete() {
+  async function handleCancel() {
     if (
       !window.confirm(
-        `Delete booking ${booking?.code}? This cannot be undone.`,
+        `Cancel booking ${booking?.code}? The record will be kept but marked as cancelled.`,
       )
     ) {
       return
     }
-    setDeleting(true)
+    setCancelling(true)
     setError(null)
     try {
-      await deleteBooking(id)
-      navigate('/bookings', { replace: true })
+      const updated = await updateBooking(id, { status: 'cancelled' })
+      setBooking(updated)
+      setStatus('cancelled')
+      setSavedAt(Date.now())
     } catch (e) {
       setError(formatError(e))
-      setDeleting(false)
+    } finally {
+      setCancelling(false)
     }
   }
 
@@ -200,14 +203,16 @@ export function BookingDetailPage() {
             </span>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={handleDelete}
-          disabled={deleting || saving}
-          className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-50"
-        >
-          {deleting ? 'Deleting…' : 'Delete'}
-        </button>
+        {booking.status !== 'cancelled' && (
+          <button
+            type="button"
+            onClick={handleCancel}
+            disabled={cancelling || saving}
+            className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-50"
+          >
+            {cancelling ? 'Cancelling…' : 'Cancel booking'}
+          </button>
+        )}
       </div>
 
       <form
@@ -395,7 +400,7 @@ export function BookingDetailPage() {
           </Link>
           <button
             type="submit"
-            disabled={saving || deleting}
+            disabled={saving || cancelling}
             className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-gray-800 disabled:opacity-60"
           >
             {saving ? 'Saving…' : 'Save changes'}

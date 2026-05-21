@@ -53,8 +53,6 @@ export async function updateBooking(id: string, patch: Partial<BookingInsert>) {
   return data as Booking
 }
 
-/** Permanently delete a booking. RLS only lets the owner do this. */
-export async function deleteBooking(id: string) {
-  const { error } = await supabase.from('bookings').delete().eq('id', id)
-  if (error) throw error
-}
+// Note: there is intentionally no `deleteBooking` helper. Bookings are
+// legal records; users cancel them via a status change instead. Hard delete
+// is also blocked at the DB level (no RLS delete policy).
