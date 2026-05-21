@@ -5,9 +5,20 @@ import { BookingsPage } from './pages/BookingsPage'
 import { NewBookingPage } from './pages/NewBookingPage'
 import { BookingDetailPage } from './pages/BookingDetailPage'
 import { AccountPage } from './pages/AccountPage'
+import { AdminDashboardPage } from './pages/AdminDashboardPage'
 import { AdminUsersPage } from './pages/AdminUsersPage'
 import { ProtectedRoute } from './components/ProtectedRoute'
+import { useAuth } from './lib/auth'
 import './App.css'
+
+/**
+ * Renders the right home page based on the signed-in user's role.
+ * Admins see the admin overview; everyone else sees the sales dashboard.
+ */
+function RoleHome() {
+  const { isAdmin } = useAuth()
+  return isAdmin ? <AdminDashboardPage /> : <DashboardPage />
+}
 
 function App() {
   return (
@@ -20,7 +31,7 @@ function App() {
         path="/"
         element={
           <ProtectedRoute>
-            <DashboardPage />
+            <RoleHome />
           </ProtectedRoute>
         }
       />
