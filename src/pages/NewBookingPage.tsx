@@ -1,0 +1,312 @@
+import { useState, type FormEvent } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { AppShell } from '../components/AppShell'
+import { createBooking } from '../lib/bookings'
+import { PROTON_MODELS } from '../data/proton-models'
+import type { BookingStatus } from '../lib/types'
+
+const STATUSES: { value: BookingStatus; label: string }[] = [
+  { value: 'pending', label: 'Pending' },
+  { value: 'confirmed', label: 'Confirmed' },
+  { value: 'delivered', label: 'Delivered' },
+  { value: 'cancelled', label: 'Cancelled' },
+]
+
+const today = () => new Date().toISOString().slice(0, 10)
+
+export function NewBookingPage() {
+  const navigate = useNavigate()
+
+  const [customerName, setCustomerName] = useState('')
+  const [customerNric, setCustomerNric] = useState('')
+  const [customerPhone, setCustomerPhone] = useState('')
+  const [customerEmail, setCustomerEmail] = useState('')
+
+  const [vehicleModel, setVehicleModel] = useState<string>(PROTON_MODELS[0])
+  const [vehicleVariant, setVehicleVariant] = useState('')
+  const [vehicleColor, setVehicleColor] = useState('')
+
+  const [otrPrice, setOtrPrice] = useState('')
+  const [bookingFee, setBookingFee] = useState('')
+
+  const [bookingDate, setBookingDate] = useState(today())
+  const [expectedDelivery, setExpectedDelivery] = useState('')
+
+  const [status, setStatus] = useState<BookingStatus>('pending')
+  const [notes, setNotes] = useState('')
+
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault()
+    setSubmitting(true)
+    setError(null)
+
+    try {
+      const created = await createBooking({
+        customer_name: customerName.trim(),
+        customer_nric: customerNric.trim() || null,
+        customer_phone: customerPhone.trim(),
+        customer_email: customerEmail.trim() || null,
+        vehicle_model: vehicleModel,
+        vehicle_variant: vehicleVariant.trim() || null,
+        vehicle_color: vehicleColor.trim() || null,
+        otr_price: Number(otrPrice) || 0,
+        booking_fee: Number(bookingFee) || 0,
+        booking_date: bookingDate,
+        expected_delivery: expectedDelivery || null,
+        status,
+        notes: notes.trim() || null,
+      })
+      navigate('/bookings', { replace: true, state: { justCreated: created.code } })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <AppShell>
+      <div className="mb-6">
+        <Link
+          to="/bookings"
+          className="text-sm text-gray-500 hover:text-gray-700"
+        >
+          ← Back to bookings
+        </Link>
+        <h1 className="mt-2 text-xl font-semibold text-gray-900">
+          New booking
+        </h1>
+      </div>
+
+      <form
+        onSubmit={handleSubmit}
+        className="space-y-6 rounded-2xl border border-gray-200 bg-white p-5 sm:p-6"
+      >
+        {/* ---------- Customer ---------- */}
+        <Section title="👤 Customer">
+          <Field label="Full name" required>
+            <input
+              type="text"
+              required
+              value={customerName}
+              onChange={(e) => setCustomerName(e.target.value)}
+              className={inputClass}
+              placeholder="As shown on IC"
+            />
+          </Field>
+          <Field label="NRIC">
+            <input
+              type="text"
+              value={customerNric}
+              onChange={(e) => setCustomerNric(e.target.value)}
+              className={inputClass}
+              placeholder="YYMMDD-PB-XXXX"
+              inputMode="numeric"
+            />
+          </Field>
+          <Field label="Phone" required>
+            <input
+              type="tel"
+              required
+              value={customerPhone}
+              onChange={(e) => setCustomerPhone(e.target.value)}
+              className={inputClass}
+              placeholder="+60 11-1234 5678"
+              inputMode="tel"
+            />
+          </Field>
+          <Field label="Email">
+            <input
+              type="email"
+              value={customerEmail}
+              onChange={(e) => setCustomerEmail(e.target.value)}
+              className={inputClass}
+              placeholder="you@example.com"
+            />
+          </Field>
+        </Section>
+
+        {/* ---------- Vehicle ---------- */}
+        <Section title="🚗 Vehicle">
+          <Field label="Model" required>
+            <select
+              required
+              value={vehicleModel}
+              onChange={(e) => setVehicleModel(e.target.value)}
+              className={inputClass}
+            >
+              {PROTON_MODELS.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Variant">
+            <input
+              type="text"
+              value={vehicleVariant}
+              onChange={(e) => setVehicleVariant(e.target.value)}
+              className={inputClass}
+              placeholder="e.g. Premium / Executive"
+            />
+          </Field>
+          <Field label="Color">
+            <input
+              type="text"
+              value={vehicleColor}
+              onChange={(e) => setVehicleColor(e.target.value)}
+              className={inputClass}
+              placeholder="e.g. Snow White"
+            />
+          </Field>
+        </Section>
+
+        {/* ---------- Money ---------- */}
+        <Section title="💰 Pricing (MYR)">
+          <Field label="OTR price" required>
+            <input
+              type="number"
+              required
+              min={0}
+              step="0.01"
+              value={otrPrice}
+              onChange={(e) => setOtrPrice(e.target.value)}
+              className={inputClass}
+              placeholder="99800"
+              inputMode="decimal"
+            />
+          </Field>
+          <Field label="Booking fee paid" required>
+            <input
+              type="number"
+              required
+              min={0}
+              step="0.01"
+              value={bookingFee}
+              onChange={(e) => setBookingFee(e.target.value)}
+              className={inputClass}
+              placeholder="1000"
+              inputMode="decimal"
+            />
+          </Field>
+        </Section>
+
+        {/* ---------- Dates + status ---------- */}
+        <Section title="📅 Dates & status">
+          <Field label="Booking date" required>
+            <input
+              type="date"
+              required
+              value={bookingDate}
+              onChange={(e) => setBookingDate(e.target.value)}
+              className={inputClass}
+            />
+          </Field>
+          <Field label="Expected delivery">
+            <input
+              type="date"
+              value={expectedDelivery}
+              onChange={(e) => setExpectedDelivery(e.target.value)}
+              className={inputClass}
+            />
+          </Field>
+          <Field label="Status">
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value as BookingStatus)}
+              className={inputClass}
+            >
+              {STATUSES.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </Section>
+
+        {/* ---------- Notes ---------- */}
+        <Section title="📝 Notes">
+          <div className="sm:col-span-2">
+            <textarea
+              rows={3}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              className={`${inputClass} min-h-20`}
+              placeholder="Anything else worth remembering…"
+            />
+          </div>
+        </Section>
+
+        {error && (
+          <div
+            role="alert"
+            className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+          >
+            {error}
+          </div>
+        )}
+
+        <div className="flex items-center justify-end gap-3 border-t border-gray-100 pt-4">
+          <Link
+            to="/bookings"
+            className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+          >
+            Cancel
+          </Link>
+          <button
+            type="submit"
+            disabled={submitting}
+            className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-gray-800 disabled:opacity-60"
+          >
+            {submitting ? 'Saving…' : 'Create booking'}
+          </button>
+        </div>
+      </form>
+    </AppShell>
+  )
+}
+
+// ----- small layout helpers -------------------------------------------------
+
+const inputClass =
+  'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10'
+
+function Section({
+  title,
+  children,
+}: {
+  title: string
+  children: React.ReactNode
+}) {
+  return (
+    <section>
+      <h2 className="mb-3 text-sm font-semibold text-gray-700">{title}</h2>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">{children}</div>
+    </section>
+  )
+}
+
+function Field({
+  label,
+  required,
+  children,
+}: {
+  label: string
+  required?: boolean
+  children: React.ReactNode
+}) {
+  return (
+    <label className="block text-sm">
+      <span className="mb-1 block font-medium text-gray-700">
+        {label}
+        {required && <span className="ml-0.5 text-red-500">*</span>}
+      </span>
+      {children}
+    </label>
+  )
+}
