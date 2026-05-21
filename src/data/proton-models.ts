@@ -3,14 +3,12 @@
 // additional brands (just add another section).
 
 export const PROTON_LINEUP = {
-  'Proton X90':   ['Executive', 'Premium', 'Flagship'],
-  'Proton X70':   ['Executive', 'Premium', 'Premium X', 'Flagship'],
-  'Proton X50':   ['Standard', 'Executive', 'Premium', 'Flagship', 'Flagship X'],
-  'Proton S70':   ['Executive', 'Premium', 'Flagship', 'X'],
-  'Proton Saga':  ['Standard MT', 'Standard AT', 'Premium S'],
+  'Proton X90':     ['Lite', 'Prime', 'Prime X'],
+  'Proton X70':     ['Executive', 'Premium'],
+  'Proton X50':     ['Executive', 'Premium', 'Flagship', 'Flagship X'],
+  'Proton S70':     ['Executive', 'Premium', 'Flagship', 'Flagship X'],
+  'Proton Saga':    ['Standard', 'Executive', 'Premium'],
   'Proton Persona': ['Standard', 'Executive'],
-  'Proton Iriz':  ['Standard', 'Executive'],
-  'Proton Exora': ['Executive'],
 } as const
 
 export const PROTON_MODELS = Object.keys(PROTON_LINEUP) as Array<
