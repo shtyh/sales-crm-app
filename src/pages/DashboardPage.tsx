@@ -5,6 +5,7 @@ import { useAuth } from '../lib/auth'
 import { listBookings } from '../lib/bookings'
 import { formatError } from '../lib/errors'
 import { formatMYR, isThisMonth } from '../lib/format'
+import { MONTHLY_INCENTIVE, computeIncentive } from '../data/incentives'
 import type { Booking, BookingStatus } from '../lib/types'
 
 const STATUS_ORDER: BookingStatus[] = [
@@ -63,9 +64,16 @@ export function DashboardPage() {
       isThisMonth(b.booking_date),
     ).length
 
+    // Use the dedicated delivered_at timestamp (set automatically when status
+    // flips to 'delivered'). Falls back to booking_date for any legacy rows
+    // that don't yet have delivered_at populated.
     const deliveredThisMonth = bookings.filter(
-      (b) => b.status === 'delivered' && isThisMonth(b.booking_date),
+      (b) =>
+        b.status === 'delivered' &&
+        isThisMonth(b.delivered_at ?? b.booking_date),
     ).length
+
+    const incentive = computeIncentive(deliveredThisMonth)
 
     const pendingCount = bookings.filter((b) => b.status === 'pending').length
 
@@ -93,6 +101,7 @@ export function DashboardPage() {
       pipelineValue,
       pendingCount,
       deliveredThisMonth,
+      incentive,
       byStatus,
       models: sortedModels,
       maxModelCount,
@@ -178,6 +187,9 @@ export function DashboardPage() {
               tone="success"
             />
           </div>
+
+          {/* ---------- Monthly incentive hero ---------- */}
+          <IncentiveCard incentive={stats.incentive} className="mb-6" />
 
           {/* ---------- Breakdown row ---------- */}
           <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -285,6 +297,80 @@ export function DashboardPage() {
         </>
       )}
     </AppShell>
+  )
+}
+
+// ----- monthly incentive hero ----------------------------------------------
+
+function IncentiveCard({
+  incentive,
+  className = '',
+}: {
+  incentive: ReturnType<typeof computeIncentive>
+  className?: string
+}) {
+  const pct = Math.min(100, Math.round(incentive.progress * 100))
+  const ruleText = `RM ${MONTHLY_INCENTIVE.rewardPerTier} per ${MONTHLY_INCENTIVE.carsPerTier} delivered`
+
+  return (
+    <section
+      className={`overflow-hidden rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white p-5 sm:p-6 ${className}`}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <div className="text-xs font-medium uppercase tracking-wider text-amber-700">
+            💰 Monthly incentive
+          </div>
+          <div className="mt-2 text-3xl font-bold tabular-nums text-gray-900 sm:text-4xl">
+            {formatMYR(incentive.earned)}
+          </div>
+          <div className="mt-1 text-sm text-gray-600">
+            earned this month
+            {incentive.tiersAchieved > 0 && (
+              <>
+                {' '}· {incentive.tiersAchieved}× tier{' '}
+                {incentive.tiersAchieved === 1 ? '' : 's'}
+              </>
+            )}
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="text-xs text-gray-500">Rule</div>
+          <div className="mt-1 text-sm text-gray-700">{ruleText}</div>
+        </div>
+      </div>
+
+      <div className="mt-5">
+        <div className="mb-1.5 flex items-center justify-between text-xs">
+          <span className="text-gray-700">
+            {incentive.delivered} delivered this month
+          </span>
+          <span className="tabular-nums text-gray-500">
+            {incentive.delivered} / {incentive.nextTierAt}
+          </span>
+        </div>
+        <div className="h-3 overflow-hidden rounded-full bg-amber-100">
+          <div
+            className="h-full bg-amber-500 transition-all"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+        <div className="mt-2 text-xs text-gray-600">
+          {incentive.carsToNext === 0 ? (
+            <>🎉 Just unlocked!</>
+          ) : (
+            <>
+              Deliver{' '}
+              <strong>
+                {incentive.carsToNext} more car
+                {incentive.carsToNext === 1 ? '' : 's'}
+              </strong>{' '}
+              to unlock <strong>{formatMYR(incentive.nextTierReward)}</strong>.
+            </>
+          )}
+        </div>
+      </div>
+    </section>
   )
 }
 

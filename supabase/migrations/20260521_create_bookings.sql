@@ -42,6 +42,8 @@ create table if not exists public.bookings (
 
   -- Dates
   booking_date      date not null default current_date,
+  -- Auto-set when status transitions to 'delivered'; used for monthly KPIs.
+  delivered_at      timestamptz,
 
   -- Status + free-form
   status            public.booking_status not null default 'pending',
@@ -68,6 +70,25 @@ drop trigger if exists trg_bookings_updated_at on public.bookings;
 create trigger trg_bookings_updated_at
   before update on public.bookings
   for each row execute function public.set_updated_at();
+
+-- Stamp delivered_at exactly when the status crosses into 'delivered'.
+-- Clears it again if the status is later moved away (rare but possible).
+create or replace function public.set_delivered_at()
+returns trigger language plpgsql as $$
+begin
+  if new.status = 'delivered' and old.status is distinct from 'delivered' then
+    new.delivered_at = now();
+  elsif new.status <> 'delivered' then
+    new.delivered_at = null;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_bookings_delivered_at on public.bookings;
+create trigger trg_bookings_delivered_at
+  before update of status on public.bookings
+  for each row execute function public.set_delivered_at();
 
 -- ============================================================================
 -- Grants — table is read/written by signed-in users (RLS narrows by row).

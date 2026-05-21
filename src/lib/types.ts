@@ -25,6 +25,7 @@ export type Booking = {
   booking_fee: number
 
   booking_date: string // YYYY-MM-DD
+  delivered_at: string | null // ISO timestamp, auto-set when status → 'delivered'
 
   status: BookingStatus
   notes: string | null
