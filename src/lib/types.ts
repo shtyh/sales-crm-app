@@ -13,19 +13,18 @@ export type Booking = {
   owner_id: string
 
   customer_name: string
-  customer_nric: string | null
+  customer_nric: string
   customer_phone: string
   customer_email: string | null
 
   vehicle_model: string
-  vehicle_variant: string | null
-  vehicle_color: string | null
+  vehicle_variant: string
+  vehicle_color: string
 
   otr_price: number
   booking_fee: number
 
   booking_date: string // YYYY-MM-DD
-  expected_delivery: string | null
 
   status: BookingStatus
   notes: string | null
@@ -40,16 +39,15 @@ export type Booking = {
  */
 export type BookingInsert = {
   customer_name: string
-  customer_nric?: string | null
+  customer_nric: string
   customer_phone: string
   customer_email?: string | null
   vehicle_model: string
-  vehicle_variant?: string | null
-  vehicle_color?: string | null
+  vehicle_variant: string
+  vehicle_color: string
   otr_price: number
   booking_fee: number
   booking_date: string
-  expected_delivery?: string | null
   status?: BookingStatus
   notes?: string | null
 }

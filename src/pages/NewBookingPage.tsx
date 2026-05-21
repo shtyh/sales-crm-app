@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
 import { createBooking } from '../lib/bookings'
-import { PROTON_MODELS } from '../data/proton-models'
+import { PROTON_MODELS, variantsFor } from '../data/proton-models'
 import type { BookingStatus } from '../lib/types'
 
 const STATUSES: { value: BookingStatus; label: string }[] = [
@@ -30,13 +30,18 @@ export function NewBookingPage() {
   const [bookingFee, setBookingFee] = useState('')
 
   const [bookingDate, setBookingDate] = useState(today())
-  const [expectedDelivery, setExpectedDelivery] = useState('')
 
   const [status, setStatus] = useState<BookingStatus>('pending')
   const [notes, setNotes] = useState('')
 
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Reset variant whenever the model changes — variants are model-specific.
+  function handleModelChange(newModel: string) {
+    setVehicleModel(newModel)
+    setVehicleVariant('')
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -46,26 +51,30 @@ export function NewBookingPage() {
     try {
       const created = await createBooking({
         customer_name: customerName.trim(),
-        customer_nric: customerNric.trim() || null,
+        customer_nric: customerNric.trim(),
         customer_phone: customerPhone.trim(),
         customer_email: customerEmail.trim() || null,
         vehicle_model: vehicleModel,
-        vehicle_variant: vehicleVariant.trim() || null,
-        vehicle_color: vehicleColor.trim() || null,
+        vehicle_variant: vehicleVariant,
+        vehicle_color: vehicleColor.trim(),
         otr_price: Number(otrPrice) || 0,
         booking_fee: Number(bookingFee) || 0,
         booking_date: bookingDate,
-        expected_delivery: expectedDelivery || null,
         status,
         notes: notes.trim() || null,
       })
-      navigate('/bookings', { replace: true, state: { justCreated: created.code } })
+      navigate('/bookings', {
+        replace: true,
+        state: { justCreated: created.code },
+      })
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setSubmitting(false)
     }
   }
+
+  const variants = variantsFor(vehicleModel)
 
   return (
     <AppShell>
@@ -97,9 +106,10 @@ export function NewBookingPage() {
               placeholder="As shown on IC"
             />
           </Field>
-          <Field label="NRIC">
+          <Field label="NRIC" required>
             <input
               type="text"
+              required
               value={customerNric}
               onChange={(e) => setCustomerNric(e.target.value)}
               className={inputClass}
@@ -135,7 +145,7 @@ export function NewBookingPage() {
             <select
               required
               value={vehicleModel}
-              onChange={(e) => setVehicleModel(e.target.value)}
+              onChange={(e) => handleModelChange(e.target.value)}
               className={inputClass}
             >
               {PROTON_MODELS.map((m) => (
@@ -145,18 +155,25 @@ export function NewBookingPage() {
               ))}
             </select>
           </Field>
-          <Field label="Variant">
-            <input
-              type="text"
+          <Field label="Variant" required>
+            <select
+              required
               value={vehicleVariant}
               onChange={(e) => setVehicleVariant(e.target.value)}
               className={inputClass}
-              placeholder="e.g. Premium / Executive"
-            />
+            >
+              <option value="">— Select variant —</option>
+              {variants.map((v) => (
+                <option key={v} value={v}>
+                  {v}
+                </option>
+              ))}
+            </select>
           </Field>
-          <Field label="Color">
+          <Field label="Color" required>
             <input
               type="text"
+              required
               value={vehicleColor}
               onChange={(e) => setVehicleColor(e.target.value)}
               className={inputClass}
@@ -196,21 +213,13 @@ export function NewBookingPage() {
         </Section>
 
         {/* ---------- Dates + status ---------- */}
-        <Section title="📅 Dates & status">
+        <Section title="📅 Date & status">
           <Field label="Booking date" required>
             <input
               type="date"
               required
               value={bookingDate}
               onChange={(e) => setBookingDate(e.target.value)}
-              className={inputClass}
-            />
-          </Field>
-          <Field label="Expected delivery">
-            <input
-              type="date"
-              value={expectedDelivery}
-              onChange={(e) => setExpectedDelivery(e.target.value)}
               className={inputClass}
             />
           </Field>
