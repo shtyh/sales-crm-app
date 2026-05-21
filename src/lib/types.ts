@@ -27,6 +27,10 @@ export type Booking = {
   booking_date: string // YYYY-MM-DD
   delivered_at: string | null // ISO timestamp, auto-set when status → 'delivered'
 
+  // Admin-managed fields (SA reads, Admin writes)
+  loan_bank: string | null
+  insurance_company: string | null
+
   status: BookingStatus
   notes: string | null
 
@@ -79,4 +83,6 @@ export type BookingInsert = {
   booking_date: string
   status?: BookingStatus
   notes?: string | null
+  loan_bank?: string | null
+  insurance_company?: string | null
 }

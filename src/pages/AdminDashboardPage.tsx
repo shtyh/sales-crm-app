@@ -3,24 +3,49 @@ import { Link } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
 import { useAuth } from '../lib/auth'
 import { listProfiles } from '../lib/profiles'
+import { listBookings } from '../lib/bookings'
 import { formatError } from '../lib/errors'
-import type { Profile } from '../lib/types'
+import { formatMYR } from '../lib/format'
+import type { Booking, Profile } from '../lib/types'
 
 export function AdminDashboardPage() {
   const { profile: currentProfile } = useAuth()
 
   const [profiles, setProfiles] = useState<Profile[] | null>(null)
+  const [bookings, setBookings] = useState<Booking[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let alive = true
-    listProfiles()
-      .then((rows) => alive && setProfiles(rows))
+    Promise.all([listProfiles(), listBookings()])
+      .then(([ps, bs]) => {
+        if (!alive) return
+        setProfiles(ps)
+        setBookings(bs)
+      })
       .catch((e) => alive && setError(formatError(e)))
     return () => {
       alive = false
     }
   }, [])
+
+  const profileById = useMemo(() => {
+    const map = new Map<string, Profile>()
+    profiles?.forEach((p) => map.set(p.id, p))
+    return map
+  }, [profiles])
+
+  const pending = useMemo(() => {
+    if (!bookings) return null
+    return bookings
+      .filter((b) => b.status === 'pending')
+      .slice(0, 5)
+  }, [bookings])
+
+  const pendingCount = useMemo(
+    () => bookings?.filter((b) => b.status === 'pending').length ?? 0,
+    [bookings],
+  )
 
   const stats = useMemo(() => {
     if (!profiles) return null
@@ -72,11 +97,69 @@ export function AdminDashboardPage() {
       {stats && (
         <>
           {/* ---------- Stats ---------- */}
-          <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <StatCard
+              label="Pending bookings"
+              value={pendingCount}
+              accent={pendingCount > 0 ? 'warn' : 'neutral'}
+              hint="awaiting deposit"
+            />
             <StatCard label="Total users" value={stats.total} />
             <StatCard label="Admins" value={stats.admins} accent="purple" />
             <StatCard label="Sales staff" value={stats.staff} />
           </div>
+
+          {/* ---------- Pending bookings ---------- */}
+          {pending && pending.length > 0 && (
+            <section className="mb-6 rounded-2xl border border-amber-200 bg-amber-50/30 p-5">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-amber-900">
+                  ⏳ Pending bookings — awaiting deposit
+                </h2>
+                <Link
+                  to="/bookings"
+                  className="text-xs font-medium text-amber-900 hover:underline"
+                >
+                  See all →
+                </Link>
+              </div>
+              <ul className="divide-y divide-amber-200">
+                {pending.map((b) => {
+                  const owner = profileById.get(b.owner_id)
+                  return (
+                    <li key={b.id}>
+                      <Link
+                        to={`/bookings/${b.id}`}
+                        className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0 hover:bg-amber-100/40"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-medium text-gray-900">
+                            {b.customer_name}
+                          </div>
+                          <div className="truncate text-xs text-gray-500">
+                            {b.vehicle_model}
+                            {b.vehicle_variant ? ` · ${b.vehicle_variant}` : ''}{' '}
+                            · by{' '}
+                            <span className="font-medium">
+                              {owner?.full_name || owner?.email || '—'}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <div className="tabular-nums text-sm text-gray-900">
+                            {formatMYR(b.otr_price)}
+                          </div>
+                          <div className="text-[10px] text-gray-500">
+                            {b.code}
+                          </div>
+                        </div>
+                      </Link>
+                    </li>
+                  )
+                })}
+              </ul>
+            </section>
+          )}
 
           {/* ---------- Quick actions ---------- */}
           <section className="mb-6 rounded-2xl border border-gray-200 bg-white p-5">
@@ -154,22 +237,27 @@ export function AdminDashboardPage() {
 function StatCard({
   label,
   value,
+  hint,
   accent = 'neutral',
 }: {
   label: string
   value: number
-  accent?: 'neutral' | 'purple'
+  hint?: string
+  accent?: 'neutral' | 'purple' | 'warn'
 }) {
+  const valueTone =
+    accent === 'purple'
+      ? 'text-purple-700'
+      : accent === 'warn'
+        ? 'text-amber-700'
+        : 'text-gray-900'
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-4">
       <div className="text-xs font-medium text-gray-500">{label}</div>
-      <div
-        className={`mt-1 text-2xl font-semibold tabular-nums ${
-          accent === 'purple' ? 'text-purple-700' : 'text-gray-900'
-        }`}
-      >
+      <div className={`mt-1 text-2xl font-semibold tabular-nums ${valueTone}`}>
         {value}
       </div>
+      {hint && <div className="mt-0.5 text-xs text-gray-400">{hint}</div>}
     </div>
   )
 }

@@ -2,9 +2,11 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
 import { AttachmentSection } from '../components/AttachmentSection'
+import { useAuth } from '../lib/auth'
 import { getBooking, updateBooking } from '../lib/bookings'
 import { formatError } from '../lib/errors'
 import { PROTON_MODELS, variantsFor } from '../data/proton-models'
+import { LOAN_BANKS, INSURERS } from '../data/banks-and-insurers'
 import type { Booking, BookingStatus } from '../lib/types'
 
 const STATUSES: { value: BookingStatus; label: string }[] = [
@@ -33,6 +35,7 @@ function formatTimestamp(iso: string) {
 
 export function BookingDetailPage() {
   const { id = '' } = useParams<{ id: string }>()
+  const { isAdmin } = useAuth()
 
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -51,6 +54,8 @@ export function BookingDetailPage() {
   const [bookingDate, setBookingDate] = useState('')
   const [status, setStatus] = useState<BookingStatus>('pending')
   const [notes, setNotes] = useState('')
+  const [loanBank, setLoanBank] = useState('')
+  const [insuranceCompany, setInsuranceCompany] = useState('')
 
   const [saving, setSaving] = useState(false)
   const [cancelling, setCancelling] = useState(false)
@@ -80,6 +85,8 @@ export function BookingDetailPage() {
         setBookingDate(b.booking_date)
         setStatus(b.status)
         setNotes(b.notes ?? '')
+        setLoanBank(b.loan_bank ?? '')
+        setInsuranceCompany(b.insurance_company ?? '')
       })
       .catch((e) => {
         if (alive) setLoadError(formatError(e))
@@ -119,6 +126,14 @@ export function BookingDetailPage() {
         booking_date: bookingDate,
         status,
         notes: notes.trim() || null,
+        // Admin-only fields — only included when caller is admin so SAs can't
+        // accidentally overwrite them with the form's "" defaults.
+        ...(isAdmin
+          ? {
+              loan_bank: loanBank || null,
+              insurance_company: insuranceCompany || null,
+            }
+          : {}),
       })
       setBooking(updated)
       setSavedAt(Date.now())
@@ -191,7 +206,7 @@ export function BookingDetailPage() {
           >
             ← Back to bookings
           </Link>
-          <div className="mt-2 flex items-center gap-3">
+          <div className="mt-2 flex flex-wrap items-center gap-2">
             <h1 className="font-mono text-xl font-semibold text-gray-900">
               {booking.code}
             </h1>
@@ -200,6 +215,9 @@ export function BookingDetailPage() {
             >
               {booking.status}
             </span>
+            {booking.status !== 'cancelled' && (
+              <DepositBadge status={booking.status} />
+            )}
           </div>
         </div>
         {booking.status !== 'cancelled' && (
@@ -367,6 +385,76 @@ export function BookingDetailPage() {
           </div>
         </Section>
 
+        {/* ---------- Admin: Loan & Insurance ---------- */}
+        <section className="rounded-xl border border-purple-200 bg-purple-50/50 p-4 sm:p-5">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-purple-900">
+              🏛️ Admin · Loan & Insurance
+            </h2>
+            {!isAdmin && (
+              <span className="text-xs text-gray-500">🔒 Admin-only</span>
+            )}
+          </div>
+
+          <div className="mb-3 text-xs text-gray-600">
+            Status:{' '}
+            {booking.status === 'confirmed' || booking.status === 'delivered'
+              ? '✅ Deposit received'
+              : booking.status === 'cancelled'
+                ? '— Booking cancelled'
+                : '⏳ Awaiting admin to collect deposit'}
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Field label="Loan bank">
+              <select
+                disabled={!isAdmin}
+                value={loanBank}
+                onChange={(e) => setLoanBank(e.target.value)}
+                className={readonlyInputClass(isAdmin)}
+              >
+                <option value="">
+                  {isAdmin ? '— Select bank —' : '— Not set yet —'}
+                </option>
+                {LOAN_BANKS.map((b) => (
+                  <option key={b} value={b}>
+                    {b}
+                  </option>
+                ))}
+                {/* If the saved value isn't in the predefined list, still show it */}
+                {loanBank &&
+                  !LOAN_BANKS.includes(loanBank as (typeof LOAN_BANKS)[number]) && (
+                    <option value={loanBank}>{loanBank}</option>
+                  )}
+              </select>
+            </Field>
+
+            <Field label="Insurance company">
+              <select
+                disabled={!isAdmin}
+                value={insuranceCompany}
+                onChange={(e) => setInsuranceCompany(e.target.value)}
+                className={readonlyInputClass(isAdmin)}
+              >
+                <option value="">
+                  {isAdmin ? '— Select insurer —' : '— Not set yet —'}
+                </option>
+                {INSURERS.map((i) => (
+                  <option key={i} value={i}>
+                    {i}
+                  </option>
+                ))}
+                {insuranceCompany &&
+                  !INSURERS.includes(
+                    insuranceCompany as (typeof INSURERS)[number],
+                  ) && (
+                    <option value={insuranceCompany}>{insuranceCompany}</option>
+                  )}
+              </select>
+            </Field>
+          </div>
+        </section>
+
         {/* ---------- Meta ---------- */}
         <div className="grid grid-cols-1 gap-2 border-t border-gray-100 pt-4 text-xs text-gray-500 sm:grid-cols-2">
           <div>Created: {formatTimestamp(booking.created_at)}</div>
@@ -446,6 +534,28 @@ export function BookingDetailPage() {
 
 const inputClass =
   'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10'
+
+/** Like inputClass but visually muted + disabled when the caller can't edit. */
+function readonlyInputClass(editable: boolean) {
+  return editable
+    ? inputClass
+    : 'w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 outline-none cursor-not-allowed'
+}
+
+function DepositBadge({ status }: { status: BookingStatus }) {
+  const received = status === 'confirmed' || status === 'delivered'
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
+        received
+          ? 'bg-green-100 text-green-800'
+          : 'bg-gray-100 text-gray-600'
+      }`}
+    >
+      {received ? '✓ Deposit received' : '⏳ Awaiting deposit'}
+    </span>
+  )
+}
 
 function Section({
   title,

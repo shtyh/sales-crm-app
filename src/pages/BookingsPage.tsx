@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
+import { useAuth } from '../lib/auth'
 import { listBookings } from '../lib/bookings'
+import { listProfiles } from '../lib/profiles'
 import { formatError } from '../lib/errors'
-import type { Booking, BookingStatus } from '../lib/types'
+import type { Booking, BookingStatus, Profile } from '../lib/types'
 
 const STATUS_STYLES: Record<BookingStatus, string> = {
   pending: 'bg-amber-100 text-amber-800',
@@ -30,14 +32,23 @@ function formatDate(iso: string) {
 
 export function BookingsPage() {
   const navigate = useNavigate()
+  const { isAdmin } = useAuth()
   const [bookings, setBookings] = useState<Booking[] | null>(null)
+  const [profiles, setProfiles] = useState<Profile[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let alive = true
-    listBookings()
-      .then((rows) => {
-        if (alive) setBookings(rows)
+    // Admins also need the profile lookup so we can show the Owner column.
+    const work = isAdmin
+      ? Promise.all([listBookings(), listProfiles()])
+      : listBookings().then((bs) => [bs, [] as Profile[]] as const)
+
+    work
+      .then(([bs, ps]) => {
+        if (!alive) return
+        setBookings(bs)
+        setProfiles(ps)
       })
       .catch((e: unknown) => {
         if (alive) setError(formatError(e))
@@ -45,7 +56,18 @@ export function BookingsPage() {
     return () => {
       alive = false
     }
-  }, [])
+  }, [isAdmin])
+
+  const profileById = useMemo(() => {
+    const m = new Map<string, Profile>()
+    profiles?.forEach((p) => m.set(p.id, p))
+    return m
+  }, [profiles])
+
+  function ownerDisplay(ownerId: string) {
+    const p = profileById.get(ownerId)
+    return p?.full_name || p?.email || '—'
+  }
 
   return (
     <AppShell>
@@ -53,7 +75,9 @@ export function BookingsPage() {
         <div>
           <h1 className="text-xl font-semibold text-gray-900">Bookings</h1>
           <p className="mt-1 text-sm text-gray-500">
-            All bookings you've created.
+            {isAdmin
+              ? 'All bookings across the team.'
+              : "All bookings you've created."}
           </p>
         </div>
         <Link
@@ -107,6 +131,9 @@ export function BookingsPage() {
                   <th className="px-4 py-3 text-left font-medium">Vehicle</th>
                   <th className="px-4 py-3 text-right font-medium">OTR</th>
                   <th className="px-4 py-3 text-left font-medium">Status</th>
+                  {isAdmin && (
+                    <th className="px-4 py-3 text-left font-medium">Owner</th>
+                  )}
                   <th className="px-4 py-3 text-left font-medium">Date</th>
                 </tr>
               </thead>
@@ -147,6 +174,11 @@ export function BookingsPage() {
                         {b.status}
                       </span>
                     </td>
+                    {isAdmin && (
+                      <td className="whitespace-nowrap px-4 py-3 text-gray-700">
+                        {ownerDisplay(b.owner_id)}
+                      </td>
+                    )}
                     <td className="whitespace-nowrap px-4 py-3 text-gray-600">
                       {formatDate(b.booking_date)}
                     </td>
@@ -187,6 +219,11 @@ export function BookingsPage() {
                       </div>
                       <div className="text-xs text-gray-500">
                         {b.code} · {formatDate(b.booking_date)}
+                        {isAdmin && (
+                          <>
+                            {' '}· by {ownerDisplay(b.owner_id)}
+                          </>
+                        )}
                       </div>
                     </div>
                     <div className="text-right tabular-nums font-medium text-gray-900">
