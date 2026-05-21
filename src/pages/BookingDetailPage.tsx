@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
 import { AttachmentSection } from '../components/AttachmentSection'
 import { getBooking, updateBooking } from '../lib/bookings'
@@ -33,7 +33,6 @@ function formatTimestamp(iso: string) {
 
 export function BookingDetailPage() {
   const { id = '' } = useParams<{ id: string }>()
-  const navigate = useNavigate()
 
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
