@@ -1,6 +1,7 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../lib/auth'
 import { formatError } from '../lib/errors'
 
 const SIGN_IN_TIMEOUT_MS = 15_000
@@ -9,12 +10,23 @@ export function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation() as { state?: { from?: { pathname?: string } } }
   const redirectTo = location.state?.from?.pathname ?? '/'
+  const { session, loading } = useAuth()
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // If a session shows up while we're on this page (we landed here while
+  // already signed in, or sign-in succeeded after our local timeout fired),
+  // bounce to wherever the user was headed. This prevents the "logged in but
+  // stuck on the login page" UX glitch.
+  useEffect(() => {
+    if (!loading && session) {
+      navigate(redirectTo, { replace: true })
+    }
+  }, [loading, session, navigate, redirectTo])
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
