@@ -235,10 +235,10 @@ export function AdminDashboardPage() {
                 />
               )}
               <ActionLink
-                disabled
+                to="/bookings"
                 icon="📊"
                 title="All bookings"
-                subtitle="Coming soon"
+                subtitle="Full searchable list"
               />
               <ActionLink
                 disabled

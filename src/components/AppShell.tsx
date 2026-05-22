@@ -1,6 +1,13 @@
 import type { ReactNode } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth, signOut } from '../lib/auth'
+
+const navLinkClass = ({ isActive }: { isActive: boolean }) =>
+  `rounded-lg px-2.5 py-1 text-sm transition ${
+    isActive
+      ? 'bg-gray-900 text-white'
+      : 'text-gray-700 hover:bg-gray-100'
+  }`
 
 /**
  * Page chrome shared by every authenticated screen: top bar with brand,
@@ -21,13 +28,28 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="border-b border-gray-200 bg-white">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3 sm:px-6">
-          <Link to="/" className="flex items-center gap-2">
-            <span className="text-xl">🚗</span>
-            <span className="font-semibold text-gray-900">
-              SWL Motors CRM
-            </span>
-          </Link>
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
+          <div className="flex items-center gap-1 sm:gap-4">
+            <Link to="/" className="flex items-center gap-2">
+              <span className="text-xl">🚗</span>
+              <span className="hidden font-semibold text-gray-900 sm:inline">
+                SWL Motors CRM
+              </span>
+            </Link>
+            {/* Primary nav — always present so users can reach the booking
+                list even when the dashboard widgets happen to be empty. */}
+            <nav className="ml-2 flex items-center gap-1 sm:ml-4">
+              <NavLink to="/" end className={navLinkClass}>
+                Home
+              </NavLink>
+              <NavLink to="/bookings" className={navLinkClass}>
+                Bookings
+              </NavLink>
+              <NavLink to="/bookings/new" className={navLinkClass}>
+                + New
+              </NavLink>
+            </nav>
+          </div>
           <div className="flex items-center gap-3 text-sm">
             {isSuperAdmin && (
               <Link
