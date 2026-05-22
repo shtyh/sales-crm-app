@@ -23,6 +23,19 @@ export type ApprovalStatus =
 export type DepositStatus = 'unpaid' | 'received' | 'refunded'
 export type PaymentStatus = 'unpaid' | 'partial' | 'paid'
 
+export type CommissionStatus =
+  | 'not_eligible'  // booking not yet delivered+paid
+  | 'pending'       // auto-flipped when delivered+paid; awaits accountant
+  | 'approved'      // accountant signed off
+  | 'paid'          // accountant paid out
+
+export const COMMISSION_LABEL: Record<CommissionStatus, string> = {
+  not_eligible: 'Not eligible',
+  pending: '⏳ Pending review',
+  approved: '✓ Approved',
+  paid: '✓✓ Paid',
+}
+
 /** Where each car is in its lifecycle. Independent of the booking flow. */
 export type CarStatus = 'in_stock' | 'reserved' | 'delivered' | 'returned'
 
@@ -137,9 +150,15 @@ export type Booking = {
   loan_status: LoanStatus
   loan_notes: string | null
 
-  // Accountant-owned (deposit/payment of actual cash).
+  // Accountant-owned (cash + paperwork)
   deposit_status: DepositStatus
+  /** Stamped automatically by trigger when deposit_status flips to received. */
+  deposit_confirmed_at: string | null
   payment_status: PaymentStatus
+  receipt_number: string | null
+  invoice_number: string | null
+  commission_status: CommissionStatus
+  commission_amount: number | null
 
   /** Which car in inventory this booking is fulfilled by. */
   car_id: string | null
@@ -238,4 +257,9 @@ export type BookingInsert = {
   owner_id?: string
   /** general_admin links the booking to a specific physical car. */
   car_id?: string | null
+  /** Accountant-only update fields. */
+  receipt_number?: string | null
+  invoice_number?: string | null
+  commission_status?: CommissionStatus
+  commission_amount?: number | null
 }

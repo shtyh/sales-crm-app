@@ -22,6 +22,7 @@ type AuthState = {
   isAdmin: boolean
   isSuperAdmin: boolean
   isFinanceAdmin: boolean
+  isAccountant: boolean
   /** Sales manager or accountant — the two roles allowed to cancel bookings. */
   canCancel: boolean
   /** sales_manager (or super_admin) — Approve/Reject SA discount requests. */
@@ -46,6 +47,7 @@ const AuthContext = createContext<AuthState>({
   isAdmin: false,
   isSuperAdmin: false,
   isFinanceAdmin: false,
+  isAccountant: false,
   canCancel: false,
   canApproveDiscount: false,
   canEditFinanceStatus: false,
@@ -183,6 +185,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAdmin: !!profile?.is_admin,
       isSuperAdmin: role === 'super_admin',
       isFinanceAdmin: role === 'finance_admin' || role === 'super_admin',
+      isAccountant: role === 'accountant' || role === 'super_admin',
       // Per spec: SA can't cancel their own bookings (no self-dealing); only
       // sales_manager + accountant can — plus super_admin's god mode.
       canCancel:
