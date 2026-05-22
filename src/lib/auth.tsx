@@ -118,16 +118,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     init()
 
     // Live updates on sign-in / sign-out / token refresh.
-    const { data: sub } = supabase.auth.onAuthStateChange(
-      async (_event, next) => {
-        try {
-          setSession(next)
-          await loadProfileFor(next?.user?.id)
-        } catch (e) {
-          console.error('Auth state change handler failed:', e)
-        }
-      },
-    )
+    //
+    // CRITICAL: the callback must return synchronously. supabase-js holds an
+    // internal lock while running it, and any awaited supabase call inside
+    // would try to re-acquire that same lock and deadlock — symptoms are
+    // that every subsequent REST request hangs forever (no error, no
+    // network entry, just "Saving…" / "Loading…" stuck on the page).
+    // See https://github.com/supabase/auth-js/issues/762
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => {
+      setSession(next)
+      // Defer the follow-up profile fetch out of the lock-held callstack.
+      setTimeout(() => {
+        if (!alive) return
+        loadProfileFor(next?.user?.id).catch((e) => {
+          console.error('Auth state change profile load failed:', e)
+        })
+      }, 0)
+    })
 
     return () => {
       alive = false
