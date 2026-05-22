@@ -36,6 +36,17 @@ const AdminUsersPage = lazy(() =>
     default: m.AdminUsersPage,
   })),
 )
+const CarsPage = lazy(() =>
+  import('./pages/CarsPage').then((m) => ({ default: m.CarsPage })),
+)
+const NewCarPage = lazy(() =>
+  import('./pages/NewCarPage').then((m) => ({ default: m.NewCarPage })),
+)
+const CarDetailPage = lazy(() =>
+  import('./pages/CarDetailPage').then((m) => ({
+    default: m.CarDetailPage,
+  })),
+)
 
 function RouteFallback() {
   return (
@@ -107,6 +118,30 @@ function App() {
           element={
             <ProtectedRoute>
               <AdminUsersPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/cars"
+          element={
+            <ProtectedRoute>
+              <CarsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/cars/new"
+          element={
+            <ProtectedRoute>
+              <NewCarPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/cars/:id"
+          element={
+            <ProtectedRoute>
+              <CarDetailPage />
             </ProtectedRoute>
           }
         />

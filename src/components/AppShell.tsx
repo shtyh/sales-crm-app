@@ -45,6 +45,9 @@ export function AppShell({ children }: { children: ReactNode }) {
               <NavLink to="/bookings" className={navLinkClass}>
                 Bookings
               </NavLink>
+              <NavLink to="/cars" className={navLinkClass}>
+                Inventory
+              </NavLink>
               <NavLink to="/bookings/new" className={navLinkClass}>
                 + New
               </NavLink>
