@@ -7,8 +7,72 @@ import { formatError } from '../lib/errors'
 import { formatMYR } from '../lib/format'
 import type { Booking, Profile } from '../lib/types'
 
+type BannerStyle = {
+  bg: string
+  label: string
+  labelTone: string
+  textTone: string
+  tagline: string
+}
+
+const BANNER: Partial<Record<NonNullable<ReturnType<typeof useAuth>['role']>, BannerStyle>> = {
+  super_admin: {
+    bg: 'bg-gradient-to-r from-rose-700 to-rose-500',
+    label: '★ Super Admin',
+    labelTone: 'text-rose-200',
+    textTone: 'text-rose-100',
+    tagline: 'God mode — you can override every check below.',
+  },
+  sales_manager: {
+    bg: 'bg-gradient-to-r from-blue-700 to-blue-500',
+    label: '☆ Sales Manager',
+    labelTone: 'text-blue-200',
+    textTone: 'text-blue-100',
+    tagline:
+      "Your team's funnel + discount sign-offs are below. Approve fast — SAs are blocked on you.",
+  },
+  general_admin: {
+    bg: 'bg-gradient-to-r from-purple-700 to-purple-500',
+    label: '☆ General Admin',
+    labelTone: 'text-purple-200',
+    textTone: 'text-purple-100',
+    tagline: "You're in admin mode. Manage day-to-day bookings here.",
+  },
+  finance_admin: {
+    bg: 'bg-gradient-to-r from-amber-700 to-amber-500',
+    label: '☆ Finance Admin',
+    labelTone: 'text-amber-200',
+    textTone: 'text-amber-100',
+    tagline:
+      'Loan / insurance / deposit / payment statuses are yours to maintain.',
+  },
+  accountant: {
+    bg: 'bg-gradient-to-r from-green-700 to-green-500',
+    label: '☆ Accountant',
+    labelTone: 'text-green-200',
+    textTone: 'text-green-100',
+    tagline: 'Deposit + payment status and cancellations flow through you.',
+  },
+}
+
+const FALLBACK_BANNER: BannerStyle = {
+  bg: 'bg-gradient-to-r from-purple-700 to-purple-500',
+  label: '☆ Admin',
+  labelTone: 'text-purple-200',
+  textTone: 'text-purple-100',
+  tagline: "You're in admin mode.",
+}
+
 export function AdminDashboardPage() {
-  const { profile: currentProfile, isSuperAdmin, canApproveDiscount } = useAuth()
+  const {
+    profile: currentProfile,
+    role,
+    isSuperAdmin,
+    canApproveDiscount,
+  } = useAuth()
+
+  const banner = (role && BANNER[role]) ?? FALLBACK_BANNER
+  const isSalesManager = role === 'sales_manager'
 
   const { data: profiles, error: profilesErr } = useProfiles()
   const { data: bookings, error: bookingsErr } = useBookings()
@@ -103,37 +167,64 @@ export function AdminDashboardPage() {
     }
   }, [profiles])
 
+  // Sales-funnel counts (manager view).
+  const funnel = useMemo(() => {
+    if (!bookings) {
+      return { pending: 0, confirmed: 0, delivered: 0, cancelled: 0 }
+    }
+    return {
+      pending: bookings.filter((b) => b.status === 'pending').length,
+      confirmed: bookings.filter((b) => b.status === 'confirmed').length,
+      delivered: bookings.filter((b) => b.status === 'delivered').length,
+      cancelled: bookings.filter((b) => b.status === 'cancelled').length,
+    }
+  }, [bookings])
+
+  // Manager-only leaderboard. Counts each owner's non-cancelled bookings +
+  // sums net revenue (otr - discount). Top 5 by booking count.
+  const leaderboard = useMemo(() => {
+    if (!bookings || !profileById.size) return []
+    type Row = { id: string; count: number; revenue: number }
+    const acc = new Map<string, Row>()
+    for (const b of bookings) {
+      if (b.status === 'cancelled') continue
+      const row = acc.get(b.owner_id) ?? {
+        id: b.owner_id,
+        count: 0,
+        revenue: 0,
+      }
+      row.count += 1
+      row.revenue += Number(b.otr_price) - Number(b.discount_amount ?? 0)
+      acc.set(b.owner_id, row)
+    }
+    return [...acc.values()]
+      .sort((a, b) => b.count - a.count || b.revenue - a.revenue)
+      .slice(0, 5)
+      .map((r) => {
+        const p = profileById.get(r.id)
+        return {
+          ...r,
+          name: p?.full_name || p?.email || '—',
+          isManager: p?.role === 'sales_manager',
+        }
+      })
+  }, [bookings, profileById])
+
   return (
     <AppShell>
-      {/* Banner — red for super_admin (god mode), purple for regular admin
-          roles, so it's visually obvious at a glance which hat you're wearing. */}
+      {/* Banner — colour + label switch per role so the user instantly knows
+          which hat they're wearing. Style map is at the top of the file. */}
       <div className="-mt-6 mb-6 -mx-4 sm:-mx-6">
-        <div
-          className={`px-4 py-4 text-white sm:px-6 sm:py-5 ${
-            isSuperAdmin
-              ? 'bg-gradient-to-r from-rose-700 to-rose-500'
-              : 'bg-gradient-to-r from-purple-700 to-purple-500'
-          }`}
-        >
+        <div className={`px-4 py-4 text-white sm:px-6 sm:py-5 ${banner.bg}`}>
           <div
-            className={`text-[10px] font-medium uppercase tracking-widest ${
-              isSuperAdmin ? 'text-rose-200' : 'text-purple-200'
-            }`}
+            className={`text-[10px] font-medium uppercase tracking-widest ${banner.labelTone}`}
           >
-            {isSuperAdmin ? '★ Super Admin' : '☆ Admin'}
+            {banner.label}
           </div>
           <h1 className="mt-1 text-xl font-semibold sm:text-2xl">
             Hi, {currentProfile?.full_name || currentProfile?.email}
           </h1>
-          <p
-            className={`mt-1 text-sm ${
-              isSuperAdmin ? 'text-rose-100' : 'text-purple-100'
-            }`}
-          >
-            {isSuperAdmin
-              ? "God mode — you can override every check below."
-              : "You're in admin mode. Manage staff and system settings here."}
-          </p>
+          <p className={`mt-1 text-sm ${banner.textTone}`}>{banner.tagline}</p>
         </div>
       </div>
 
@@ -155,17 +246,52 @@ export function AdminDashboardPage() {
       {stats && (
         <>
           {/* ---------- Stats ---------- */}
-          <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <StatCard
-              label="Pending bookings"
-              value={pendingCount}
-              accent={pendingCount > 0 ? 'warn' : 'neutral'}
-              hint="awaiting deposit"
-            />
-            <StatCard label="Total users" value={stats.total} />
-            <StatCard label="Admins" value={stats.admins} accent="purple" />
-            <StatCard label="Sales staff" value={stats.staff} />
-          </div>
+          {/* Sales manager gets the team's sales funnel (the thing they
+              actually monitor). Other admin roles keep the HR-style overview. */}
+          {isSalesManager ? (
+            <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <StatCard
+                label="Discount approvals"
+                value={pendingApprovals.length}
+                accent={pendingApprovals.length > 0 ? 'rose' : 'neutral'}
+                hint="awaiting your sign-off"
+              />
+              <StatCard
+                label="Pending"
+                value={funnel.pending}
+                accent="warn"
+                hint="awaiting deposit"
+              />
+              <StatCard
+                label="Confirmed"
+                value={funnel.confirmed}
+                accent="blue"
+                hint="deposit received"
+              />
+              <StatCard
+                label="Delivered"
+                value={funnel.delivered}
+                accent="green"
+                hint="closed wins"
+              />
+            </div>
+          ) : (
+            <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <StatCard
+                label="Pending bookings"
+                value={pendingCount}
+                accent={pendingCount > 0 ? 'warn' : 'neutral'}
+                hint="awaiting deposit"
+              />
+              <StatCard label="Total users" value={stats.total} />
+              <StatCard
+                label="Admins"
+                value={stats.admins}
+                accent="purple"
+              />
+              <StatCard label="Sales staff" value={stats.staff} />
+            </div>
+          )}
 
           {/* ---------- Pending discount approvals (sales_manager queue) ---------- */}
           {canApproveDiscount && pendingApprovals.length > 0 && (
@@ -234,6 +360,46 @@ export function AdminDashboardPage() {
                   )
                 })}
               </ul>
+            </section>
+          )}
+
+          {/* ---------- Team leaderboard (sales_manager only) ---------- */}
+          {isSalesManager && leaderboard.length > 0 && (
+            <section className="mb-6 rounded-2xl border border-blue-200 bg-blue-50/30 p-5">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-blue-900">
+                  🏆 Top performers
+                </h2>
+                <span className="text-xs text-blue-700">
+                  by bookings (excludes cancelled)
+                </span>
+              </div>
+              <ol className="space-y-2">
+                {leaderboard.map((row, i) => (
+                  <li
+                    key={row.id}
+                    className="flex items-center gap-3 rounded-lg bg-white px-3 py-2"
+                  >
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-semibold text-blue-800">
+                      {i + 1}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-medium text-gray-900">
+                        {row.name}
+                        {row.isManager && (
+                          <span className="ml-1 text-[10px] text-blue-600">
+                            (manager)
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {row.count} booking{row.count === 1 ? '' : 's'} ·{' '}
+                        net {formatMYR(row.revenue)}
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ol>
             </section>
           )}
 
@@ -482,6 +648,18 @@ function BookingListWidget({
   )
 }
 
+const STAT_TONE: Record<
+  'neutral' | 'purple' | 'warn' | 'rose' | 'blue' | 'green',
+  string
+> = {
+  neutral: 'text-gray-900',
+  purple: 'text-purple-700',
+  warn: 'text-amber-700',
+  rose: 'text-rose-700',
+  blue: 'text-blue-700',
+  green: 'text-green-700',
+}
+
 function StatCard({
   label,
   value,
@@ -491,14 +669,9 @@ function StatCard({
   label: string
   value: number
   hint?: string
-  accent?: 'neutral' | 'purple' | 'warn'
+  accent?: keyof typeof STAT_TONE
 }) {
-  const valueTone =
-    accent === 'purple'
-      ? 'text-purple-700'
-      : accent === 'warn'
-        ? 'text-amber-700'
-        : 'text-gray-900'
+  const valueTone = STAT_TONE[accent]
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-4">
       <div className="text-xs font-medium text-gray-500">{label}</div>
