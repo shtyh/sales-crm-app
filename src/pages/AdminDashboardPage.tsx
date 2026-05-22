@@ -77,17 +77,34 @@ export function AdminDashboardPage() {
 
   return (
     <AppShell>
-      {/* Distinct purple banner so admin pages are visually obviously admin */}
+      {/* Banner — red for super_admin (god mode), purple for regular admin
+          roles, so it's visually obvious at a glance which hat you're wearing. */}
       <div className="-mt-6 mb-6 -mx-4 sm:-mx-6">
-        <div className="bg-gradient-to-r from-purple-700 to-purple-500 px-4 py-4 text-white sm:px-6 sm:py-5">
-          <div className="text-[10px] font-medium uppercase tracking-widest text-purple-200">
-            ☆ Admin
+        <div
+          className={`px-4 py-4 text-white sm:px-6 sm:py-5 ${
+            isSuperAdmin
+              ? 'bg-gradient-to-r from-rose-700 to-rose-500'
+              : 'bg-gradient-to-r from-purple-700 to-purple-500'
+          }`}
+        >
+          <div
+            className={`text-[10px] font-medium uppercase tracking-widest ${
+              isSuperAdmin ? 'text-rose-200' : 'text-purple-200'
+            }`}
+          >
+            {isSuperAdmin ? '★ Super Admin' : '☆ Admin'}
           </div>
           <h1 className="mt-1 text-xl font-semibold sm:text-2xl">
             Hi, {currentProfile?.full_name || currentProfile?.email}
           </h1>
-          <p className="mt-1 text-sm text-purple-100">
-            You're in admin mode. Manage staff and system settings here.
+          <p
+            className={`mt-1 text-sm ${
+              isSuperAdmin ? 'text-rose-100' : 'text-purple-100'
+            }`}
+          >
+            {isSuperAdmin
+              ? "God mode — you can override every check below."
+              : "You're in admin mode. Manage staff and system settings here."}
           </p>
         </div>
       </div>

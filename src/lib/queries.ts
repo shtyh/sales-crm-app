@@ -5,6 +5,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createBooking,
+  deleteBooking,
   getBooking,
   listBookings,
   updateBooking,
@@ -63,6 +64,17 @@ export function useUpdateBooking() {
     }) => updateBooking(id, patch),
     onSuccess: (updated) => {
       qc.setQueryData<Booking>(qk.booking(updated.id), updated)
+      qc.invalidateQueries({ queryKey: qk.bookings })
+    },
+  })
+}
+
+export function useDeleteBooking() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => deleteBooking(id),
+    onSuccess: (_, id) => {
+      qc.removeQueries({ queryKey: qk.booking(id) })
       qc.invalidateQueries({ queryKey: qk.bookings })
     },
   })

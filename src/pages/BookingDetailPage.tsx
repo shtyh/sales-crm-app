@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { AppShell } from '../components/AppShell'
 import { AttachmentSection } from '../components/AttachmentSection'
@@ -8,6 +8,7 @@ import {
   qk,
   useAttachments,
   useBooking,
+  useDeleteBooking,
   useUpdateBooking,
 } from '../lib/queries'
 import { formatError } from '../lib/errors'
@@ -67,12 +68,14 @@ function formatTimestamp(iso: string) {
 
 export function BookingDetailPage() {
   const { id = '' } = useParams<{ id: string }>()
-  const { isFinanceAdmin, canCancel } = useAuth()
+  const navigate = useNavigate()
+  const { isFinanceAdmin, canCancel, isSuperAdmin } = useAuth()
   const qc = useQueryClient()
 
   const { data: booking, error: bookingErr, isLoading } = useBooking(id)
   const { data: attachments } = useAttachments(id)
   const updateMut = useUpdateBooking()
+  const deleteMut = useDeleteBooking()
 
   const loadError = bookingErr
     ? formatError(bookingErr)
@@ -213,6 +216,38 @@ export function BookingDetailPage() {
     }
   }
 
+  /**
+   * Hard delete — super_admin only. Two confirmations:
+   *   1. Plain "are you sure" prompt
+   *   2. Type the booking code to confirm (defeats accidental clicks)
+   */
+  async function handleDelete() {
+    if (!booking) return
+    if (
+      !window.confirm(
+        `PERMANENTLY DELETE booking ${booking.code}?\n\n` +
+          'This wipes the record (and all attachments) from the database. ' +
+          'There is no undo. Normally you should Cancel instead.',
+      )
+    ) {
+      return
+    }
+    const typed = window.prompt(
+      `To confirm, type the booking code exactly: ${booking.code}`,
+    )
+    if (typed !== booking.code) {
+      setError('Booking code did not match — delete aborted.')
+      return
+    }
+    setError(null)
+    try {
+      await deleteMut.mutateAsync(id)
+      navigate('/bookings', { replace: true })
+    } catch (e) {
+      setError(formatError(e))
+    }
+  }
+
   if (isLoading) {
     return (
       <AppShell>
@@ -275,16 +310,29 @@ export function BookingDetailPage() {
               )}
           </div>
         </div>
-        {booking.status !== 'cancelled' && canCancel && (
-          <button
-            type="button"
-            onClick={handleCancel}
-            disabled={cancelling || saving}
-            className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-50"
-          >
-            {cancelling ? 'Cancelling…' : 'Cancel booking'}
-          </button>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {booking.status !== 'cancelled' && canCancel && (
+            <button
+              type="button"
+              onClick={handleCancel}
+              disabled={cancelling || saving || deleteMut.isPending}
+              className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-50"
+            >
+              {cancelling ? 'Cancelling…' : 'Cancel booking'}
+            </button>
+          )}
+          {isSuperAdmin && (
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={deleteMut.isPending || saving || cancelling}
+              className="rounded-lg border border-rose-300 bg-rose-50 px-3 py-1.5 text-sm font-medium text-rose-800 transition hover:bg-rose-100 disabled:opacity-50"
+              title="Super admin only — permanent delete"
+            >
+              {deleteMut.isPending ? 'Deleting…' : '★ Delete'}
+            </button>
+          )}
+        </div>
       </div>
 
       <form

@@ -103,8 +103,10 @@ create policy bookings_insert on public.bookings
   for insert to authenticated
   with check (
     public.is_super_admin()
-    or (public.current_app_role() = 'sales_advisor' and owner_id = (select auth.uid()))
-    or public.current_app_role() = 'general_admin'
+    or (
+      public.current_app_role() in ('sales_advisor','sales_manager')
+      and owner_id = (select auth.uid())
+    )
   );
 
 drop policy if exists bookings_update on public.bookings;

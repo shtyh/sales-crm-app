@@ -53,6 +53,12 @@ export async function updateBooking(id: string, patch: Partial<BookingInsert>) {
   return data as Booking
 }
 
-// Note: there is intentionally no `deleteBooking` helper. Bookings are
-// legal records; users cancel them via a status change instead. Hard delete
-// is also blocked at the DB level (no RLS delete policy).
+/**
+ * Hard-delete a booking. Allowed only for super_admin (RLS enforces).
+ * Normal users should cancel via a status change instead; this exists
+ * for the rare god-mode cleanup case.
+ */
+export async function deleteBooking(id: string) {
+  const { error } = await supabase.from('bookings').delete().eq('id', id)
+  if (error) throw error
+}
