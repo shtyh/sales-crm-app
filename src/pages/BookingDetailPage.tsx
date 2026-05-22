@@ -1,13 +1,20 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
 import { AttachmentSection } from '../components/AttachmentSection'
 import { useAuth } from '../lib/auth'
 import { getBooking, updateBooking } from '../lib/bookings'
+import { listAttachments } from '../lib/attachments'
 import { formatError } from '../lib/errors'
 import { PROTON_MODELS, variantsFor } from '../data/proton-models'
 import { LOAN_BANKS, INSURERS } from '../data/banks-and-insurers'
-import type { Booking, BookingStatus, LoanStatus } from '../lib/types'
+import type {
+  Attachment,
+  AttachmentKind,
+  Booking,
+  BookingStatus,
+  LoanStatus,
+} from '../lib/types'
 
 const STATUSES: { value: BookingStatus; label: string }[] = [
   { value: 'pending', label: 'Pending' },
@@ -85,9 +92,45 @@ export function BookingDetailPage() {
   const [error, setError] = useState<string | null>(null)
   const [savedAt, setSavedAt] = useState<number | null>(null)
 
+  // All attachments for this booking — fetched ONCE, then split per kind below.
+  // (Previously each <AttachmentSection> re-fetched the full list independently,
+  // so opening a booking made 4 identical round-trips.)
+  const [attachments, setAttachments] = useState<Attachment[] | null>(null)
+
+  const refreshAttachments = useCallback(async () => {
+    const rows = await listAttachments(id)
+    setAttachments(rows)
+  }, [id])
+
+  const attachmentsByKind = useMemo(() => {
+    const map: Record<AttachmentKind, Attachment[] | null> = {
+      bank_transaction: null,
+      bank_statement: null,
+      lou: null,
+      cancellation_form: null,
+      other: null,
+    }
+    if (!attachments) return map
+    for (const k of Object.keys(map) as AttachmentKind[]) map[k] = []
+    for (const a of attachments) map[a.kind]?.push(a)
+    return map
+  }, [attachments])
+
   useEffect(() => {
     let alive = true
     setLoading(true)
+    setAttachments(null)
+    // Kick off the attachments fetch in parallel with the booking fetch — we
+    // don't need to wait for the booking to come back before asking for files.
+    listAttachments(id)
+      .then((rows) => {
+        if (alive) setAttachments(rows)
+      })
+      .catch((e) => {
+        // Non-fatal: the form still renders, individual sections will show empty.
+        console.warn('Failed to load attachments:', e)
+        if (alive) setAttachments([])
+      })
     getBooking(id)
       .then((b) => {
         if (!alive) return
@@ -592,6 +635,8 @@ export function BookingDetailPage() {
           kind="bank_transaction"
           title="🏦 Bank transaction"
           description="Deposit / payment slips, online transfer screenshots, etc."
+          items={attachmentsByKind.bank_transaction}
+          onChange={refreshAttachments}
         />
         <AttachmentSection
           bookingId={booking.id}
@@ -599,6 +644,8 @@ export function BookingDetailPage() {
           kind="bank_statement"
           title="💳 Bank statement"
           description="Customer bank statement — only needed for cancellation refunds."
+          items={attachmentsByKind.bank_statement}
+          onChange={refreshAttachments}
         />
         <AttachmentSection
           bookingId={booking.id}
@@ -606,6 +653,8 @@ export function BookingDetailPage() {
           kind="lou"
           title="📃 Letter of Undertaking (LOU)"
           description="Employer LOU, loan undertaking, guarantor letter, etc."
+          items={attachmentsByKind.lou}
+          onChange={refreshAttachments}
         />
         <AttachmentSection
           bookingId={booking.id}
@@ -613,6 +662,8 @@ export function BookingDetailPage() {
           kind="cancellation_form"
           title="❌ Cancellation form"
           description="Signed cancellation form if the customer backs out."
+          items={attachmentsByKind.cancellation_form}
+          onChange={refreshAttachments}
         />
       </div>
     </AppShell>

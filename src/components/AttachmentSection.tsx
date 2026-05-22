@@ -1,8 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import {
   deleteAttachment,
   getAttachmentUrl,
-  listAttachments,
   uploadAttachment,
 } from '../lib/attachments'
 import { formatError } from '../lib/errors'
@@ -30,6 +29,10 @@ type Props = {
   kind: AttachmentKind
   title: string
   description?: string
+  /** Attachments of this kind. `null` means parent is still loading. */
+  items: Attachment[] | null
+  /** Re-fetch the parent's attachment list after a mutation. */
+  onChange: () => Promise<void>
 }
 
 export function AttachmentSection({
@@ -38,26 +41,13 @@ export function AttachmentSection({
   kind,
   title,
   description,
+  items,
+  onChange,
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const [items, setItems] = useState<Attachment[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
-
-  async function refresh() {
-    try {
-      const all = await listAttachments(bookingId)
-      setItems(all.filter((a) => a.kind === kind))
-    } catch (e) {
-      setError(formatError(e))
-    }
-  }
-
-  useEffect(() => {
-    refresh()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bookingId, kind])
 
   async function handlePick(file: File | null) {
     if (!file) return
@@ -69,7 +59,7 @@ export function AttachmentSection({
     setUploading(true)
     try {
       await uploadAttachment(bookingId, bookingCode, kind, file)
-      await refresh()
+      await onChange()
     } catch (e) {
       setError(formatError(e))
     } finally {
@@ -93,7 +83,7 @@ export function AttachmentSection({
     setError(null)
     try {
       await deleteAttachment(a)
-      await refresh()
+      await onChange()
     } catch (e) {
       setError(formatError(e))
     }
