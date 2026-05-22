@@ -22,10 +22,16 @@ export async function listProfiles() {
   return data as Profile[]
 }
 
-/** Update a profile. Only admins are allowed by RLS to mutate other people. */
+/**
+ * Update a profile. RLS rules:
+ *   - Users can update their OWN row (used for the Account page name change)
+ *   - super_admin can update anyone
+ *   - Role changes are blocked by trigger for non-super-admin
+ *   - is_admin is a generated column; never include it in `patch`
+ */
 export async function updateProfile(
   id: string,
-  patch: Partial<Pick<Profile, 'full_name' | 'is_admin'>>,
+  patch: Partial<Pick<Profile, 'full_name' | 'role'>>,
 ) {
   const { data, error } = await supabase
     .from('profiles')

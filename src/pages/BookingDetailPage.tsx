@@ -67,7 +67,7 @@ function formatTimestamp(iso: string) {
 
 export function BookingDetailPage() {
   const { id = '' } = useParams<{ id: string }>()
-  const { isAdmin } = useAuth()
+  const { isFinanceAdmin, canCancel } = useAuth()
   const qc = useQueryClient()
 
   const { data: booking, error: bookingErr, isLoading } = useBooking(id)
@@ -172,16 +172,16 @@ export function BookingDetailPage() {
           booking_date: bookingDate,
           status,
           notes: notes.trim() || null,
-          // SA + Admin can both write these (SA's job to update after bank reply)
-          loan_status: loanStatus,
-          loan_notes: loanNotes.trim() || null,
-          // Admin-only fields — only included when caller is admin so SAs can't
-          // accidentally overwrite them with the form's "" defaults. The DB
-          // trigger also blocks any non-admin from changing them.
-          ...(isAdmin
+          // Loan + insurance fields are finance_admin only (DB trigger enforces).
+          // Don't send them at all for other roles so the patch doesn't trip
+          // the trigger when a non-finance user accidentally re-submits the
+          // same value as null vs "" coercion.
+          ...(isFinanceAdmin
             ? {
                 loan_bank: loanBank || null,
                 insurance_company: insuranceCompany || null,
+                loan_status: loanStatus,
+                loan_notes: loanNotes.trim() || null,
               }
             : {}),
         },
@@ -275,7 +275,7 @@ export function BookingDetailPage() {
               )}
           </div>
         </div>
-        {booking.status !== 'cancelled' && (
+        {booking.status !== 'cancelled' && canCancel && (
           <button
             type="button"
             onClick={handleCancel}
@@ -440,14 +440,14 @@ export function BookingDetailPage() {
           </div>
         </Section>
 
-        {/* ---------- Admin: Loan & Insurance setup ---------- */}
+        {/* ---------- Finance Admin: Loan & Insurance ---------- */}
         <section className="rounded-xl border border-purple-200 bg-purple-50/50 p-4 sm:p-5">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-purple-900">
-              🏛️ Loan & Insurance setup
+              🏛️ Loan & Insurance
             </h2>
-            {!isAdmin && (
-              <span className="text-xs text-gray-500">🔒 Admin-only</span>
+            {!isFinanceAdmin && (
+              <span className="text-xs text-gray-500">🔒 Finance Admin only</span>
             )}
           </div>
 
@@ -463,13 +463,13 @@ export function BookingDetailPage() {
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Loan bank">
               <select
-                disabled={!isAdmin}
+                disabled={!isFinanceAdmin}
                 value={loanBank}
                 onChange={(e) => setLoanBank(e.target.value)}
-                className={readonlyInputClass(isAdmin)}
+                className={readonlyInputClass(isFinanceAdmin)}
               >
                 <option value="">
-                  {isAdmin ? '— Select bank —' : '— Not set yet —'}
+                  {isFinanceAdmin ? '— Select bank —' : '— Not set yet —'}
                 </option>
                 {LOAN_BANKS.map((b) => (
                   <option key={b} value={b}>
@@ -485,13 +485,13 @@ export function BookingDetailPage() {
 
             <Field label="Insurance company">
               <select
-                disabled={!isAdmin}
+                disabled={!isFinanceAdmin}
                 value={insuranceCompany}
                 onChange={(e) => setInsuranceCompany(e.target.value)}
-                className={readonlyInputClass(isAdmin)}
+                className={readonlyInputClass(isFinanceAdmin)}
               >
                 <option value="">
-                  {isAdmin ? '— Select insurer —' : '— Not set yet —'}
+                  {isFinanceAdmin ? '— Select insurer —' : '— Not set yet —'}
                 </option>
                 {INSURERS.map((i) => (
                   <option key={i} value={i}>
@@ -507,25 +507,14 @@ export function BookingDetailPage() {
               </select>
             </Field>
           </div>
-        </section>
 
-        {/* ---------- Loan application status (SA + Admin both edit) ---------- */}
-        <section className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-gray-900">
-              📋 Loan application status
-            </h2>
-            <span className="text-xs text-gray-500">
-              SA updates after the bank decides
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Loan status">
               <select
+                disabled={!isFinanceAdmin}
                 value={loanStatus}
                 onChange={(e) => setLoanStatus(e.target.value as LoanStatus)}
-                className={inputClass}
+                className={readonlyInputClass(isFinanceAdmin)}
               >
                 {LOAN_STATUSES.map((s) => (
                   <option key={s.value} value={s.value}>
@@ -537,9 +526,10 @@ export function BookingDetailPage() {
             <Field label="Loan notes">
               <input
                 type="text"
+                disabled={!isFinanceAdmin}
                 value={loanNotes}
                 onChange={(e) => setLoanNotes(e.target.value)}
-                className={inputClass}
+                className={readonlyInputClass(isFinanceAdmin)}
                 placeholder={
                   loanStatus === 'rejected'
                     ? 'Why rejected? Next bank to try?'

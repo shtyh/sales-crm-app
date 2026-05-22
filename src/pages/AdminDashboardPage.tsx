@@ -8,7 +8,7 @@ import { formatMYR } from '../lib/format'
 import type { Booking, Profile } from '../lib/types'
 
 export function AdminDashboardPage() {
-  const { profile: currentProfile } = useAuth()
+  const { profile: currentProfile, isSuperAdmin } = useAuth()
 
   const { data: profiles, error: profilesErr } = useProfiles()
   const { data: bookings, error: bookingsErr } = useBookings()
@@ -202,12 +202,21 @@ export function AdminDashboardPage() {
               Quick actions
             </h2>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-              <ActionLink
-                to="/admin/users"
-                icon="👥"
-                title="Manage users"
-                subtitle="Rename, grant/revoke admin"
-              />
+              {isSuperAdmin ? (
+                <ActionLink
+                  to="/admin/users"
+                  icon="👥"
+                  title="Manage users"
+                  subtitle="Invite, rename, change roles"
+                />
+              ) : (
+                <ActionLink
+                  disabled
+                  icon="👥"
+                  title="Manage users"
+                  subtitle="Super admin only"
+                />
+              )}
               <ActionLink
                 disabled
                 icon="📊"

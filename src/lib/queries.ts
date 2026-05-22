@@ -86,7 +86,7 @@ export function useUpdateProfile() {
       patch,
     }: {
       id: string
-      patch: Partial<Pick<Profile, 'full_name' | 'is_admin'>>
+      patch: Partial<Pick<Profile, 'full_name' | 'role'>>
     }) => updateProfile(id, patch),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.profiles })

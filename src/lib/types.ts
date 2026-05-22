@@ -52,10 +52,38 @@ export type Booking = {
  * Fields the user supplies when creating a booking. `code`, `owner_id`,
  * and timestamps are filled in by the database defaults.
  */
+/**
+ * RBAC roles. Mirrors the `public.app_role` enum in Supabase. Order is the
+ * privilege hierarchy from most → least powerful (super_admin first, plain
+ * sales_advisor last).
+ */
+export type AppRole =
+  | 'super_admin'
+  | 'general_admin'
+  | 'sales_manager'
+  | 'finance_admin'
+  | 'accountant'
+  | 'sales_advisor'
+
+export const ROLE_LABEL: Record<AppRole, string> = {
+  super_admin: 'Super Admin',
+  general_admin: 'General Admin',
+  sales_manager: 'Sales Manager',
+  finance_admin: 'Finance Admin',
+  accountant: 'Accountant',
+  sales_advisor: 'Sales Advisor',
+}
+
 export type Profile = {
   id: string
   full_name: string | null
   email: string | null
+  role: AppRole
+  /**
+   * Server-side generated: true when role is anything other than sales_advisor.
+   * Kept for back-compat with code that historically branched on isAdmin.
+   * Read-only — the DB rejects direct writes.
+   */
   is_admin: boolean
   created_at: string
   updated_at: string

@@ -10,13 +10,20 @@ import {
 import type { Session, User } from '@supabase/supabase-js'
 import { supabase } from './supabase'
 import { getProfile } from './profiles'
-import type { Profile } from './types'
+import type { AppRole, Profile } from './types'
 
 type AuthState = {
   session: Session | null
   user: User | null
   profile: Profile | null
+  /** Caller's role, or null while loading / signed out. */
+  role: AppRole | null
+  /** Back-compat: true for any non-SA role (matches DB's is_admin column). */
   isAdmin: boolean
+  isSuperAdmin: boolean
+  isFinanceAdmin: boolean
+  /** Sales manager or accountant — the two roles allowed to cancel bookings. */
+  canCancel: boolean
   loading: boolean
   refreshProfile: () => Promise<void>
 }
@@ -25,7 +32,11 @@ const AuthContext = createContext<AuthState>({
   session: null,
   user: null,
   profile: null,
+  role: null,
   isAdmin: false,
+  isSuperAdmin: false,
+  isFinanceAdmin: false,
+  canCancel: false,
   loading: true,
   refreshProfile: async () => {},
 })
@@ -147,17 +158,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await loadProfileFor(session?.user?.id)
   }, [loadProfileFor, session?.user?.id])
 
-  const value = useMemo<AuthState>(
-    () => ({
+  const value = useMemo<AuthState>(() => {
+    const role = profile?.role ?? null
+    return {
       session,
       user: session?.user ?? null,
       profile,
+      role,
       isAdmin: !!profile?.is_admin,
+      isSuperAdmin: role === 'super_admin',
+      isFinanceAdmin: role === 'finance_admin' || role === 'super_admin',
+      // Per spec: SA can't cancel their own bookings (no self-dealing); only
+      // sales_manager + accountant can — plus super_admin's god mode.
+      canCancel:
+        role === 'sales_manager' ||
+        role === 'accountant' ||
+        role === 'super_admin',
       loading,
       refreshProfile,
-    }),
-    [session, profile, loading, refreshProfile],
-  )
+    }
+  }, [session, profile, loading, refreshProfile])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

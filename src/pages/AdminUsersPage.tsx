@@ -4,12 +4,30 @@ import { AppShell } from '../components/AppShell'
 import { useAuth } from '../lib/auth'
 import { useProfiles, useUpdateProfile } from '../lib/queries'
 import { formatError } from '../lib/errors'
-import type { Profile } from '../lib/types'
+import { ROLE_LABEL, type AppRole, type Profile } from '../lib/types'
+
+const ASSIGNABLE_ROLES: AppRole[] = [
+  'sales_advisor',
+  'sales_manager',
+  'general_admin',
+  'finance_admin',
+  'accountant',
+  'super_admin',
+]
+
+const ROLE_BADGE: Record<AppRole, string> = {
+  super_admin: 'bg-rose-100 text-rose-800',
+  general_admin: 'bg-purple-100 text-purple-800',
+  sales_manager: 'bg-blue-100 text-blue-800',
+  finance_admin: 'bg-amber-100 text-amber-800',
+  accountant: 'bg-green-100 text-green-800',
+  sales_advisor: 'bg-gray-100 text-gray-700',
+}
 
 export function AdminUsersPage() {
-  const { profile: currentProfile, isAdmin, loading } = useAuth()
+  const { profile: currentProfile, isSuperAdmin, loading } = useAuth()
 
-  const { data: profiles, error: profilesErr } = useProfiles(isAdmin)
+  const { data: profiles, error: profilesErr } = useProfiles(isSuperAdmin)
   const updateMut = useUpdateProfile()
 
   const [localError, setLocalError] = useState<string | null>(null)
@@ -29,15 +47,16 @@ export function AdminUsersPage() {
       </AppShell>
     )
   }
-  if (!isAdmin) {
+  if (!isSuperAdmin) {
     return <Navigate to="/" replace />
   }
 
-  async function handleToggleAdmin(p: Profile) {
-    if (p.id === currentProfile?.id && p.is_admin) {
+  async function handleChangeRole(p: Profile, newRole: AppRole) {
+    if (newRole === p.role) return
+    if (p.id === currentProfile?.id && newRole !== 'super_admin') {
       if (
         !window.confirm(
-          'Demote yourself? You will lose admin access immediately.',
+          'Change your OWN role away from super_admin? You will lose access to this page immediately and only another super_admin can restore it.',
         )
       ) {
         return
@@ -46,7 +65,7 @@ export function AdminUsersPage() {
     setBusyId(p.id)
     setLocalError(null)
     try {
-      await updateMut.mutateAsync({ id: p.id, patch: { is_admin: !p.is_admin } })
+      await updateMut.mutateAsync({ id: p.id, patch: { role: newRole } })
     } catch (e) {
       setLocalError(formatError(e))
     } finally {
@@ -167,29 +186,32 @@ export function AdminUsersPage() {
                       </td>
                       <td className="px-4 py-3 text-gray-600">{p.email}</td>
                       <td className="px-4 py-3">
-                        {p.is_admin ? (
-                          <span className="inline-flex rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-800">
-                            ☆ Admin
+                        <span
+                          className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${ROLE_BADGE[p.role]}`}
+                        >
+                          {ROLE_LABEL[p.role]}
+                        </span>
+                        {isSelf && (
+                          <span className="ml-1 text-[10px] text-gray-400">
+                            (you)
                           </span>
-                        ) : (
-                          <span className="text-xs text-gray-500">Staff</span>
                         )}
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <button
-                          type="button"
-                          onClick={() => handleToggleAdmin(p)}
+                        <select
+                          value={p.role}
                           disabled={busyId === p.id}
-                          className="rounded-lg border border-gray-300 bg-white px-3 py-1 text-xs text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
+                          onChange={(e) =>
+                            handleChangeRole(p, e.target.value as AppRole)
+                          }
+                          className="rounded-lg border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 disabled:opacity-50"
                         >
-                          {busyId === p.id
-                            ? '…'
-                            : p.is_admin
-                              ? isSelf
-                                ? 'Demote (me)'
-                                : 'Demote'
-                              : 'Make admin'}
-                        </button>
+                          {ASSIGNABLE_ROLES.map((r) => (
+                            <option key={r} value={r}>
+                              {ROLE_LABEL[r]}
+                            </option>
+                          ))}
+                        </select>
                       </td>
                     </tr>
                   )
@@ -239,28 +261,31 @@ export function AdminUsersPage() {
                         )}
                       </button>
                     )}
-                    {p.is_admin && (
-                      <span className="shrink-0 rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-800">
-                        ☆ Admin
-                      </span>
-                    )}
+                    <span
+                      className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${ROLE_BADGE[p.role]}`}
+                    >
+                      {ROLE_LABEL[p.role]}
+                    </span>
                   </div>
                   <div className="mt-1 text-xs text-gray-500">{p.email}</div>
-                  <div className="mt-3 flex justify-end">
-                    <button
-                      type="button"
-                      onClick={() => handleToggleAdmin(p)}
+                  <div className="mt-3 flex items-center justify-between gap-2">
+                    {isSelf && (
+                      <span className="text-[10px] text-gray-400">(you)</span>
+                    )}
+                    <select
+                      value={p.role}
                       disabled={busyId === p.id}
-                      className="rounded-lg border border-gray-300 bg-white px-3 py-1 text-xs text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
+                      onChange={(e) =>
+                        handleChangeRole(p, e.target.value as AppRole)
+                      }
+                      className="ml-auto rounded-lg border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 disabled:opacity-50"
                     >
-                      {busyId === p.id
-                        ? '…'
-                        : p.is_admin
-                          ? isSelf
-                            ? 'Demote (me)'
-                            : 'Demote'
-                          : 'Make admin'}
-                    </button>
+                      {ASSIGNABLE_ROLES.map((r) => (
+                        <option key={r} value={r}>
+                          {ROLE_LABEL[r]}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </li>
               )
