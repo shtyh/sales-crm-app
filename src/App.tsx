@@ -47,6 +47,9 @@ const CarDetailPage = lazy(() =>
     default: m.CarDetailPage,
   })),
 )
+const FinancePage = lazy(() =>
+  import('./pages/FinancePage').then((m) => ({ default: m.FinancePage })),
+)
 
 function RouteFallback() {
   return (
@@ -58,10 +61,13 @@ function RouteFallback() {
 
 /**
  * Renders the right home page based on the signed-in user's role.
- * Admins see the admin overview; everyone else sees the sales dashboard.
+ *   finance_admin → /finance (inventory + LOU)
+ *   any other privileged role → admin overview
+ *   sales_advisor → personal sales dashboard
  */
 function RoleHome() {
-  const { isAdmin } = useAuth()
+  const { role, isAdmin } = useAuth()
+  if (role === 'finance_admin') return <Navigate to="/finance" replace />
   return isAdmin ? <AdminDashboardPage /> : <DashboardPage />
 }
 
@@ -142,6 +148,14 @@ function App() {
           element={
             <ProtectedRoute>
               <CarDetailPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/finance"
+          element={
+            <ProtectedRoute>
+              <FinancePage />
             </ProtectedRoute>
           }
         />
