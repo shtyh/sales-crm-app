@@ -1,6 +1,9 @@
 import { useState, type FormEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { formatError } from '../lib/errors'
+
+const SIGN_IN_TIMEOUT_MS = 15_000
 
 export function LoginPage() {
   const navigate = useNavigate()
@@ -18,16 +21,35 @@ export function LoginPage() {
     setSubmitting(true)
     setError(null)
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    try {
+      // Race the network call against a timeout so the button can't sit on
+      // "Signing in…" forever if the request hangs (slow network, broken
+      // browser extension shimming fetch, etc.).
+      const result = await Promise.race([
+        supabase.auth.signInWithPassword({ email, password }),
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () =>
+              reject(
+                new Error(
+                  'Login is taking too long. Check your connection and try again.',
+                ),
+              ),
+            SIGN_IN_TIMEOUT_MS,
+          ),
+        ),
+      ])
 
-    setSubmitting(false)
-
-    if (error) {
-      setError(error.message)
-      return
+      if (result.error) {
+        setError(result.error.message)
+        return
+      }
+      navigate(redirectTo, { replace: true })
+    } catch (e) {
+      setError(formatError(e))
+    } finally {
+      setSubmitting(false)
     }
-
-    navigate(redirectTo, { replace: true })
   }
 
   return (
