@@ -26,10 +26,14 @@ type AuthState = {
   canCancel: boolean
   /** sales_manager (or super_admin) — Approve/Reject SA discount requests. */
   canApproveDiscount: boolean
-  /** finance_admin / accountant / super_admin — write deposit/payment status. */
+  /** accountant (or super_admin) — write deposit/payment status. */
   canEditFinanceStatus: boolean
   /** sales_manager (or super_admin) — change a booking's owner_id. */
   canReassign: boolean
+  /** general_admin (or super_admin) — write a car's vehicle attributes. */
+  canEditCarAttributes: boolean
+  /** finance_admin (or super_admin) — write a car's floor-stock fields. */
+  canEditCarFloorStock: boolean
   loading: boolean
   refreshProfile: () => Promise<void>
 }
@@ -46,6 +50,8 @@ const AuthContext = createContext<AuthState>({
   canApproveDiscount: false,
   canEditFinanceStatus: false,
   canReassign: false,
+  canEditCarAttributes: false,
+  canEditCarFloorStock: false,
   loading: true,
   refreshProfile: async () => {},
 })
@@ -185,12 +191,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         role === 'super_admin',
       canApproveDiscount:
         role === 'sales_manager' || role === 'super_admin',
+      // Tightened per Finance Admin spec: deposit/payment is the
+      // accountant's territory; finance_admin only watches paper credit.
       canEditFinanceStatus:
-        role === 'finance_admin' ||
-        role === 'accountant' ||
-        role === 'super_admin',
+        role === 'accountant' || role === 'super_admin',
       canReassign:
         role === 'sales_manager' || role === 'super_admin',
+      canEditCarAttributes:
+        role === 'general_admin' || role === 'super_admin',
+      canEditCarFloorStock:
+        role === 'finance_admin' || role === 'super_admin',
       loading,
       refreshProfile,
     }

@@ -23,6 +23,61 @@ export type ApprovalStatus =
 export type DepositStatus = 'unpaid' | 'received' | 'refunded'
 export type PaymentStatus = 'unpaid' | 'partial' | 'paid'
 
+/** Where each car is in its lifecycle. Independent of the booking flow. */
+export type CarStatus = 'in_stock' | 'reserved' | 'delivered' | 'returned'
+
+/** Floor-stock financing state — finance_admin owned. */
+export type FloorStockStatus =
+  | 'locked'              // bank-financed, not yet settled
+  | 'pending_settlement'  // customer paid, we're settling with the bank
+  | 'overdue'             // due date passed without settlement
+  | 'paid_off'            // bank cleared, car is free to deliver
+
+export const CAR_STATUS_LABEL: Record<CarStatus, string> = {
+  in_stock: 'In stock',
+  reserved: 'Reserved',
+  delivered: 'Delivered',
+  returned: 'Returned',
+}
+
+export const FLOOR_STOCK_LABEL: Record<FloorStockStatus, string> = {
+  locked: '🔒 Locked',
+  pending_settlement: '⏳ Pending settlement',
+  overdue: '⚠ Overdue',
+  paid_off: '✓ Paid off',
+}
+
+export type Car = {
+  id: string
+  chassis_no: string
+  model: string
+  variant: string | null
+  color: string | null
+  arrived_at: string // YYYY-MM-DD
+  status: CarStatus
+  floor_stock_bank: string | null
+  financed_amount: number | null
+  floor_stock_status: FloorStockStatus
+  floor_stock_due: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type CarInsert = {
+  chassis_no: string
+  model: string
+  variant?: string | null
+  color?: string | null
+  arrived_at?: string
+  status?: CarStatus
+  // Finance-only fields are intentionally omitted from INSERT shape; finance
+  // sets them later via update. PATCHes reuse this type via Partial<CarInsert>.
+  floor_stock_bank?: string | null
+  financed_amount?: number | null
+  floor_stock_status?: FloorStockStatus
+  floor_stock_due?: string | null
+}
+
 export type Booking = {
   id: string
   code: string
@@ -58,9 +113,12 @@ export type Booking = {
   loan_status: LoanStatus
   loan_notes: string | null
 
-  // Finance-admin + accountant fields
+  // Accountant-owned (deposit/payment of actual cash).
   deposit_status: DepositStatus
   payment_status: PaymentStatus
+
+  /** Which car in inventory this booking is fulfilled by. */
+  car_id: string | null
 
   status: BookingStatus
   notes: string | null
@@ -154,4 +212,6 @@ export type BookingInsert = {
   payment_status?: PaymentStatus
   /** sales_manager reassignment of leads */
   owner_id?: string
+  /** general_admin links the booking to a specific physical car. */
+  car_id?: string | null
 }

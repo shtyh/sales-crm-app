@@ -12,7 +12,15 @@ import {
 } from './bookings'
 import { listProfiles, updateProfile } from './profiles'
 import { listAttachments } from './attachments'
-import type { Attachment, Booking, BookingInsert, Profile } from './types'
+import { createCar, getCar, listCars, updateCar } from './cars'
+import type {
+  Attachment,
+  Booking,
+  BookingInsert,
+  Car,
+  CarInsert,
+  Profile,
+} from './types'
 
 // Query keys — centralised so we can invalidate from anywhere without
 // having to remember the tuple shape.
@@ -22,6 +30,8 @@ export const qk = {
   profiles: ['profiles'] as const,
   attachments: (bookingId: string) =>
     ['booking-attachments', bookingId] as const,
+  cars: ['cars'] as const,
+  car: (id: string) => ['cars', id] as const,
 }
 
 // ---------- Bookings -------------------------------------------------------
@@ -113,5 +123,46 @@ export function useAttachments(bookingId: string) {
     queryKey: qk.attachments(bookingId),
     queryFn: () => listAttachments(bookingId),
     enabled: !!bookingId,
+  })
+}
+
+// ---------- Cars (inventory) -----------------------------------------------
+
+export function useCars(enabled = true) {
+  return useQuery<Car[]>({
+    queryKey: qk.cars,
+    queryFn: listCars,
+    enabled,
+  })
+}
+
+export function useCar(id: string) {
+  return useQuery<Car | null>({
+    queryKey: qk.car(id),
+    queryFn: () => getCar(id),
+    enabled: !!id,
+  })
+}
+
+export function useCreateCar() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: CarInsert) => createCar(input),
+    onSuccess: (created) => {
+      qc.setQueryData<Car>(qk.car(created.id), created)
+      qc.invalidateQueries({ queryKey: qk.cars })
+    },
+  })
+}
+
+export function useUpdateCar() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: Partial<CarInsert> }) =>
+      updateCar(id, patch),
+    onSuccess: (updated) => {
+      qc.setQueryData<Car>(qk.car(updated.id), updated)
+      qc.invalidateQueries({ queryKey: qk.cars })
+    },
   })
 }
