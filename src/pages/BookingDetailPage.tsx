@@ -8,6 +8,7 @@ import {
   qk,
   useAttachments,
   useBooking,
+  useCars,
   useDeleteBooking,
   useProfiles,
   useUpdateBooking,
@@ -21,9 +22,11 @@ import type {
   AttachmentKind,
   BookingStatus,
   DepositStatus,
+  FloorStockStatus,
   LoanStatus,
   PaymentStatus,
 } from '../lib/types'
+import { FLOOR_STOCK_LABEL } from '../lib/types'
 
 const STATUSES: { value: BookingStatus; label: string }[] = [
   { value: 'pending', label: 'Pending' },
@@ -105,6 +108,7 @@ export function BookingDetailPage() {
     canApproveDiscount,
     canEditFinanceStatus,
     canReassign,
+    canEditCarAttributes,
     isSuperAdmin,
   } = useAuth()
   const qc = useQueryClient()
@@ -115,6 +119,10 @@ export function BookingDetailPage() {
   // useProfiles is cached so this is essentially free when navigating from
   // /bookings.
   const { data: profiles } = useProfiles(canReassign)
+  // Cars list — used both for the general_admin dropdown and to look up
+  // the linked car's chassis / floor-stock for everyone else's read-only
+  // display. Small data, RLS lets everyone read, cached by React Query.
+  const { data: cars } = useCars()
   const updateMut = useUpdateBooking()
   const deleteMut = useDeleteBooking()
 
@@ -145,6 +153,12 @@ export function BookingDetailPage() {
   const [depositStatus, setDepositStatus] = useState<DepositStatus>('unpaid')
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>('unpaid')
   const [ownerId, setOwnerId] = useState('')
+  const [carId, setCarId] = useState<string>('')
+
+  const linkedCar = useMemo(
+    () => (carId ? cars?.find((c) => c.id === carId) ?? null : null),
+    [cars, carId],
+  )
 
   const [cancelling, setCancelling] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -194,6 +208,7 @@ export function BookingDetailPage() {
     setDepositStatus(booking.deposit_status ?? 'unpaid')
     setPaymentStatus(booking.payment_status ?? 'unpaid')
     setOwnerId(booking.owner_id)
+    setCarId(booking.car_id ?? '')
   }, [booking])
 
   function handleModelChange(newModel: string) {
@@ -244,6 +259,9 @@ export function BookingDetailPage() {
             : {}),
           ...(canReassign && ownerId && ownerId !== booking?.owner_id
             ? { owner_id: ownerId }
+            : {}),
+          ...(canEditCarAttributes && carId !== (booking?.car_id ?? '')
+            ? { car_id: carId || null }
             : {}),
         },
       })
@@ -616,6 +634,77 @@ export function BookingDetailPage() {
             />
           </div>
         </Section>
+
+        {/* ---------- Linked car (inventory) ---------- */}
+        <section className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-gray-900">
+              🚙 Linked car
+            </h2>
+            {!canEditCarAttributes && (
+              <span className="text-xs text-gray-500">
+                🔒 General Admin assigns inventory
+              </span>
+            )}
+          </div>
+
+          {canEditCarAttributes ? (
+            <Field label="Inventory unit">
+              <select
+                value={carId}
+                onChange={(e) => setCarId(e.target.value)}
+                className={inputClass}
+              >
+                <option value="">— Not yet assigned —</option>
+                {/* Show: the currently-linked car (even if not in_stock) +
+                    every other in_stock car. Stops you from being stuck if
+                    the car is already reserved by this booking. */}
+                {cars
+                  ?.filter(
+                    (c) => c.status === 'in_stock' || c.id === booking.car_id,
+                  )
+                  .map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.chassis_no} · {c.model}
+                      {c.variant ? ` ${c.variant}` : ''}
+                      {c.color ? ` · ${c.color}` : ''}
+                    </option>
+                  ))}
+              </select>
+            </Field>
+          ) : linkedCar ? (
+            <Link
+              to={`/cars/${linkedCar.id}`}
+              className="block rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 hover:bg-gray-100"
+            >
+              <div className="font-mono text-xs text-gray-600">
+                {linkedCar.chassis_no}
+              </div>
+              <div className="text-sm text-gray-900">
+                {linkedCar.model}
+                {linkedCar.variant ? ` · ${linkedCar.variant}` : ''}
+                {linkedCar.color ? ` · ${linkedCar.color}` : ''}
+              </div>
+            </Link>
+          ) : (
+            <div className="rounded-lg border border-dashed border-gray-200 px-3 py-2 text-xs text-gray-500">
+              No inventory unit assigned yet.
+            </div>
+          )}
+
+          {/* Surface the floor-stock state so non-finance roles know why
+              delivery is blocked when the bank hasn't been settled. */}
+          {linkedCar && linkedCar.floor_stock_status !== 'paid_off' && (
+            <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              ⚠ This car is{' '}
+              <span className="font-semibold">
+                {FLOOR_STOCK_LABEL[linkedCar.floor_stock_status as FloorStockStatus]}
+              </span>{' '}
+              — delivery is blocked until Finance Admin marks it{' '}
+              <span className="font-semibold">Paid off</span>.
+            </div>
+          )}
+        </section>
 
         {/* ---------- Finance / Accountant: deposit + payment status ---------- */}
         <section className="rounded-xl border border-amber-200 bg-amber-50/50 p-4 sm:p-5">
