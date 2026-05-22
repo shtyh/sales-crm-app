@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { AppShell } from '../components/AppShell'
 import { AttachmentSection } from '../components/AttachmentSection'
+import { AuditLogPanel } from '../components/AuditLogPanel'
 import { useAuth } from '../lib/auth'
 import {
   qk,
@@ -973,6 +974,8 @@ export function BookingDetailPage() {
           onChange={refreshAttachments}
         />
       </div>
+
+      <AuditLogPanel tableName="bookings" rowId={booking.id} />
     </AppShell>
   )
 }

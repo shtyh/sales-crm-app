@@ -13,8 +13,10 @@ import {
 import { listProfiles, updateProfile } from './profiles'
 import { listAttachments } from './attachments'
 import { createCar, getCar, listCars, updateCar } from './cars'
+import { listAuditForRow } from './audit'
 import type {
   Attachment,
+  AuditLogEntry,
   Booking,
   BookingInsert,
   Car,
@@ -32,6 +34,8 @@ export const qk = {
     ['booking-attachments', bookingId] as const,
   cars: ['cars'] as const,
   car: (id: string) => ['cars', id] as const,
+  audit: (tableName: string, rowId: string) =>
+    ['audit', tableName, rowId] as const,
 }
 
 // ---------- Bookings -------------------------------------------------------
@@ -164,5 +168,27 @@ export function useUpdateCar() {
       qc.setQueryData<Car>(qk.car(updated.id), updated)
       qc.invalidateQueries({ queryKey: qk.cars })
     },
+  })
+}
+
+// ---------- Audit log ------------------------------------------------------
+
+/**
+ * Recent audit entries for a specific row. `enabled` should usually be the
+ * caller's `isSuperAdmin` flag — RLS would return [] for everyone else anyway,
+ * but skipping the request avoids the round-trip.
+ */
+export function useAuditForRow(
+  tableName: string,
+  rowId: string,
+  enabled = true,
+) {
+  return useQuery<AuditLogEntry[]>({
+    queryKey: qk.audit(tableName, rowId),
+    queryFn: () => listAuditForRow(tableName, rowId),
+    enabled: enabled && !!rowId,
+    // Audit data isn't latency-critical; keep it fresh for a minute so we
+    // refresh after navigating back from making changes.
+    staleTime: 60_000,
   })
 }

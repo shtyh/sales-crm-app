@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
+import { AuditLogPanel } from '../components/AuditLogPanel'
 import { useAuth } from '../lib/auth'
 import { useCar, useUpdateCar } from '../lib/queries'
 import { formatError } from '../lib/errors'
@@ -393,6 +394,8 @@ export function CarDetailPage() {
           )}
         </div>
       </form>
+
+      <AuditLogPanel tableName="cars" rowId={car.id} />
     </AppShell>
   )
 }

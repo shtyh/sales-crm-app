@@ -63,6 +63,30 @@ export type Car = {
   updated_at: string
 }
 
+export type AuditOperation = 'INSERT' | 'UPDATE' | 'DELETE'
+
+export type AuditLogEntry = {
+  id: string
+  occurred_at: string
+  actor_id: string | null
+  actor_role: AppRole | null
+  table_name: string
+  row_id: string
+  operation: AuditOperation
+  /**
+   * For INSERT: full row as JSON.
+   * For UPDATE: only the columns that changed, mapped to their NEW value.
+   * For DELETE: null.
+   */
+  changed: Record<string, unknown> | null
+  /**
+   * For UPDATE: same keys as `changed` but holding the OLD values.
+   * For DELETE: the full row before deletion.
+   * For INSERT: null.
+   */
+  old_values: Record<string, unknown> | null
+}
+
 export type CarInsert = {
   chassis_no: string
   model: string
