@@ -1,17 +1,21 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { AppShell } from '../components/AppShell'
 import { AttachmentSection } from '../components/AttachmentSection'
 import { useAuth } from '../lib/auth'
-import { getBooking, updateBooking } from '../lib/bookings'
-import { listAttachments } from '../lib/attachments'
+import {
+  qk,
+  useAttachments,
+  useBooking,
+  useUpdateBooking,
+} from '../lib/queries'
 import { formatError } from '../lib/errors'
 import { PROTON_MODELS, variantsFor } from '../data/proton-models'
 import { LOAN_BANKS, INSURERS } from '../data/banks-and-insurers'
 import type {
   Attachment,
   AttachmentKind,
-  Booking,
   BookingStatus,
   LoanStatus,
 } from '../lib/types'
@@ -64,10 +68,17 @@ function formatTimestamp(iso: string) {
 export function BookingDetailPage() {
   const { id = '' } = useParams<{ id: string }>()
   const { isAdmin } = useAuth()
+  const qc = useQueryClient()
 
-  const [loading, setLoading] = useState(true)
-  const [loadError, setLoadError] = useState<string | null>(null)
-  const [booking, setBooking] = useState<Booking | null>(null)
+  const { data: booking, error: bookingErr, isLoading } = useBooking(id)
+  const { data: attachments } = useAttachments(id)
+  const updateMut = useUpdateBooking()
+
+  const loadError = bookingErr
+    ? formatError(bookingErr)
+    : booking === null
+      ? 'Booking not found, or you do not have access.'
+      : null
 
   // Editable form state — populated once the booking loads.
   const [customerName, setCustomerName] = useState('')
@@ -87,20 +98,16 @@ export function BookingDetailPage() {
   const [loanStatus, setLoanStatus] = useState<LoanStatus>('not_applicable')
   const [loanNotes, setLoanNotes] = useState('')
 
-  const [saving, setSaving] = useState(false)
   const [cancelling, setCancelling] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [savedAt, setSavedAt] = useState<number | null>(null)
+  const saving = updateMut.isPending && !cancelling
 
-  // All attachments for this booking — fetched ONCE, then split per kind below.
-  // (Previously each <AttachmentSection> re-fetched the full list independently,
-  // so opening a booking made 4 identical round-trips.)
-  const [attachments, setAttachments] = useState<Attachment[] | null>(null)
-
+  // Mutations refetch on invalidate; this lets AttachmentSection trigger a
+  // refresh after upload/delete without owning the query itself.
   const refreshAttachments = useCallback(async () => {
-    const rows = await listAttachments(id)
-    setAttachments(rows)
-  }, [id])
+    await qc.invalidateQueries({ queryKey: qk.attachments(id) })
+  }, [qc, id])
 
   const attachmentsByKind = useMemo(() => {
     const map: Record<AttachmentKind, Attachment[] | null> = {
@@ -116,56 +123,26 @@ export function BookingDetailPage() {
     return map
   }, [attachments])
 
+  // Sync server data into the form once it arrives (or after a refresh).
   useEffect(() => {
-    let alive = true
-    setLoading(true)
-    setAttachments(null)
-    // Kick off the attachments fetch in parallel with the booking fetch — we
-    // don't need to wait for the booking to come back before asking for files.
-    listAttachments(id)
-      .then((rows) => {
-        if (alive) setAttachments(rows)
-      })
-      .catch((e) => {
-        // Non-fatal: the form still renders, individual sections will show empty.
-        console.warn('Failed to load attachments:', e)
-        if (alive) setAttachments([])
-      })
-    getBooking(id)
-      .then((b) => {
-        if (!alive) return
-        if (!b) {
-          setLoadError('Booking not found, or you do not have access.')
-          return
-        }
-        setBooking(b)
-        setCustomerName(b.customer_name)
-        setCustomerNric(b.customer_nric)
-        setCustomerPhone(b.customer_phone)
-        setCustomerEmail(b.customer_email ?? '')
-        setVehicleModel(b.vehicle_model)
-        setVehicleVariant(b.vehicle_variant)
-        setVehicleColor(b.vehicle_color)
-        setOtrPrice(String(b.otr_price))
-        setBookingFee(String(b.booking_fee))
-        setBookingDate(b.booking_date)
-        setStatus(b.status)
-        setNotes(b.notes ?? '')
-        setLoanBank(b.loan_bank ?? '')
-        setInsuranceCompany(b.insurance_company ?? '')
-        setLoanStatus(b.loan_status ?? 'not_applicable')
-        setLoanNotes(b.loan_notes ?? '')
-      })
-      .catch((e) => {
-        if (alive) setLoadError(formatError(e))
-      })
-      .finally(() => {
-        if (alive) setLoading(false)
-      })
-    return () => {
-      alive = false
-    }
-  }, [id])
+    if (!booking) return
+    setCustomerName(booking.customer_name)
+    setCustomerNric(booking.customer_nric)
+    setCustomerPhone(booking.customer_phone)
+    setCustomerEmail(booking.customer_email ?? '')
+    setVehicleModel(booking.vehicle_model)
+    setVehicleVariant(booking.vehicle_variant)
+    setVehicleColor(booking.vehicle_color)
+    setOtrPrice(String(booking.otr_price))
+    setBookingFee(String(booking.booking_fee))
+    setBookingDate(booking.booking_date)
+    setStatus(booking.status)
+    setNotes(booking.notes ?? '')
+    setLoanBank(booking.loan_bank ?? '')
+    setInsuranceCompany(booking.insurance_company ?? '')
+    setLoanStatus(booking.loan_status ?? 'not_applicable')
+    setLoanNotes(booking.loan_notes ?? '')
+  }, [booking])
 
   function handleModelChange(newModel: string) {
     setVehicleModel(newModel)
@@ -178,41 +155,40 @@ export function BookingDetailPage() {
 
   async function handleSave(e: FormEvent) {
     e.preventDefault()
-    setSaving(true)
     setError(null)
     try {
-      const updated = await updateBooking(id, {
-        customer_name: customerName.trim(),
-        customer_nric: customerNric.trim(),
-        customer_phone: customerPhone.trim(),
-        customer_email: customerEmail.trim() || null,
-        vehicle_model: vehicleModel,
-        vehicle_variant: vehicleVariant,
-        vehicle_color: vehicleColor.trim(),
-        otr_price: Number(otrPrice) || 0,
-        booking_fee: Number(bookingFee) || 0,
-        booking_date: bookingDate,
-        status,
-        notes: notes.trim() || null,
-        // SA + Admin can both write these (SA's job to update after bank reply)
-        loan_status: loanStatus,
-        loan_notes: loanNotes.trim() || null,
-        // Admin-only fields — only included when caller is admin so SAs can't
-        // accidentally overwrite them with the form's "" defaults. The DB
-        // trigger also blocks any non-admin from changing them.
-        ...(isAdmin
-          ? {
-              loan_bank: loanBank || null,
-              insurance_company: insuranceCompany || null,
-            }
-          : {}),
+      await updateMut.mutateAsync({
+        id,
+        patch: {
+          customer_name: customerName.trim(),
+          customer_nric: customerNric.trim(),
+          customer_phone: customerPhone.trim(),
+          customer_email: customerEmail.trim() || null,
+          vehicle_model: vehicleModel,
+          vehicle_variant: vehicleVariant,
+          vehicle_color: vehicleColor.trim(),
+          otr_price: Number(otrPrice) || 0,
+          booking_fee: Number(bookingFee) || 0,
+          booking_date: bookingDate,
+          status,
+          notes: notes.trim() || null,
+          // SA + Admin can both write these (SA's job to update after bank reply)
+          loan_status: loanStatus,
+          loan_notes: loanNotes.trim() || null,
+          // Admin-only fields — only included when caller is admin so SAs can't
+          // accidentally overwrite them with the form's "" defaults. The DB
+          // trigger also blocks any non-admin from changing them.
+          ...(isAdmin
+            ? {
+                loan_bank: loanBank || null,
+                insurance_company: insuranceCompany || null,
+              }
+            : {}),
+        },
       })
-      setBooking(updated)
       setSavedAt(Date.now())
     } catch (e) {
       setError(formatError(e))
-    } finally {
-      setSaving(false)
     }
   }
 
@@ -227,8 +203,7 @@ export function BookingDetailPage() {
     setCancelling(true)
     setError(null)
     try {
-      const updated = await updateBooking(id, { status: 'cancelled' })
-      setBooking(updated)
+      await updateMut.mutateAsync({ id, patch: { status: 'cancelled' } })
       setStatus('cancelled')
       setSavedAt(Date.now())
     } catch (e) {
@@ -238,7 +213,7 @@ export function BookingDetailPage() {
     }
   }
 
-  if (loading) {
+  if (isLoading) {
     return (
       <AppShell>
         <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center text-sm text-gray-500">

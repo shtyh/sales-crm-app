@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
 import { useAuth } from '../lib/auth'
-import { listBookings } from '../lib/bookings'
-import { listProfiles } from '../lib/profiles'
+import { useBookings, useProfiles } from '../lib/queries'
 import { formatError } from '../lib/errors'
-import type { Booking, BookingStatus, Profile } from '../lib/types'
+import type { BookingStatus, Profile } from '../lib/types'
 
 const STATUS_STYLES: Record<BookingStatus, string> = {
   pending: 'bg-amber-100 text-amber-800',
@@ -33,30 +32,14 @@ function formatDate(iso: string) {
 export function BookingsPage() {
   const navigate = useNavigate()
   const { isAdmin } = useAuth()
-  const [bookings, setBookings] = useState<Booking[] | null>(null)
-  const [profiles, setProfiles] = useState<Profile[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    let alive = true
-    // Admins also need the profile lookup so we can show the Owner column.
-    const work = isAdmin
-      ? Promise.all([listBookings(), listProfiles()])
-      : listBookings().then((bs) => [bs, [] as Profile[]] as const)
-
-    work
-      .then(([bs, ps]) => {
-        if (!alive) return
-        setBookings(bs)
-        setProfiles(ps)
-      })
-      .catch((e: unknown) => {
-        if (alive) setError(formatError(e))
-      })
-    return () => {
-      alive = false
-    }
-  }, [isAdmin])
+  const { data: bookings, error: bookingsErr } = useBookings()
+  // Only admins use the owner column → only admins need the profile lookup.
+  const { data: profiles, error: profilesErr } = useProfiles(isAdmin)
+  const error =
+    bookingsErr || profilesErr
+      ? formatError(bookingsErr ?? profilesErr)
+      : null
 
   const profileById = useMemo(() => {
     const m = new Map<string, Profile>()
@@ -97,7 +80,7 @@ export function BookingsPage() {
         </div>
       )}
 
-      {bookings === null && !error && (
+      {!bookings && !error && (
         <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center text-sm text-gray-500">
           Loading…
         </div>

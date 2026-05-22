@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
 import { useAuth } from '../lib/auth'
-import { listProfiles } from '../lib/profiles'
-import { listBookings } from '../lib/bookings'
+import { useBookings, useProfiles } from '../lib/queries'
 import { formatError } from '../lib/errors'
 import { formatMYR } from '../lib/format'
 import type { Booking, Profile } from '../lib/types'
@@ -11,23 +10,12 @@ import type { Booking, Profile } from '../lib/types'
 export function AdminDashboardPage() {
   const { profile: currentProfile } = useAuth()
 
-  const [profiles, setProfiles] = useState<Profile[] | null>(null)
-  const [bookings, setBookings] = useState<Booking[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    let alive = true
-    Promise.all([listProfiles(), listBookings()])
-      .then(([ps, bs]) => {
-        if (!alive) return
-        setProfiles(ps)
-        setBookings(bs)
-      })
-      .catch((e) => alive && setError(formatError(e)))
-    return () => {
-      alive = false
-    }
-  }, [])
+  const { data: profiles, error: profilesErr } = useProfiles()
+  const { data: bookings, error: bookingsErr } = useBookings()
+  const error =
+    profilesErr || bookingsErr
+      ? formatError(profilesErr ?? bookingsErr)
+      : null
 
   const profileById = useMemo(() => {
     const map = new Map<string, Profile>()

@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
 import { useAuth } from '../lib/auth'
-import { listBookings } from '../lib/bookings'
+import { useBookings } from '../lib/queries'
 import { formatError } from '../lib/errors'
 import { formatMYR } from '../lib/format'
-import type { Booking, BookingStatus } from '../lib/types'
+import type { BookingStatus } from '../lib/types'
 
 const STATUS_ORDER: BookingStatus[] = [
   'pending',
@@ -37,18 +37,8 @@ export function DashboardPage() {
   const displayName =
     (user?.user_metadata?.full_name as string | undefined) ?? user?.email ?? ''
 
-  const [bookings, setBookings] = useState<Booking[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    let alive = true
-    listBookings()
-      .then((rows) => alive && setBookings(rows))
-      .catch((e) => alive && setError(formatError(e)))
-    return () => {
-      alive = false
-    }
-  }, [])
+  const { data: bookings, error: queryError } = useBookings()
+  const error = queryError ? formatError(queryError) : null
 
   // Derived stats — recompute whenever bookings change.
   const stats = useMemo(() => {

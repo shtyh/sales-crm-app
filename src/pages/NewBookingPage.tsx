@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
-import { createBooking } from '../lib/bookings'
+import { useCreateBooking } from '../lib/queries'
 import { formatError } from '../lib/errors'
 import { PROTON_MODELS, variantsFor } from '../data/proton-models'
 import type { BookingStatus } from '../lib/types'
@@ -35,7 +35,8 @@ export function NewBookingPage() {
   const [status, setStatus] = useState<BookingStatus>('pending')
   const [notes, setNotes] = useState('')
 
-  const [submitting, setSubmitting] = useState(false)
+  const createMut = useCreateBooking()
+  const submitting = createMut.isPending
   const [error, setError] = useState<string | null>(null)
 
   // Reset variant whenever the model changes — variants are model-specific.
@@ -46,11 +47,9 @@ export function NewBookingPage() {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
-    setSubmitting(true)
     setError(null)
-
     try {
-      const created = await createBooking({
+      const created = await createMut.mutateAsync({
         customer_name: customerName.trim(),
         customer_nric: customerNric.trim(),
         customer_phone: customerPhone.trim(),
@@ -70,8 +69,6 @@ export function NewBookingPage() {
       })
     } catch (e) {
       setError(formatError(e))
-    } finally {
-      setSubmitting(false)
     }
   }
 

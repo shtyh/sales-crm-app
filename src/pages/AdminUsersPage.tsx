@@ -1,33 +1,23 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
 import { useAuth } from '../lib/auth'
-import { listProfiles, updateProfile } from '../lib/profiles'
+import { useProfiles, useUpdateProfile } from '../lib/queries'
 import { formatError } from '../lib/errors'
 import type { Profile } from '../lib/types'
 
 export function AdminUsersPage() {
   const { profile: currentProfile, isAdmin, loading } = useAuth()
 
-  const [profiles, setProfiles] = useState<Profile[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const { data: profiles, error: profilesErr } = useProfiles(isAdmin)
+  const updateMut = useUpdateProfile()
+
+  const [localError, setLocalError] = useState<string | null>(null)
+  const error = localError ?? (profilesErr ? formatError(profilesErr) : null)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [editing, setEditing] = useState<{ id: string; value: string } | null>(
     null,
   )
-
-  async function refresh() {
-    try {
-      const rows = await listProfiles()
-      setProfiles(rows)
-    } catch (e) {
-      setError(formatError(e))
-    }
-  }
-
-  useEffect(() => {
-    if (isAdmin) refresh()
-  }, [isAdmin])
 
   // Permission guard — wait until auth has loaded, then redirect non-admins.
   if (loading) {
@@ -54,12 +44,11 @@ export function AdminUsersPage() {
       }
     }
     setBusyId(p.id)
-    setError(null)
+    setLocalError(null)
     try {
-      await updateProfile(p.id, { is_admin: !p.is_admin })
-      await refresh()
+      await updateMut.mutateAsync({ id: p.id, patch: { is_admin: !p.is_admin } })
     } catch (e) {
-      setError(formatError(e))
+      setLocalError(formatError(e))
     } finally {
       setBusyId(null)
     }
@@ -76,12 +65,11 @@ export function AdminUsersPage() {
       return
     }
     setBusyId(p.id)
-    setError(null)
+    setLocalError(null)
     try {
-      await updateProfile(p.id, { full_name: trimmed })
-      await refresh()
+      await updateMut.mutateAsync({ id: p.id, patch: { full_name: trimmed } })
     } catch (e) {
-      setError(formatError(e))
+      setLocalError(formatError(e))
     } finally {
       setBusyId(null)
       setEditing(null)
@@ -116,7 +104,7 @@ export function AdminUsersPage() {
         </div>
       )}
 
-      {profiles === null && !error && (
+      {!profiles && !error && (
         <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center text-sm text-gray-500">
           Loading…
         </div>
