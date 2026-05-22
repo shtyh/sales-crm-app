@@ -13,17 +13,11 @@ import { getProfile } from './profiles'
 import type { Profile } from './types'
 
 type AuthState = {
-  /** Current Supabase session (null when signed out). */
   session: Session | null
-  /** Convenience: the user behind the current session. */
   user: User | null
-  /** The signed-in user's profile row (loaded after session is established). */
   profile: Profile | null
-  /** True if the current user has the admin flag in their profile. */
   isAdmin: boolean
-  /** True until the initial session + profile load has resolved. */
   loading: boolean
-  /** Re-fetch the profile (e.g. after the user changes their display name). */
   refreshProfile: () => Promise<void>
 }
 
@@ -35,6 +29,12 @@ const AuthContext = createContext<AuthState>({
   loading: true,
   refreshProfile: async () => {},
 })
+
+// Hard ceiling on the initial auth-hydration phase. If anything (network,
+// corrupt localStorage, a browser extension shimming globals) holds us up
+// longer than this, we give up and let the app render the signed-out UI
+// instead of showing a permanent "Loading…" spinner.
+const AUTH_INIT_TIMEOUT_MS = 5000
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
@@ -49,30 +49,89 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const p = await getProfile(userId)
       setProfile(p)
-    } catch {
+    } catch (e) {
+      // Profile read should never break login; degrade gracefully.
+      console.warn('Profile load failed:', e)
       setProfile(null)
     }
   }, [])
 
   useEffect(() => {
     let alive = true
+    let settled = false
 
-    // Initial hydration from the locally cached session.
-    supabase.auth.getSession().then(async ({ data }) => {
-      if (!alive) return
-      setSession(data.session)
-      await loadProfileFor(data.session?.user?.id)
-      if (alive) setLoading(false)
-    })
+    function settle() {
+      if (!alive || settled) return
+      settled = true
+      setLoading(false)
+    }
 
-    // React to sign-in / sign-out / token refresh.
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, next) => {
-      setSession(next)
-      await loadProfileFor(next?.user?.id)
-    })
+    // Watchdog — if getSession or anything downstream is hanging, the user
+    // should still get a working login page after a few seconds rather than
+    // an indefinite spinner.
+    const watchdog = setTimeout(() => {
+      if (alive && !settled) {
+        console.warn(
+          `Auth init exceeded ${AUTH_INIT_TIMEOUT_MS}ms — proceeding as signed out.`,
+        )
+        setSession(null)
+        setProfile(null)
+        settle()
+      }
+    }, AUTH_INIT_TIMEOUT_MS)
+
+    async function init() {
+      try {
+        const { data, error } = await supabase.auth.getSession()
+        if (!alive) return
+
+        if (error) {
+          // The stored token is corrupt / refresh failed. Wipe it so the next
+          // load starts from a clean slate, then continue as signed out.
+          console.warn('Stored session is bad, clearing it:', error.message)
+          try {
+            await supabase.auth.signOut()
+          } catch {
+            /* ignore — best effort */
+          }
+          setSession(null)
+        } else {
+          setSession(data.session)
+          await loadProfileFor(data.session?.user?.id)
+        }
+      } catch (e) {
+        console.error('Auth init failed:', e)
+        try {
+          await supabase.auth.signOut()
+        } catch {
+          /* ignore */
+        }
+        if (alive) {
+          setSession(null)
+          setProfile(null)
+        }
+      } finally {
+        clearTimeout(watchdog)
+        settle()
+      }
+    }
+    init()
+
+    // Live updates on sign-in / sign-out / token refresh.
+    const { data: sub } = supabase.auth.onAuthStateChange(
+      async (_event, next) => {
+        try {
+          setSession(next)
+          await loadProfileFor(next?.user?.id)
+        } catch (e) {
+          console.error('Auth state change handler failed:', e)
+        }
+      },
+    )
 
     return () => {
       alive = false
+      clearTimeout(watchdog)
       sub.subscription.unsubscribe()
     }
   }, [loadProfileFor])
