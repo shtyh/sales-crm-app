@@ -13,6 +13,16 @@ export type LoanStatus =
   | 'approved'
   | 'rejected'
 
+/** Gate on a booking's discount: only 'pending' rows need manager attention. */
+export type ApprovalStatus =
+  | 'not_required'
+  | 'pending'
+  | 'approved'
+  | 'rejected'
+
+export type DepositStatus = 'unpaid' | 'received' | 'refunded'
+export type PaymentStatus = 'unpaid' | 'partial' | 'paid'
+
 export type Booking = {
   id: string
   code: string
@@ -29,17 +39,28 @@ export type Booking = {
 
   otr_price: number
   booking_fee: number
+  /** MYR off OTR. SA-set non-zero → flips approval_status to 'pending'. */
+  discount_amount: number
+  /**
+   * State machine for the discount: 'not_required' when discount==0,
+   * 'pending' awaiting manager review, 'approved'/'rejected' after.
+   * Only sales_manager (or super_admin) can flip it explicitly.
+   */
+  approval_status: ApprovalStatus
 
   booking_date: string // YYYY-MM-DD
   delivered_at: string | null // ISO timestamp, auto-set when status → 'delivered'
 
-  // Admin-managed fields (SA reads, Admin writes)
+  // Finance-admin-only fields
   loan_bank: string | null
   insurance_company: string | null
 
-  // Shared fields — SA + Admin both edit
   loan_status: LoanStatus
   loan_notes: string | null
+
+  // Finance-admin + accountant fields
+  deposit_status: DepositStatus
+  payment_status: PaymentStatus
 
   status: BookingStatus
   notes: string | null
@@ -118,6 +139,7 @@ export type BookingInsert = {
   vehicle_color: string
   otr_price: number
   booking_fee: number
+  discount_amount?: number
   booking_date: string
   status?: BookingStatus
   notes?: string | null
@@ -125,4 +147,11 @@ export type BookingInsert = {
   insurance_company?: string | null
   loan_status?: LoanStatus
   loan_notes?: string | null
+  // Update-only fields (defaults on DB; not meant for INSERT). Typed here
+  // because we reuse this shape as Partial<BookingInsert> for PATCHes.
+  approval_status?: ApprovalStatus
+  deposit_status?: DepositStatus
+  payment_status?: PaymentStatus
+  /** sales_manager reassignment of leads */
+  owner_id?: string
 }

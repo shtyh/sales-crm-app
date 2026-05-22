@@ -1,21 +1,24 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
 import { useAuth } from '../lib/auth'
-import { useBookings, useProfiles } from '../lib/queries'
+import { useBookings, useProfiles, useUpdateBooking } from '../lib/queries'
 import { formatError } from '../lib/errors'
 import { formatMYR } from '../lib/format'
 import type { Booking, Profile } from '../lib/types'
 
 export function AdminDashboardPage() {
-  const { profile: currentProfile, isSuperAdmin } = useAuth()
+  const { profile: currentProfile, isSuperAdmin, canApproveDiscount } = useAuth()
 
   const { data: profiles, error: profilesErr } = useProfiles()
   const { data: bookings, error: bookingsErr } = useBookings()
+  const approveMut = useUpdateBooking()
+  const [approvalError, setApprovalError] = useState<string | null>(null)
   const error =
-    profilesErr || bookingsErr
+    approvalError ??
+    (profilesErr || bookingsErr
       ? formatError(profilesErr ?? bookingsErr)
-      : null
+      : null)
 
   const profileById = useMemo(() => {
     const map = new Map<string, Profile>()
@@ -34,6 +37,31 @@ export function AdminDashboardPage() {
     () => bookings?.filter((b) => b.status === 'pending').length ?? 0,
     [bookings],
   )
+
+  // Discount-approval queue for sales_manager / super_admin. Pending = SA
+  // submitted a non-zero discount and needs the manager's blessing.
+  const pendingApprovals = useMemo(
+    () =>
+      bookings
+        ?.filter((b) => b.approval_status === 'pending')
+        .slice(0, 10) ?? [],
+    [bookings],
+  )
+
+  async function handleApprovalDecision(
+    booking: Booking,
+    decision: 'approved' | 'rejected',
+  ) {
+    setApprovalError(null)
+    try {
+      await approveMut.mutateAsync({
+        id: booking.id,
+        patch: { approval_status: decision },
+      })
+    } catch (e) {
+      setApprovalError(formatError(e))
+    }
+  }
 
   // Bookings whose loan was approved + not yet delivered → admin's JPJ queue.
   const readyForJpj = useMemo(
@@ -138,6 +166,76 @@ export function AdminDashboardPage() {
             <StatCard label="Admins" value={stats.admins} accent="purple" />
             <StatCard label="Sales staff" value={stats.staff} />
           </div>
+
+          {/* ---------- Pending discount approvals (sales_manager queue) ---------- */}
+          {canApproveDiscount && pendingApprovals.length > 0 && (
+            <section className="mb-6 rounded-2xl border border-rose-200 bg-rose-50/30 p-5">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-rose-900">
+                  ⏳ Discount approvals — {pendingApprovals.length} pending
+                </h2>
+                <span className="text-xs text-rose-700">
+                  Your sign-off needed
+                </span>
+              </div>
+              <ul className="divide-y divide-rose-200">
+                {pendingApprovals.map((b) => {
+                  const owner = profileById.get(b.owner_id)
+                  const busy = approveMut.isPending && approveMut.variables?.id === b.id
+                  return (
+                    <li
+                      key={b.id}
+                      className="flex flex-wrap items-center gap-3 py-3 first:pt-0 last:pb-0"
+                    >
+                      <Link
+                        to={`/bookings/${b.id}`}
+                        className="min-w-0 flex-1 hover:underline"
+                      >
+                        <div className="truncate text-sm font-medium text-gray-900">
+                          {b.customer_name}{' '}
+                          <span className="font-mono text-xs text-gray-500">
+                            {b.code}
+                          </span>
+                        </div>
+                        <div className="truncate text-xs text-gray-500">
+                          {b.vehicle_model}
+                          {b.vehicle_variant ? ` · ${b.vehicle_variant}` : ''}
+                          {' · by '}
+                          <span className="font-medium">
+                            {owner?.full_name || owner?.email || '—'}
+                          </span>
+                        </div>
+                      </Link>
+                      <div className="shrink-0 text-right">
+                        <div className="text-xs text-gray-500">Discount</div>
+                        <div className="tabular-nums text-sm font-semibold text-rose-700">
+                          −{formatMYR(b.discount_amount)}
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleApprovalDecision(b, 'approved')}
+                          disabled={busy}
+                          className="rounded-lg bg-green-600 px-3 py-1 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleApprovalDecision(b, 'rejected')}
+                          disabled={busy}
+                          className="rounded-lg bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    </li>
+                  )
+                })}
+              </ul>
+            </section>
+          )}
 
           {/* ---------- Pending bookings ---------- */}
           {pending && pending.length > 0 && (

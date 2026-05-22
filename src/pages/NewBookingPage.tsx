@@ -29,6 +29,7 @@ export function NewBookingPage() {
 
   const [otrPrice, setOtrPrice] = useState('')
   const [bookingFee, setBookingFee] = useState('')
+  const [discountAmount, setDiscountAmount] = useState('')
 
   const [bookingDate, setBookingDate] = useState(today())
 
@@ -59,6 +60,7 @@ export function NewBookingPage() {
         vehicle_color: vehicleColor.trim(),
         otr_price: Number(otrPrice) || 0,
         booking_fee: Number(bookingFee) || 0,
+        discount_amount: Number(discountAmount) || 0,
         booking_date: bookingDate,
         status,
         notes: notes.trim() || null,
@@ -207,6 +209,22 @@ export function NewBookingPage() {
               placeholder="1000"
               inputMode="decimal"
             />
+          </Field>
+          <Field label="Discount (MYR off OTR)">
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              value={discountAmount}
+              onChange={(e) => setDiscountAmount(e.target.value)}
+              className={inputClass}
+              placeholder="0"
+              inputMode="decimal"
+            />
+            <span className="mt-1 block text-xs text-gray-500">
+              Any non-zero discount you set will go to your manager for
+              approval.
+            </span>
           </Field>
         </Section>
 

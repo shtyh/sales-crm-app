@@ -24,6 +24,12 @@ type AuthState = {
   isFinanceAdmin: boolean
   /** Sales manager or accountant — the two roles allowed to cancel bookings. */
   canCancel: boolean
+  /** sales_manager (or super_admin) — Approve/Reject SA discount requests. */
+  canApproveDiscount: boolean
+  /** finance_admin / accountant / super_admin — write deposit/payment status. */
+  canEditFinanceStatus: boolean
+  /** sales_manager (or super_admin) — change a booking's owner_id. */
+  canReassign: boolean
   loading: boolean
   refreshProfile: () => Promise<void>
 }
@@ -37,6 +43,9 @@ const AuthContext = createContext<AuthState>({
   isSuperAdmin: false,
   isFinanceAdmin: false,
   canCancel: false,
+  canApproveDiscount: false,
+  canEditFinanceStatus: false,
+  canReassign: false,
   loading: true,
   refreshProfile: async () => {},
 })
@@ -174,6 +183,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         role === 'sales_manager' ||
         role === 'accountant' ||
         role === 'super_admin',
+      canApproveDiscount:
+        role === 'sales_manager' || role === 'super_admin',
+      canEditFinanceStatus:
+        role === 'finance_admin' ||
+        role === 'accountant' ||
+        role === 'super_admin',
+      canReassign:
+        role === 'sales_manager' || role === 'super_admin',
       loading,
       refreshProfile,
     }

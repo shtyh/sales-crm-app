@@ -9,16 +9,20 @@ import {
   useAttachments,
   useBooking,
   useDeleteBooking,
+  useProfiles,
   useUpdateBooking,
 } from '../lib/queries'
 import { formatError } from '../lib/errors'
 import { PROTON_MODELS, variantsFor } from '../data/proton-models'
 import { LOAN_BANKS, INSURERS } from '../data/banks-and-insurers'
 import type {
+  ApprovalStatus,
   Attachment,
   AttachmentKind,
   BookingStatus,
+  DepositStatus,
   LoanStatus,
+  PaymentStatus,
 } from '../lib/types'
 
 const STATUSES: { value: BookingStatus; label: string }[] = [
@@ -49,6 +53,32 @@ const LOAN_LABEL: Record<LoanStatus, string> = {
   rejected: '✗ Loan rejected',
 }
 
+const APPROVAL_BADGE: Record<ApprovalStatus, string> = {
+  not_required: 'bg-gray-100 text-gray-600',
+  pending: 'bg-amber-100 text-amber-800',
+  approved: 'bg-green-100 text-green-800',
+  rejected: 'bg-red-100 text-red-800',
+}
+
+const APPROVAL_LABEL: Record<ApprovalStatus, string> = {
+  not_required: 'No discount',
+  pending: '⏳ Awaiting manager approval',
+  approved: '✓ Discount approved',
+  rejected: '✗ Discount rejected',
+}
+
+const DEPOSIT_OPTIONS: { value: DepositStatus; label: string }[] = [
+  { value: 'unpaid', label: 'Unpaid' },
+  { value: 'received', label: 'Received' },
+  { value: 'refunded', label: 'Refunded' },
+]
+
+const PAYMENT_OPTIONS: { value: PaymentStatus; label: string }[] = [
+  { value: 'unpaid', label: 'Unpaid' },
+  { value: 'partial', label: 'Partially paid' },
+  { value: 'paid', label: 'Fully paid' },
+]
+
 const STATUS_BADGE: Record<BookingStatus, string> = {
   pending: 'bg-amber-100 text-amber-800',
   confirmed: 'bg-blue-100 text-blue-800',
@@ -69,11 +99,22 @@ function formatTimestamp(iso: string) {
 export function BookingDetailPage() {
   const { id = '' } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { isFinanceAdmin, canCancel, isSuperAdmin } = useAuth()
+  const {
+    isFinanceAdmin,
+    canCancel,
+    canApproveDiscount,
+    canEditFinanceStatus,
+    canReassign,
+    isSuperAdmin,
+  } = useAuth()
   const qc = useQueryClient()
 
   const { data: booking, error: bookingErr, isLoading } = useBooking(id)
   const { data: attachments } = useAttachments(id)
+  // Owner reassignment dropdown — only manager needs the profile list, and
+  // useProfiles is cached so this is essentially free when navigating from
+  // /bookings.
+  const { data: profiles } = useProfiles(canReassign)
   const updateMut = useUpdateBooking()
   const deleteMut = useDeleteBooking()
 
@@ -93,6 +134,7 @@ export function BookingDetailPage() {
   const [vehicleColor, setVehicleColor] = useState('')
   const [otrPrice, setOtrPrice] = useState('')
   const [bookingFee, setBookingFee] = useState('')
+  const [discountAmount, setDiscountAmount] = useState('')
   const [bookingDate, setBookingDate] = useState('')
   const [status, setStatus] = useState<BookingStatus>('pending')
   const [notes, setNotes] = useState('')
@@ -100,6 +142,9 @@ export function BookingDetailPage() {
   const [insuranceCompany, setInsuranceCompany] = useState('')
   const [loanStatus, setLoanStatus] = useState<LoanStatus>('not_applicable')
   const [loanNotes, setLoanNotes] = useState('')
+  const [depositStatus, setDepositStatus] = useState<DepositStatus>('unpaid')
+  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>('unpaid')
+  const [ownerId, setOwnerId] = useState('')
 
   const [cancelling, setCancelling] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -138,6 +183,7 @@ export function BookingDetailPage() {
     setVehicleColor(booking.vehicle_color)
     setOtrPrice(String(booking.otr_price))
     setBookingFee(String(booking.booking_fee))
+    setDiscountAmount(String(booking.discount_amount ?? 0))
     setBookingDate(booking.booking_date)
     setStatus(booking.status)
     setNotes(booking.notes ?? '')
@@ -145,6 +191,9 @@ export function BookingDetailPage() {
     setInsuranceCompany(booking.insurance_company ?? '')
     setLoanStatus(booking.loan_status ?? 'not_applicable')
     setLoanNotes(booking.loan_notes ?? '')
+    setDepositStatus(booking.deposit_status ?? 'unpaid')
+    setPaymentStatus(booking.payment_status ?? 'unpaid')
+    setOwnerId(booking.owner_id)
   }, [booking])
 
   function handleModelChange(newModel: string) {
@@ -172,13 +221,13 @@ export function BookingDetailPage() {
           vehicle_color: vehicleColor.trim(),
           otr_price: Number(otrPrice) || 0,
           booking_fee: Number(bookingFee) || 0,
+          discount_amount: Number(discountAmount) || 0,
           booking_date: bookingDate,
           status,
           notes: notes.trim() || null,
-          // Loan + insurance fields are finance_admin only (DB trigger enforces).
-          // Don't send them at all for other roles so the patch doesn't trip
-          // the trigger when a non-finance user accidentally re-submits the
-          // same value as null vs "" coercion.
+          // Send each role-gated bucket of fields ONLY when the caller is
+          // allowed to write them; otherwise the DB trigger will reject the
+          // whole PATCH because something is "distinct from" the old value.
           ...(isFinanceAdmin
             ? {
                 loan_bank: loanBank || null,
@@ -187,7 +236,31 @@ export function BookingDetailPage() {
                 loan_notes: loanNotes.trim() || null,
               }
             : {}),
+          ...(canEditFinanceStatus
+            ? {
+                deposit_status: depositStatus,
+                payment_status: paymentStatus,
+              }
+            : {}),
+          ...(canReassign && ownerId && ownerId !== booking?.owner_id
+            ? { owner_id: ownerId }
+            : {}),
         },
+      })
+      setSavedAt(Date.now())
+    } catch (e) {
+      setError(formatError(e))
+    }
+  }
+
+  /** Manager-only: flip approval_status without touching other fields. */
+  async function handleApprovalDecision(decision: 'approved' | 'rejected') {
+    if (!canApproveDiscount) return
+    setError(null)
+    try {
+      await updateMut.mutateAsync({
+        id,
+        patch: { approval_status: decision },
       })
       setSavedAt(Date.now())
     } catch (e) {
@@ -308,6 +381,13 @@ export function BookingDetailPage() {
                   {LOAN_LABEL[booking.loan_status]}
                 </span>
               )}
+            {booking.approval_status !== 'not_required' && (
+              <span
+                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${APPROVAL_BADGE[booking.approval_status]}`}
+              >
+                {APPROVAL_LABEL[booking.approval_status]}
+              </span>
+            )}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -448,6 +528,55 @@ export function BookingDetailPage() {
               inputMode="decimal"
             />
           </Field>
+          <Field label="Discount (MYR off OTR)">
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              value={discountAmount}
+              onChange={(e) => setDiscountAmount(e.target.value)}
+              className={inputClass}
+              inputMode="decimal"
+              placeholder="0"
+            />
+          </Field>
+          <div className="sm:col-span-1">
+            <label className="block text-sm">
+              <span className="mb-1 block font-medium text-gray-700">
+                Discount approval
+              </span>
+              <div
+                className={`inline-flex w-full items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm`}
+              >
+                <span
+                  className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${APPROVAL_BADGE[booking.approval_status]}`}
+                >
+                  {APPROVAL_LABEL[booking.approval_status]}
+                </span>
+                {canApproveDiscount &&
+                  booking.approval_status === 'pending' && (
+                    <span className="flex gap-1">
+                      <button
+                        type="button"
+                        onClick={() => handleApprovalDecision('approved')}
+                        disabled={updateMut.isPending}
+                        className="rounded-lg bg-green-600 px-2 py-0.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                      >
+                        Approve
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleApprovalDecision('rejected')}
+                        disabled={updateMut.isPending}
+                        className="rounded-lg bg-red-600 px-2 py-0.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                      >
+                        Reject
+                      </button>
+                    </span>
+                  )}
+              </div>
+            </label>
+          </div>
         </Section>
 
         {/* ---------- Dates + status ---------- */}
@@ -487,6 +616,82 @@ export function BookingDetailPage() {
             />
           </div>
         </Section>
+
+        {/* ---------- Finance / Accountant: deposit + payment status ---------- */}
+        <section className="rounded-xl border border-amber-200 bg-amber-50/50 p-4 sm:p-5">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-amber-900">
+              💰 Finance status
+            </h2>
+            {!canEditFinanceStatus && (
+              <span className="text-xs text-gray-500">
+                🔒 Finance Admin / Accountant only
+              </span>
+            )}
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Field label="Deposit">
+              <select
+                disabled={!canEditFinanceStatus}
+                value={depositStatus}
+                onChange={(e) =>
+                  setDepositStatus(e.target.value as DepositStatus)
+                }
+                className={readonlyInputClass(canEditFinanceStatus)}
+              >
+                {DEPOSIT_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Payment">
+              <select
+                disabled={!canEditFinanceStatus}
+                value={paymentStatus}
+                onChange={(e) =>
+                  setPaymentStatus(e.target.value as PaymentStatus)
+                }
+                className={readonlyInputClass(canEditFinanceStatus)}
+              >
+                {PAYMENT_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
+        </section>
+
+        {/* ---------- Sales Manager: reassign owner ---------- */}
+        {canReassign && profiles && (
+          <section className="rounded-xl border border-blue-200 bg-blue-50/50 p-4 sm:p-5">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-blue-900">
+                🔁 Owner
+              </h2>
+              <span className="text-xs text-gray-500">
+                Manager-only: reassign this lead
+              </span>
+            </div>
+            <Field label="Assigned to">
+              <select
+                value={ownerId}
+                onChange={(e) => setOwnerId(e.target.value)}
+                className={inputClass}
+              >
+                {profiles.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.full_name || p.email}{' '}
+                    {p.role !== 'sales_advisor' ? `· ${p.role}` : ''}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </section>
+        )}
 
         {/* ---------- Finance Admin: Loan & Insurance ---------- */}
         <section className="rounded-xl border border-purple-200 bg-purple-50/50 p-4 sm:p-5">
