@@ -14,6 +14,14 @@ import { listProfiles, updateProfile } from './profiles'
 import { listAttachments } from './attachments'
 import { createCar, getCar, listCars, updateCar } from './cars'
 import { listAuditForRow } from './audit'
+import {
+  createPayoutAndAssign,
+  createSchedule,
+  deleteSchedule,
+  listPayouts,
+  listSchedules,
+  updateSchedule,
+} from './commissions'
 import type {
   Attachment,
   AuditLogEntry,
@@ -21,6 +29,10 @@ import type {
   BookingInsert,
   Car,
   CarInsert,
+  CommissionPayout,
+  CommissionPayoutInsert,
+  CommissionSchedule,
+  CommissionScheduleInsert,
   Profile,
 } from './types'
 
@@ -36,6 +48,8 @@ export const qk = {
   car: (id: string) => ['cars', id] as const,
   audit: (tableName: string, rowId: string) =>
     ['audit', tableName, rowId] as const,
+  commissionSchedules: ['commission-schedules'] as const,
+  commissionPayouts: ['commission-payouts'] as const,
 }
 
 // ---------- Bookings -------------------------------------------------------
@@ -167,6 +181,79 @@ export function useUpdateCar() {
     onSuccess: (updated) => {
       qc.setQueryData<Car>(qk.car(updated.id), updated)
       qc.invalidateQueries({ queryKey: qk.cars })
+    },
+  })
+}
+
+// ---------- Commission schedules -------------------------------------------
+
+export function useCommissionSchedules(enabled = true) {
+  return useQuery<CommissionSchedule[]>({
+    queryKey: qk.commissionSchedules,
+    queryFn: listSchedules,
+    enabled,
+  })
+}
+
+export function useCreateSchedule() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: CommissionScheduleInsert) => createSchedule(input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.commissionSchedules })
+    },
+  })
+}
+
+export function useUpdateSchedule() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      id,
+      patch,
+    }: {
+      id: string
+      patch: Partial<CommissionScheduleInsert>
+    }) => updateSchedule(id, patch),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.commissionSchedules })
+    },
+  })
+}
+
+export function useDeleteSchedule() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => deleteSchedule(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.commissionSchedules })
+    },
+  })
+}
+
+// ---------- Commission payouts ---------------------------------------------
+
+export function useCommissionPayouts(enabled = true) {
+  return useQuery<CommissionPayout[]>({
+    queryKey: qk.commissionPayouts,
+    queryFn: listPayouts,
+    enabled,
+  })
+}
+
+export function useCreatePayout() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      input,
+      bookingIds,
+    }: {
+      input: CommissionPayoutInsert
+      bookingIds: string[]
+    }) => createPayoutAndAssign(input, bookingIds),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.commissionPayouts })
+      qc.invalidateQueries({ queryKey: qk.bookings })
     },
   })
 }

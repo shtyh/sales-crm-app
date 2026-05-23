@@ -23,6 +23,55 @@ export type ApprovalStatus =
 export type DepositStatus = 'unpaid' | 'received' | 'refunded'
 export type PaymentStatus = 'unpaid' | 'partial' | 'paid'
 
+/** State machine for a booking's commission to a sales advisor. */
+export type CommissionStatus =
+  | 'not_eligible'  // default — booking not yet delivered+paid
+  | 'pending'       // auto when delivered+paid; awaits SM
+  | 'approved'      // SM signed off; awaits payout
+  | 'rejected'      // SM rejected (e.g. fraud / cancelled)
+  | 'paid'          // attached to a commission_payouts batch
+
+export const COMMISSION_LABEL: Record<CommissionStatus, string> = {
+  not_eligible: 'Not yet earned',
+  pending: '⏳ Pending review',
+  approved: '✓ Approved',
+  rejected: '✗ Rejected',
+  paid: '✓✓ Paid',
+}
+
+export type CommissionSchedule = {
+  id: string
+  model: string
+  variant: string | null
+  base_commission: number
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type CommissionScheduleInsert = {
+  model: string
+  variant?: string | null
+  base_commission: number
+  notes?: string | null
+}
+
+export type CommissionPayout = {
+  id: string
+  label: string
+  paid_at: string // YYYY-MM-DD
+  paid_by: string | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type CommissionPayoutInsert = {
+  label: string
+  paid_at: string
+  notes?: string | null
+}
+
 /** Where each car is in its lifecycle. Independent of the booking flow. */
 export type CarStatus = 'in_stock' | 'reserved' | 'delivered' | 'returned'
 
@@ -140,6 +189,15 @@ export type Booking = {
   // finance_admin-owned cash status
   deposit_status: DepositStatus
   payment_status: PaymentStatus
+
+  // Commission (auto-managed; manual fields gated by sales_manager)
+  /** Snapshot of commission_schedules.base_commission at insert time. */
+  base_commission: number | null
+  /** Auto = greatest(0, base_commission - discount_amount). */
+  commission_amount: number | null
+  commission_status: CommissionStatus
+  /** Set when SM groups this booking into a payout batch. */
+  commission_payout_id: string | null
 
   /** Which car in inventory this booking is fulfilled by. */
   car_id: string | null
