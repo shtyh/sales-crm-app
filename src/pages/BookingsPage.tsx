@@ -1,10 +1,13 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
 import { useAuth } from '../lib/auth'
 import { useBookings, useProfiles } from '../lib/queries'
 import { formatError } from '../lib/errors'
 import type { BookingStatus, Profile } from '../lib/types'
+
+const filterInputClass =
+  'rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm outline-none focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10'
 
 const STATUS_STYLES: Record<BookingStatus, string> = {
   pending: 'bg-amber-100 text-amber-800',
@@ -44,15 +47,56 @@ export function BookingsPage() {
     return p?.full_name || p?.email || '—'
   }
 
+  // ----- Filters --------------------------------------------------------
+  // Owner filter only makes sense for admins (an SA sees only their own
+  // bookings). Date filters apply to everyone.
+  const [ownerFilter, setOwnerFilter] = useState<string>('')
+  const [dateFrom, setDateFrom] = useState<string>('')
+  const [dateTo, setDateTo] = useState<string>('')
+
+  // Owner dropdown options — restrict to profiles that actually own a
+  // booking in the visible set so the list doesn't bloat with every user.
+  const ownerOptions = useMemo(() => {
+    if (!bookings || !profiles) return [] as Profile[]
+    const ownerIds = new Set(bookings.map((b) => b.owner_id))
+    return profiles
+      .filter((p) => ownerIds.has(p.id))
+      .sort((a, b) =>
+        (a.full_name || a.email || '').localeCompare(
+          b.full_name || b.email || '',
+        ),
+      )
+  }, [bookings, profiles])
+
+  const filteredBookings = useMemo(() => {
+    if (!bookings) return undefined
+    return bookings.filter((b) => {
+      if (ownerFilter && b.owner_id !== ownerFilter) return false
+      // booking_date is a YYYY-MM-DD string so a lexicographic compare is fine
+      if (dateFrom && b.booking_date < dateFrom) return false
+      if (dateTo && b.booking_date > dateTo) return false
+      return true
+    })
+  }, [bookings, ownerFilter, dateFrom, dateTo])
+
+  const filtersActive = !!(ownerFilter || dateFrom || dateTo)
+  function clearFilters() {
+    setOwnerFilter('')
+    setDateFrom('')
+    setDateTo('')
+  }
+
   return (
     <AppShell>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-4 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-gray-900">Bookings</h1>
           <p className="mt-1 text-sm text-gray-500">
-            {isAdmin
-              ? 'All bookings across the team.'
-              : "All bookings you've created."}
+            {filtersActive && filteredBookings
+              ? `${filteredBookings.length} of ${bookings?.length ?? 0} shown`
+              : isAdmin
+                ? 'All bookings across the team.'
+                : "All bookings you've created."}
           </p>
         </div>
         <Link
@@ -62,6 +106,59 @@ export function BookingsPage() {
           + New booking
         </Link>
       </div>
+
+      {/* Filter toolbar — only render once we have at least one booking, so
+          empty-state and filters don't fight for the same screen real estate. */}
+      {bookings && bookings.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-end gap-3 rounded-xl border border-gray-200 bg-white p-3">
+          {isAdmin && (
+            <label className="flex flex-col gap-1 text-xs text-gray-600">
+              <span className="font-medium">Sales advisor</span>
+              <select
+                value={ownerFilter}
+                onChange={(e) => setOwnerFilter(e.target.value)}
+                className={filterInputClass}
+              >
+                <option value="">All advisors</option>
+                {ownerOptions.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.full_name || p.email}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <label className="flex flex-col gap-1 text-xs text-gray-600">
+            <span className="font-medium">From</span>
+            <input
+              type="date"
+              value={dateFrom}
+              max={dateTo || undefined}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className={filterInputClass}
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-gray-600">
+            <span className="font-medium">To</span>
+            <input
+              type="date"
+              value={dateTo}
+              min={dateFrom || undefined}
+              onChange={(e) => setDateTo(e.target.value)}
+              className={filterInputClass}
+            />
+          </label>
+          {filtersActive && (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="self-end rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      )}
 
       {error && (
         <div
@@ -94,7 +191,23 @@ export function BookingsPage() {
         </div>
       )}
 
-      {bookings && bookings.length > 0 && (
+      {bookings &&
+        bookings.length > 0 &&
+        filteredBookings &&
+        filteredBookings.length === 0 && (
+          <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-10 text-center text-sm text-gray-500">
+            No bookings match the current filters.
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="ml-2 font-medium text-gray-900 underline-offset-2 hover:underline"
+            >
+              Clear filters
+            </button>
+          </div>
+        )}
+
+      {filteredBookings && filteredBookings.length > 0 && (
         <>
           {/* Desktop table */}
           <div className="hidden overflow-hidden rounded-2xl border border-gray-200 bg-white sm:block">
@@ -112,7 +225,7 @@ export function BookingsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {bookings.map((b) => (
+                {filteredBookings.map((b) => (
                   <tr
                     key={b.id}
                     onClick={() => navigate(`/bookings/${b.id}`)}
@@ -161,7 +274,7 @@ export function BookingsPage() {
 
           {/* Mobile cards */}
           <ul className="space-y-3 sm:hidden">
-            {bookings.map((b) => (
+            {filteredBookings.map((b) => (
               <li key={b.id}>
                 <Link
                   to={`/bookings/${b.id}`}
