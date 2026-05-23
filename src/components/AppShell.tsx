@@ -59,6 +59,15 @@ export function AppShell({ children }: { children: ReactNode }) {
                   Commissions
                 </NavLink>
               )}
+              {isSuperAdmin && (
+                <NavLink
+                  to="/admin/commissions"
+                  className={navLinkClass}
+                  title="Set base commission per car model"
+                >
+                  Rates
+                </NavLink>
+              )}
               <NavLink to="/bookings/new" className={navLinkClass}>
                 + New
               </NavLink>

@@ -163,16 +163,29 @@ export function CommissionsPage() {
     <AppShell>
       <div className="-mt-6 mb-6 -mx-4 sm:-mx-6">
         <div className="bg-gradient-to-r from-blue-700 to-blue-500 px-4 py-4 text-white sm:px-6 sm:py-5">
-          <div className="text-[10px] font-medium uppercase tracking-widest text-blue-200">
-            ☆ Sales Manager
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <div className="text-[10px] font-medium uppercase tracking-widest text-blue-200">
+                ☆ Sales Manager
+              </div>
+              <h1 className="mt-1 text-xl font-semibold sm:text-2xl">
+                Commissions
+              </h1>
+              <p className="mt-1 text-sm text-blue-100">
+                Review what's pending, then bundle approved ones into a payout
+                batch (twice a month).
+              </p>
+            </div>
+            {/* super_admin shortcut to the rate table — the most common
+                follow-up question when you land here is "where do I set the
+                base amount?" */}
+            <Link
+              to="/admin/commissions"
+              className="shrink-0 rounded-lg border border-blue-300 bg-white/10 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/20"
+            >
+              ⚙ Edit base rates →
+            </Link>
           </div>
-          <h1 className="mt-1 text-xl font-semibold sm:text-2xl">
-            Commissions
-          </h1>
-          <p className="mt-1 text-sm text-blue-100">
-            Review what's pending, then bundle approved ones into a payout
-            batch (twice a month).
-          </p>
         </div>
       </div>
 
