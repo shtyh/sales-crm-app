@@ -49,10 +49,14 @@ export function BookingsPage() {
 
   // ----- Filters --------------------------------------------------------
   // Owner filter only makes sense for admins (an SA sees only their own
-  // bookings). Date filters apply to everyone.
+  // bookings). Every other filter applies to all roles.
   const [ownerFilter, setOwnerFilter] = useState<string>('')
   const [dateFrom, setDateFrom] = useState<string>('')
   const [dateTo, setDateTo] = useState<string>('')
+  const [statusFilter, setStatusFilter] = useState<'' | BookingStatus>('')
+  const [modelFilter, setModelFilter] = useState<string>('')
+  const [variantFilter, setVariantFilter] = useState<string>('')
+  const [colourFilter, setColourFilter] = useState<string>('')
 
   // Owner dropdown options — restrict to profiles that actually own a
   // booking in the visible set so the list doesn't bloat with every user.
@@ -68,22 +72,88 @@ export function BookingsPage() {
       )
   }, [bookings, profiles])
 
+  // Model / variant / colour options are derived from the bookings actually
+  // on screen. Variants are filtered to the selected model so the dropdown
+  // doesn't suggest combinations that don't exist.
+  const modelOptions = useMemo(() => {
+    if (!bookings) return [] as string[]
+    return Array.from(
+      new Set(bookings.map((b) => b.vehicle_model).filter(Boolean)),
+    ).sort()
+  }, [bookings])
+
+  const variantOptions = useMemo(() => {
+    if (!bookings) return [] as string[]
+    return Array.from(
+      new Set(
+        bookings
+          .filter((b) => !modelFilter || b.vehicle_model === modelFilter)
+          .map((b) => b.vehicle_variant)
+          .filter(Boolean),
+      ),
+    ).sort()
+  }, [bookings, modelFilter])
+
+  const colourOptions = useMemo(() => {
+    if (!bookings) return [] as string[]
+    return Array.from(
+      new Set(bookings.map((b) => b.vehicle_color).filter(Boolean)),
+    ).sort()
+  }, [bookings])
+
   const filteredBookings = useMemo(() => {
     if (!bookings) return undefined
     return bookings.filter((b) => {
       if (ownerFilter && b.owner_id !== ownerFilter) return false
-      // booking_date is a YYYY-MM-DD string so a lexicographic compare is fine
+      // booking_date is YYYY-MM-DD so a lexicographic compare is fine
       if (dateFrom && b.booking_date < dateFrom) return false
       if (dateTo && b.booking_date > dateTo) return false
+      if (statusFilter && b.status !== statusFilter) return false
+      if (modelFilter && b.vehicle_model !== modelFilter) return false
+      if (variantFilter && b.vehicle_variant !== variantFilter) return false
+      if (colourFilter && b.vehicle_color !== colourFilter) return false
       return true
     })
-  }, [bookings, ownerFilter, dateFrom, dateTo])
+  }, [
+    bookings,
+    ownerFilter,
+    dateFrom,
+    dateTo,
+    statusFilter,
+    modelFilter,
+    variantFilter,
+    colourFilter,
+  ])
 
-  const filtersActive = !!(ownerFilter || dateFrom || dateTo)
+  const filtersActive = !!(
+    ownerFilter ||
+    dateFrom ||
+    dateTo ||
+    statusFilter ||
+    modelFilter ||
+    variantFilter ||
+    colourFilter
+  )
   function clearFilters() {
     setOwnerFilter('')
     setDateFrom('')
     setDateTo('')
+    setStatusFilter('')
+    setModelFilter('')
+    setVariantFilter('')
+    setColourFilter('')
+  }
+
+  // If the user changes the model filter, the previously-selected variant
+  // may no longer exist for that model; reset it to avoid an empty result.
+  function handleModelChange(next: string) {
+    setModelFilter(next)
+    if (next && variantFilter) {
+      const stillValid = bookings?.some(
+        (b) => b.vehicle_model === next && b.vehicle_variant === variantFilter,
+      )
+      if (!stillValid) setVariantFilter('')
+    }
   }
 
   return (
@@ -147,6 +217,68 @@ export function BookingsPage() {
               onChange={(e) => setDateTo(e.target.value)}
               className={filterInputClass}
             />
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-gray-600">
+            <span className="font-medium">Status</span>
+            <select
+              value={statusFilter}
+              onChange={(e) =>
+                setStatusFilter(e.target.value as '' | BookingStatus)
+              }
+              className={filterInputClass}
+            >
+              <option value="">All statuses</option>
+              <option value="pending">Pending</option>
+              <option value="confirmed">Confirmed</option>
+              <option value="delivered">Delivered</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-gray-600">
+            <span className="font-medium">Model</span>
+            <select
+              value={modelFilter}
+              onChange={(e) => handleModelChange(e.target.value)}
+              className={filterInputClass}
+            >
+              <option value="">All models</option>
+              {modelOptions.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-gray-600">
+            <span className="font-medium">Variant</span>
+            <select
+              value={variantFilter}
+              onChange={(e) => setVariantFilter(e.target.value)}
+              className={filterInputClass}
+              disabled={variantOptions.length === 0}
+            >
+              <option value="">All variants</option>
+              {variantOptions.map((v) => (
+                <option key={v} value={v}>
+                  {v}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-gray-600">
+            <span className="font-medium">Colour</span>
+            <select
+              value={colourFilter}
+              onChange={(e) => setColourFilter(e.target.value)}
+              className={filterInputClass}
+            >
+              <option value="">All colours</option>
+              {colourOptions.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
           </label>
           {filtersActive && (
             <button
