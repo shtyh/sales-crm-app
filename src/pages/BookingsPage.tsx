@@ -4,6 +4,7 @@ import { AppShell } from '../components/AppShell'
 import { useAuth } from '../lib/auth'
 import { useBookings, useProfiles } from '../lib/queries'
 import { formatError } from '../lib/errors'
+import { exportBookingsToExcel } from '../lib/exportBookings'
 import type { BookingStatus, Profile } from '../lib/types'
 
 const filterInputClass =
@@ -148,6 +149,22 @@ export function BookingsPage() {
     setColourFilter('')
   }
 
+  // ----- Excel export ---------------------------------------------------
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState<string | null>(null)
+  async function handleExport() {
+    if (!filteredBookings || filteredBookings.length === 0) return
+    setExporting(true)
+    setExportError(null)
+    try {
+      await exportBookingsToExcel(filteredBookings, profileById)
+    } catch (e) {
+      setExportError(formatError(e))
+    } finally {
+      setExporting(false)
+    }
+  }
+
   // If the user changes the model filter, the previously-selected variant
   // may no longer exist for that model; reset it to avoid an empty result.
   function handleModelChange(next: string) {
@@ -173,13 +190,34 @@ export function BookingsPage() {
                 : "All bookings you've created."}
           </p>
         </div>
-        <Link
-          to="/bookings/new"
-          className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-gray-800"
-        >
-          + New booking
-        </Link>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleExport}
+            disabled={
+              exporting || !filteredBookings || filteredBookings.length === 0
+            }
+            className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {exporting ? 'Exporting…' : 'Export to Excel'}
+          </button>
+          <Link
+            to="/bookings/new"
+            className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-gray-800"
+          >
+            + New booking
+          </Link>
+        </div>
       </div>
+
+      {exportError && (
+        <div
+          role="alert"
+          className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+        >
+          {exportError}
+        </div>
+      )}
 
       {/* Filter toolbar — only render once we have at least one booking, so
           empty-state and filters don't fight for the same screen real estate. */}
@@ -193,7 +231,7 @@ export function BookingsPage() {
                 onChange={(e) => setOwnerFilter(e.target.value)}
                 className={filterInputClass}
               >
-                <option value="">All advisors</option>
+                <option value="">All</option>
                 {ownerOptions.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.full_name || p.email}
@@ -221,7 +259,7 @@ export function BookingsPage() {
               }
               className={filterInputClass}
             >
-              <option value="">All statuses</option>
+              <option value="">All</option>
               <option value="pending">Pending</option>
               <option value="confirmed">Confirmed</option>
               <option value="delivered">Delivered</option>
@@ -235,7 +273,7 @@ export function BookingsPage() {
               onChange={(e) => handleModelChange(e.target.value)}
               className={filterInputClass}
             >
-              <option value="">All models</option>
+              <option value="">All</option>
               {modelOptions.map((m) => (
                 <option key={m} value={m}>
                   {m}
@@ -251,7 +289,7 @@ export function BookingsPage() {
               className={filterInputClass}
               disabled={variantOptions.length === 0}
             >
-              <option value="">All variants</option>
+              <option value="">All</option>
               {variantOptions.map((v) => (
                 <option key={v} value={v}>
                   {v}
@@ -266,7 +304,7 @@ export function BookingsPage() {
               onChange={(e) => setColourFilter(e.target.value)}
               className={filterInputClass}
             >
-              <option value="">All colours</option>
+              <option value="">All</option>
               {colourOptions.map((c) => (
                 <option key={c} value={c}>
                   {c}
