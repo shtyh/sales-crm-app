@@ -55,6 +55,11 @@ const CommissionSchedulesPage = lazy(() =>
     default: m.CommissionSchedulesPage,
   })),
 )
+const CommissionsPage = lazy(() =>
+  import('./pages/CommissionsPage').then((m) => ({
+    default: m.CommissionsPage,
+  })),
+)
 
 function RouteFallback() {
   return (
@@ -169,6 +174,14 @@ function App() {
           element={
             <ProtectedRoute>
               <CommissionSchedulesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/commissions"
+          element={
+            <ProtectedRoute>
+              <CommissionsPage />
             </ProtectedRoute>
           }
         />

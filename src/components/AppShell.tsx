@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth, signOut } from '../lib/auth'
+// Top-nav exposes /commissions only to roles that have anything to do there.
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
   `rounded-lg px-2.5 py-1 text-sm transition ${
@@ -15,7 +16,7 @@ const navLinkClass = ({ isActive }: { isActive: boolean }) =>
  * inside the `<main>` slot.
  */
 export function AppShell({ children }: { children: ReactNode }) {
-  const { user, isSuperAdmin, isFinanceAdmin } = useAuth()
+  const { user, isSuperAdmin, isFinanceAdmin, canApproveDiscount } = useAuth()
   const navigate = useNavigate()
   const displayName =
     (user?.user_metadata?.full_name as string | undefined) ?? user?.email ?? ''
@@ -51,6 +52,11 @@ export function AppShell({ children }: { children: ReactNode }) {
               {isFinanceAdmin && (
                 <NavLink to="/finance" className={navLinkClass}>
                   Finance
+                </NavLink>
+              )}
+              {canApproveDiscount && (
+                <NavLink to="/commissions" className={navLinkClass}>
+                  Commissions
                 </NavLink>
               )}
               <NavLink to="/bookings/new" className={navLinkClass}>
