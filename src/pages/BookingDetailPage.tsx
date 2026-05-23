@@ -846,6 +846,16 @@ export function BookingDetailPage() {
           )}
         </section>
 
+        {/* SA gets Finance + Loan side-by-side (condensed); other roles see
+            them stacked full-width with the SM "reassign owner" block between.
+            `contents` removes the wrapper from layout for the non-SA path. */}
+        <div
+          className={
+            isSalesAdvisor
+              ? 'grid grid-cols-1 gap-4 sm:grid-cols-2 items-start'
+              : 'contents'
+          }
+        >
         {/* ---------- Finance Admin: deposit + payment status -----------------
             SAs get a condensed one-line view; everyone else sees the editable
             form (Finance Admin edits, others see disabled inputs). */}
@@ -1074,6 +1084,7 @@ export function BookingDetailPage() {
             </div>
           )}
         </section>
+        </div>
 
         {/* ---------- Meta ---------- */}
         <div className="grid grid-cols-1 gap-2 border-t border-gray-100 pt-4 text-xs text-gray-500 sm:grid-cols-2">
