@@ -50,6 +50,11 @@ const CarDetailPage = lazy(() =>
 const FinancePage = lazy(() =>
   import('./pages/FinancePage').then((m) => ({ default: m.FinancePage })),
 )
+const CommissionSchedulesPage = lazy(() =>
+  import('./pages/CommissionSchedulesPage').then((m) => ({
+    default: m.CommissionSchedulesPage,
+  })),
+)
 
 function RouteFallback() {
   return (
@@ -156,6 +161,14 @@ function App() {
           element={
             <ProtectedRoute>
               <FinancePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/commissions"
+          element={
+            <ProtectedRoute>
+              <CommissionSchedulesPage />
             </ProtectedRoute>
           }
         />

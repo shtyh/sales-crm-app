@@ -504,12 +504,21 @@ export function AdminDashboardPage() {
                 title="All bookings"
                 subtitle="Full searchable list"
               />
-              <ActionLink
-                disabled
-                icon="📈"
-                title="Reports"
-                subtitle="Coming soon"
-              />
+              {isSuperAdmin ? (
+                <ActionLink
+                  to="/admin/commissions"
+                  icon="💸"
+                  title="Commission schedule"
+                  subtitle="Set base RM per model"
+                />
+              ) : (
+                <ActionLink
+                  disabled
+                  icon="💸"
+                  title="Commission schedule"
+                  subtitle="Super admin only"
+                />
+              )}
             </div>
           </section>
 
