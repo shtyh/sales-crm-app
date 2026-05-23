@@ -243,8 +243,12 @@ function CommissionStat({
   tone: 'green' | 'blue' | 'amber'
   hint?: string
 }) {
-  const t =
-    tone === 'green'
+  // Negative commission (over-discounted) goes red regardless of requested
+  // tone — the SA needs to see they're underwater.
+  const negative = value < 0
+  const t = negative
+    ? 'text-rose-700'
+    : tone === 'green'
       ? 'text-green-700'
       : tone === 'blue'
         ? 'text-blue-700'

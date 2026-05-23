@@ -744,14 +744,38 @@ export function BookingDetailPage() {
                   +{formatMYR(Number(booking.special_support ?? 0))}
                 </div>
               </div>
-              <div className="rounded-lg border border-blue-300 bg-blue-100/50 p-3">
-                <div className="text-[10px] uppercase tracking-wider text-blue-800">
-                  = SA earns
-                </div>
-                <div className="mt-1 tabular-nums font-semibold text-blue-900">
-                  {formatMYR(Number(booking.commission_amount ?? 0))}
-                </div>
-              </div>
+              {(() => {
+                const saEarns = Number(booking.commission_amount ?? 0)
+                const negative = saEarns < 0
+                return (
+                  <div
+                    className={
+                      negative
+                        ? 'rounded-lg border border-rose-300 bg-rose-100/60 p-3'
+                        : 'rounded-lg border border-blue-300 bg-blue-100/50 p-3'
+                    }
+                  >
+                    <div
+                      className={
+                        negative
+                          ? 'text-[10px] uppercase tracking-wider text-rose-800'
+                          : 'text-[10px] uppercase tracking-wider text-blue-800'
+                      }
+                    >
+                      {negative ? '= SA owes' : '= SA earns'}
+                    </div>
+                    <div
+                      className={
+                        negative
+                          ? 'mt-1 tabular-nums font-semibold text-rose-900'
+                          : 'mt-1 tabular-nums font-semibold text-blue-900'
+                      }
+                    >
+                      {formatMYR(saEarns)}
+                    </div>
+                  </div>
+                )
+              })()}
             </div>
           )}
 
