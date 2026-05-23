@@ -852,7 +852,7 @@ export function BookingDetailPage() {
         <div
           className={
             isSalesAdvisor
-              ? 'grid grid-cols-1 gap-4 sm:grid-cols-2 items-start'
+              ? 'grid grid-cols-1 gap-4 sm:grid-cols-2'
               : 'contents'
           }
         >
