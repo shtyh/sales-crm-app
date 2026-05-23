@@ -211,9 +211,6 @@ export function BookingsPage() {
               onChange={(e) => setDateFrom(e.target.value)}
               className={filterInputClass}
             />
-            <span className="text-[10px] text-gray-400">
-              up to today ({today})
-            </span>
           </label>
           <label className="flex flex-col gap-1 text-xs text-gray-600">
             <span className="font-medium">Status</span>

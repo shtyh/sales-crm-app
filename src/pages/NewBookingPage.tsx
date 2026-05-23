@@ -3,7 +3,11 @@ import { Link, useNavigate } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
 import { useCreateBooking } from '../lib/queries'
 import { formatError } from '../lib/errors'
-import { PROTON_MODELS, variantsFor } from '../data/proton-models'
+import {
+  PROTON_MODELS,
+  coloursFor,
+  variantsFor,
+} from '../data/proton-models'
 import type { BookingStatus } from '../lib/types'
 
 const STATUSES: { value: BookingStatus; label: string }[] = [
@@ -42,10 +46,13 @@ export function NewBookingPage() {
   const submitting = createMut.isPending
   const [error, setError] = useState<string | null>(null)
 
-  // Reset variant whenever the model changes — variants are model-specific.
+  // Reset variant + colour whenever the model changes — both are
+  // model-specific and the previously-picked options may not exist for the
+  // new model.
   function handleModelChange(newModel: string) {
     setVehicleModel(newModel)
     setVehicleVariant('')
+    setVehicleColor('')
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -173,14 +180,32 @@ export function NewBookingPage() {
             </select>
           </Field>
           <Field label="Color" required>
-            <input
-              type="text"
-              required
-              value={vehicleColor}
-              onChange={(e) => setVehicleColor(e.target.value)}
-              className={inputClass}
-              placeholder="e.g. Snow White"
-            />
+            {coloursFor(vehicleModel).length > 0 ? (
+              <select
+                required
+                value={vehicleColor}
+                onChange={(e) => setVehicleColor(e.target.value)}
+                className={inputClass}
+              >
+                <option value="" disabled>
+                  — Select colour —
+                </option>
+                {coloursFor(vehicleModel).map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type="text"
+                required
+                value={vehicleColor}
+                onChange={(e) => setVehicleColor(e.target.value)}
+                className={inputClass}
+                placeholder="e.g. Snow White"
+              />
+            )}
           </Field>
         </Section>
 

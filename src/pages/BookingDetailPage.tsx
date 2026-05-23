@@ -14,7 +14,11 @@ import {
   useUpdateBooking,
 } from '../lib/queries'
 import { formatError } from '../lib/errors'
-import { PROTON_MODELS, variantsFor } from '../data/proton-models'
+import {
+  PROTON_MODELS,
+  coloursFor,
+  variantsFor,
+} from '../data/proton-models'
 import { LOAN_BANKS, INSURERS } from '../data/banks-and-insurers'
 import type {
   Attachment,
@@ -210,10 +214,14 @@ export function BookingDetailPage() {
 
   function handleModelChange(newModel: string) {
     setVehicleModel(newModel)
-    // If the previously chosen variant isn't valid for the new model, reset.
-    const valid = variantsFor(newModel)
-    if (!valid.includes(vehicleVariant)) {
+    // If the previously chosen variant or colour isn't valid for the new
+    // model, reset that field so the form doesn't display a stale value.
+    if (!variantsFor(newModel).includes(vehicleVariant)) {
       setVehicleVariant('')
+    }
+    const palette = coloursFor(newModel)
+    if (palette.length > 0 && !palette.includes(vehicleColor)) {
+      setVehicleColor('')
     }
   }
 
@@ -507,13 +515,50 @@ export function BookingDetailPage() {
             </select>
           </Field>
           <Field label="Color" required>
-            <input
-              type="text"
-              required
-              value={vehicleColor}
-              onChange={(e) => setVehicleColor(e.target.value)}
-              className={inputClass}
-            />
+            {(() => {
+              const palette = coloursFor(vehicleModel)
+              if (palette.length === 0) {
+                // No factory palette for this model (e.g. Persona) — fall
+                // back to free-text so admins can still record whatever's
+                // on the LOU.
+                return (
+                  <input
+                    type="text"
+                    required
+                    value={vehicleColor}
+                    onChange={(e) => setVehicleColor(e.target.value)}
+                    className={inputClass}
+                  />
+                )
+              }
+              // Legacy bookings may already hold a colour that isn't in the
+              // current palette; surface it as a selectable option so we
+              // don't silently lose the value.
+              const options = palette.includes(
+                vehicleColor as (typeof palette)[number],
+              )
+                ? palette
+                : vehicleColor
+                  ? [vehicleColor, ...palette]
+                  : palette
+              return (
+                <select
+                  required
+                  value={vehicleColor}
+                  onChange={(e) => setVehicleColor(e.target.value)}
+                  className={inputClass}
+                >
+                  <option value="" disabled>
+                    — Select colour —
+                  </option>
+                  {options.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              )
+            })()}
           </Field>
         </Section>
 
