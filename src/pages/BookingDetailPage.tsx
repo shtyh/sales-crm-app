@@ -27,7 +27,8 @@ import type {
   LoanStatus,
   PaymentStatus,
 } from '../lib/types'
-import { FLOOR_STOCK_LABEL } from '../lib/types'
+import { COMMISSION_LABEL, FLOOR_STOCK_LABEL } from '../lib/types'
+import { formatMYR } from '../lib/format'
 
 const STATUSES: { value: BookingStatus; label: string }[] = [
   { value: 'pending', label: 'Pending' },
@@ -280,6 +281,25 @@ export function BookingDetailPage() {
       await updateMut.mutateAsync({
         id,
         patch: { approval_status: decision },
+      })
+      setSavedAt(Date.now())
+    } catch (e) {
+      setError(formatError(e))
+    }
+  }
+
+  /** Manager-only: flip commission_status (Approve / Reject). The "Paid"
+   * transition happens via the /commissions page payout batch flow. */
+  async function handleCommissionDecision(
+    decision: 'approved' | 'rejected',
+  ) {
+    if (!canApproveDiscount) return
+    setError(null)
+    try {
+      await updateMut.mutateAsync({
+        id,
+        // approval_status is unrelated; we send commission_status only
+        patch: { commission_status: decision } as never,
       })
       setSavedAt(Date.now())
     } catch (e) {
@@ -703,6 +723,98 @@ export function BookingDetailPage() {
               </span>{' '}
               — delivery is blocked until Finance Admin marks it{' '}
               <span className="font-semibold">Paid off</span>.
+            </div>
+          )}
+        </section>
+
+        {/* ---------- Commission (read-only for most; SM gets Approve/Reject) ---- */}
+        <section className="rounded-xl border border-blue-200 bg-blue-50/40 p-4 sm:p-5">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-blue-900">
+              💸 Commission
+            </h2>
+            <span
+              className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                booking.commission_status === 'paid'
+                  ? 'bg-green-100 text-green-800'
+                  : booking.commission_status === 'approved'
+                    ? 'bg-blue-100 text-blue-800'
+                    : booking.commission_status === 'rejected'
+                      ? 'bg-red-100 text-red-700'
+                      : booking.commission_status === 'pending'
+                        ? 'bg-amber-100 text-amber-800'
+                        : 'bg-gray-100 text-gray-600'
+              }`}
+            >
+              {COMMISSION_LABEL[booking.commission_status]}
+            </span>
+          </div>
+
+          {booking.base_commission == null ? (
+            <div className="rounded-lg border border-dashed border-gray-200 bg-white p-3 text-xs text-gray-500">
+              No commission schedule set for{' '}
+              <span className="font-medium">
+                {booking.vehicle_model}
+                {booking.vehicle_variant ? ` · ${booking.vehicle_variant}` : ''}
+              </span>
+              . Super admin can add a row at /admin/commissions; existing
+              bookings will need to be re-saved to pick up the new value.
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 gap-3 text-sm sm:gap-4">
+              <div className="rounded-lg border border-gray-200 bg-white p-3">
+                <div className="text-[10px] uppercase tracking-wider text-gray-500">
+                  Base
+                </div>
+                <div className="mt-1 tabular-nums text-gray-900">
+                  {formatMYR(Number(booking.base_commission))}
+                </div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-white p-3">
+                <div className="text-[10px] uppercase tracking-wider text-gray-500">
+                  − Discount
+                </div>
+                <div className="mt-1 tabular-nums text-rose-700">
+                  −{formatMYR(Number(booking.discount_amount ?? 0))}
+                </div>
+              </div>
+              <div className="rounded-lg border border-blue-300 bg-blue-100/50 p-3">
+                <div className="text-[10px] uppercase tracking-wider text-blue-800">
+                  = SA earns
+                </div>
+                <div className="mt-1 tabular-nums font-semibold text-blue-900">
+                  {formatMYR(Number(booking.commission_amount ?? 0))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* SM inline Approve/Reject when pending */}
+          {canApproveDiscount &&
+            booking.commission_status === 'pending' && (
+              <div className="mt-3 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleCommissionDecision('approved')}
+                  disabled={updateMut.isPending}
+                  className="rounded-lg bg-green-600 px-3 py-1 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                >
+                  Approve commission
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleCommissionDecision('rejected')}
+                  disabled={updateMut.isPending}
+                  className="rounded-lg bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                >
+                  Reject
+                </button>
+              </div>
+            )}
+
+          {booking.commission_status === 'pending' && !canApproveDiscount && (
+            <div className="mt-3 text-xs text-gray-500">
+              Awaiting Sales Manager approval.
             </div>
           )}
         </section>

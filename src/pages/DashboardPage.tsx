@@ -53,10 +53,33 @@ export function DashboardPage() {
 
     const recent = bookings.slice(0, 5)
 
+    // Commission totals on the SA's own bookings.
+    let earned = 0    // approved or paid
+    let pending = 0   // not_eligible + pending — what *might* be earned
+    let paid = 0
+    let projected = 0 // sum of commission_amount across all non-cancelled bookings
+    for (const b of bookings) {
+      if (b.status === 'cancelled') continue
+      const amt = Number(b.commission_amount ?? 0)
+      projected += amt
+      if (b.commission_status === 'paid') {
+        paid += amt
+        earned += amt
+      } else if (b.commission_status === 'approved') {
+        earned += amt
+      } else if (
+        b.commission_status === 'pending' ||
+        b.commission_status === 'not_eligible'
+      ) {
+        pending += amt
+      }
+    }
+
     return {
       byStatus,
       recent,
       total,
+      commission: { earned, pending, paid, projected },
     }
   }, [bookings])
 
@@ -112,6 +135,26 @@ export function DashboardPage() {
 
       {stats && stats.total > 0 && (
         <>
+          {/* ---------- My commission ---------- */}
+          <div className="mb-6 grid grid-cols-3 gap-3">
+            <CommissionStat
+              label="Paid out"
+              value={stats.commission.paid}
+              tone="green"
+            />
+            <CommissionStat
+              label="Approved · waiting payout"
+              value={stats.commission.earned - stats.commission.paid}
+              tone="blue"
+            />
+            <CommissionStat
+              label="Projected (active)"
+              value={stats.commission.pending}
+              tone="amber"
+              hint="not yet earned; cancel/discount can change this"
+            />
+          </div>
+
           {/* ---------- Status breakdown ---------- */}
           <div className="mb-6">
             <BreakdownCard title="By status">
@@ -191,6 +234,34 @@ export function DashboardPage() {
 }
 
 // ----- small layout helpers -------------------------------------------------
+
+function CommissionStat({
+  label,
+  value,
+  tone,
+  hint,
+}: {
+  label: string
+  value: number
+  tone: 'green' | 'blue' | 'amber'
+  hint?: string
+}) {
+  const t =
+    tone === 'green'
+      ? 'text-green-700'
+      : tone === 'blue'
+        ? 'text-blue-700'
+        : 'text-amber-700'
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-4">
+      <div className="text-[11px] font-medium text-gray-500">{label}</div>
+      <div className={`mt-1 tabular-nums text-lg font-semibold ${t}`}>
+        {formatMYR(value)}
+      </div>
+      {hint && <div className="mt-0.5 text-[10px] text-gray-400">{hint}</div>}
+    </div>
+  )
+}
 
 function BreakdownCard({
   title,
