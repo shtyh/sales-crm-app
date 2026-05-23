@@ -52,7 +52,9 @@ export function BookingsPage() {
   // bookings). Every other filter applies to all roles.
   const [ownerFilter, setOwnerFilter] = useState<string>('')
   const [dateFrom, setDateFrom] = useState<string>('')
-  const [dateTo, setDateTo] = useState<string>('')
+  // The date range is always [From → today]; today is computed once per render
+  // so a long-open tab still picks up the current day after midnight.
+  const today = new Date().toISOString().slice(0, 10)
   const [statusFilter, setStatusFilter] = useState<'' | BookingStatus>('')
   const [modelFilter, setModelFilter] = useState<string>('')
   const [variantFilter, setVariantFilter] = useState<string>('')
@@ -105,9 +107,13 @@ export function BookingsPage() {
     if (!bookings) return undefined
     return bookings.filter((b) => {
       if (ownerFilter && b.owner_id !== ownerFilter) return false
-      // booking_date is YYYY-MM-DD so a lexicographic compare is fine
-      if (dateFrom && b.booking_date < dateFrom) return false
-      if (dateTo && b.booking_date > dateTo) return false
+      // booking_date is YYYY-MM-DD so a lexicographic compare is fine.
+      // When the user picks a From date, the implicit upper bound is today —
+      // we never surface future-dated bookings while a date filter is on.
+      if (dateFrom) {
+        if (b.booking_date < dateFrom) return false
+        if (b.booking_date > today) return false
+      }
       if (statusFilter && b.status !== statusFilter) return false
       if (modelFilter && b.vehicle_model !== modelFilter) return false
       if (variantFilter && b.vehicle_variant !== variantFilter) return false
@@ -118,7 +124,7 @@ export function BookingsPage() {
     bookings,
     ownerFilter,
     dateFrom,
-    dateTo,
+    today,
     statusFilter,
     modelFilter,
     variantFilter,
@@ -128,7 +134,6 @@ export function BookingsPage() {
   const filtersActive = !!(
     ownerFilter ||
     dateFrom ||
-    dateTo ||
     statusFilter ||
     modelFilter ||
     variantFilter ||
@@ -137,7 +142,6 @@ export function BookingsPage() {
   function clearFilters() {
     setOwnerFilter('')
     setDateFrom('')
-    setDateTo('')
     setStatusFilter('')
     setModelFilter('')
     setVariantFilter('')
@@ -203,20 +207,13 @@ export function BookingsPage() {
             <input
               type="date"
               value={dateFrom}
-              max={dateTo || undefined}
+              max={today}
               onChange={(e) => setDateFrom(e.target.value)}
               className={filterInputClass}
             />
-          </label>
-          <label className="flex flex-col gap-1 text-xs text-gray-600">
-            <span className="font-medium">To</span>
-            <input
-              type="date"
-              value={dateTo}
-              min={dateFrom || undefined}
-              onChange={(e) => setDateTo(e.target.value)}
-              className={filterInputClass}
-            />
+            <span className="text-[10px] text-gray-400">
+              up to today ({today})
+            </span>
           </label>
           <label className="flex flex-col gap-1 text-xs text-gray-600">
             <span className="font-medium">Status</span>
