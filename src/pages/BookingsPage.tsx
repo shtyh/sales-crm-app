@@ -13,14 +13,6 @@ const STATUS_STYLES: Record<BookingStatus, string> = {
   cancelled: 'bg-gray-100 text-gray-600',
 }
 
-function formatMYR(amount: number) {
-  return new Intl.NumberFormat('en-MY', {
-    style: 'currency',
-    currency: 'MYR',
-    maximumFractionDigits: 0,
-  }).format(amount)
-}
-
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-MY', {
     day: '2-digit',
@@ -112,7 +104,6 @@ export function BookingsPage() {
                   <th className="px-4 py-3 text-left font-medium">Code</th>
                   <th className="px-4 py-3 text-left font-medium">Customer</th>
                   <th className="px-4 py-3 text-left font-medium">Vehicle</th>
-                  <th className="px-4 py-3 text-right font-medium">OTR</th>
                   <th className="px-4 py-3 text-left font-medium">Status</th>
                   {isAdmin && (
                     <th className="px-4 py-3 text-left font-medium">Owner</th>
@@ -146,9 +137,6 @@ export function BookingsPage() {
                           {b.vehicle_color ? ` · ${b.vehicle_color}` : ''}
                         </div>
                       )}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums text-gray-900">
-                      {formatMYR(b.otr_price)}
                     </td>
                     <td className="px-4 py-3">
                       <span
@@ -194,23 +182,18 @@ export function BookingsPage() {
                       {b.status}
                     </span>
                   </div>
-                  <div className="mt-3 flex items-end justify-between">
-                    <div>
-                      <div className="text-sm text-gray-900">
-                        {b.vehicle_model}
-                        {b.vehicle_variant ? ` · ${b.vehicle_variant}` : ''}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {b.code} · {formatDate(b.booking_date)}
-                        {isAdmin && (
-                          <>
-                            {' '}· by {ownerDisplay(b.owner_id)}
-                          </>
-                        )}
-                      </div>
+                  <div className="mt-3">
+                    <div className="text-sm text-gray-900">
+                      {b.vehicle_model}
+                      {b.vehicle_variant ? ` · ${b.vehicle_variant}` : ''}
                     </div>
-                    <div className="text-right tabular-nums font-medium text-gray-900">
-                      {formatMYR(b.otr_price)}
+                    <div className="text-xs text-gray-500">
+                      {b.code} · {formatDate(b.booking_date)}
+                      {isAdmin && (
+                        <>
+                          {' '}· by {ownerDisplay(b.owner_id)}
+                        </>
+                      )}
                     </div>
                   </div>
                 </Link>

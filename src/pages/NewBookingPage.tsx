@@ -27,7 +27,9 @@ export function NewBookingPage() {
   const [vehicleVariant, setVehicleVariant] = useState('')
   const [vehicleColor, setVehicleColor] = useState('')
 
-  const [otrPrice, setOtrPrice] = useState('')
+  // OTR is hidden from the booking flow but the DB column is still required
+  // (NOT NULL), so we submit 0 for new bookings until/unless the column gets
+  // dropped.
   const [bookingFee, setBookingFee] = useState('')
   const [discountAmount, setDiscountAmount] = useState('')
 
@@ -58,7 +60,7 @@ export function NewBookingPage() {
         vehicle_model: vehicleModel,
         vehicle_variant: vehicleVariant,
         vehicle_color: vehicleColor.trim(),
-        otr_price: Number(otrPrice) || 0,
+        otr_price: 0,
         booking_fee: Number(bookingFee) || 0,
         discount_amount: Number(discountAmount) || 0,
         booking_date: bookingDate,
@@ -184,19 +186,6 @@ export function NewBookingPage() {
 
         {/* ---------- Money ---------- */}
         <Section title="💰 Pricing (MYR)">
-          <Field label="OTR price" required>
-            <input
-              type="number"
-              required
-              min={0}
-              step="0.01"
-              value={otrPrice}
-              onChange={(e) => setOtrPrice(e.target.value)}
-              className={inputClass}
-              placeholder="99800"
-              inputMode="decimal"
-            />
-          </Field>
           <Field label="Booking fee paid" required>
             <input
               type="number"
@@ -210,7 +199,7 @@ export function NewBookingPage() {
               inputMode="decimal"
             />
           </Field>
-          <Field label="Discount (MYR off OTR)">
+          <Field label="Discount (MYR)">
             <input
               type="number"
               min={0}
@@ -221,10 +210,6 @@ export function NewBookingPage() {
               placeholder="0"
               inputMode="decimal"
             />
-            <span className="mt-1 block text-xs text-gray-500">
-              Any non-zero discount you set will go to your manager for
-              approval.
-            </span>
           </Field>
         </Section>
 

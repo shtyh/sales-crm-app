@@ -68,15 +68,16 @@ These are enforced by `public.guard_booking_field_writes` BEFORE INSERT/UPDATE.
 | Column | Who can write |
 |---|---|
 | `customer_*`, `vehicle_*`, `otr_price`, `booking_fee`, `booking_date`, `status` (non-cancel), `notes` | booking owner (SA) + any privileged role (general_admin / sales_manager / finance_admin) |
-| `discount_amount` | same set; if SA sets non-zero → `approval_status` auto-flips to `pending` |
-| `approval_status` | sales_manager only (when explicit). System auto-recomputes from discount changes. |
-| `owner_id` (lead reassignment) | sales_manager only |
+| `discount_amount` | same set; no approval flow as of 2026-05-23 |
+| `special_support` | sales_manager only — RM bonus that adds to commission |
+| `approval_status` | legacy, sales_manager only when explicit. No longer auto-flipped. |
+| `owner_id` (lead reassignment) | sales_manager only (UI hidden 2026-05-23) |
 | `loan_bank`, `loan_status`, `loan_notes`, `insurance_company` | finance_admin only |
 | `deposit_status`, `payment_status` | finance_admin only |
 | `status='cancelled'` transition | sales_manager only |
 | `car_id` | general_admin or sales_manager (or super_admin) |
 | `base_commission` | system trigger only (snapshot on INSERT from `commission_schedules`); super_admin can override |
-| `commission_amount` | auto = greatest(0, base − discount); sales_manager can override |
+| `commission_amount` | auto = greatest(0, base − discount + special_support); sales_manager can override |
 | `commission_status` | system auto-flips to `pending` when delivered+paid (or `approved` if owner is SM). sales_manager flips manually after. |
 | `commission_payout_id` | sales_manager (set when bundling into a payout batch) |
 
@@ -156,6 +157,7 @@ Files in `supabase/migrations/` (chronological):
 20260522_revert_accountant_module.sql             rolls back Phase 5
 20260522_commission_module.sql                    schedules + payouts + commission cols
 20260523_allow_sm_assign_car.sql                  guard car_id → general_admin OR sales_manager
+20260523_special_support_and_relax_discount.sql   new special_support col; discount no longer needs approval
 ```
 
 Some early ones were **applied by hand** in Supabase SQL editor and so don't show up in `supabase_migrations.schema_migrations`. The files are still source of truth for what should exist.

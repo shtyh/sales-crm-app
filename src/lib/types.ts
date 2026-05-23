@@ -167,12 +167,13 @@ export type Booking = {
 
   otr_price: number
   booking_fee: number
-  /** MYR off OTR. SA-set non-zero → flips approval_status to 'pending'. */
+  /** MYR off OTR. Free for SA to set; no manager approval required. */
   discount_amount: number
+  /** Manager-granted RM bonus on top of base commission. SM-only write. */
+  special_support: number
   /**
-   * State machine for the discount: 'not_required' when discount==0,
-   * 'pending' awaiting manager review, 'approved'/'rejected' after.
-   * Only sales_manager (or super_admin) can flip it explicitly.
+   * Legacy: pre-2026-05-23 discount approval state. New bookings default
+   * to 'not_required'; column kept for historical rows.
    */
   approval_status: ApprovalStatus
 
@@ -280,6 +281,8 @@ export type BookingInsert = {
   otr_price: number
   booking_fee: number
   discount_amount?: number
+  /** sales_manager-only; bumps commission up by this much. */
+  special_support?: number
   booking_date: string
   status?: BookingStatus
   notes?: string | null

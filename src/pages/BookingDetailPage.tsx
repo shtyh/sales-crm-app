@@ -11,14 +11,12 @@ import {
   useBooking,
   useCars,
   useDeleteBooking,
-  useProfiles,
   useUpdateBooking,
 } from '../lib/queries'
 import { formatError } from '../lib/errors'
 import { PROTON_MODELS, variantsFor } from '../data/proton-models'
 import { LOAN_BANKS, INSURERS } from '../data/banks-and-insurers'
 import type {
-  ApprovalStatus,
   Attachment,
   AttachmentKind,
   BookingStatus,
@@ -56,20 +54,6 @@ const LOAN_LABEL: Record<LoanStatus, string> = {
   pending: '⏳ Loan pending',
   approved: '✓ Loan approved',
   rejected: '✗ Loan rejected',
-}
-
-const APPROVAL_BADGE: Record<ApprovalStatus, string> = {
-  not_required: 'bg-gray-100 text-gray-600',
-  pending: 'bg-amber-100 text-amber-800',
-  approved: 'bg-green-100 text-green-800',
-  rejected: 'bg-red-100 text-red-800',
-}
-
-const APPROVAL_LABEL: Record<ApprovalStatus, string> = {
-  not_required: 'No discount',
-  pending: '⏳ Awaiting manager approval',
-  approved: '✓ Discount approved',
-  rejected: '✗ Discount rejected',
 }
 
 const DEPOSIT_OPTIONS: { value: DepositStatus; label: string }[] = [
@@ -122,7 +106,6 @@ export function BookingDetailPage() {
     canCancel,
     canApproveDiscount,
     canEditFinanceStatus,
-    canReassign,
     canAssignCar,
     isSuperAdmin,
   } = useAuth()
@@ -132,9 +115,7 @@ export function BookingDetailPage() {
   const { data: booking, error: bookingErr, isLoading } = useBooking(id)
   const { data: attachments } = useAttachments(id)
   // Owner reassignment dropdown — only manager needs the profile list, and
-  // useProfiles is cached so this is essentially free when navigating from
-  // /bookings.
-  const { data: profiles } = useProfiles(canReassign)
+  // Owner reassignment UI is currently hidden — profiles fetch not needed.
   // Cars list — used both for the general_admin dropdown and to look up
   // the linked car's chassis / floor-stock for everyone else's read-only
   // display. Small data, RLS lets everyone read, cached by React Query.
@@ -156,9 +137,11 @@ export function BookingDetailPage() {
   const [vehicleModel, setVehicleModel] = useState<string>(PROTON_MODELS[0])
   const [vehicleVariant, setVehicleVariant] = useState('')
   const [vehicleColor, setVehicleColor] = useState('')
-  const [otrPrice, setOtrPrice] = useState('')
+  // OTR is hidden from the UI but the column is preserved; we leave whatever
+  // was stored alone on save (no patch sent).
   const [bookingFee, setBookingFee] = useState('')
   const [discountAmount, setDiscountAmount] = useState('')
+  const [specialSupport, setSpecialSupport] = useState('')
   const [bookingDate, setBookingDate] = useState('')
   const [status, setStatus] = useState<BookingStatus>('pending')
   const [notes, setNotes] = useState('')
@@ -168,7 +151,6 @@ export function BookingDetailPage() {
   const [loanNotes, setLoanNotes] = useState('')
   const [depositStatus, setDepositStatus] = useState<DepositStatus>('unpaid')
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>('unpaid')
-  const [ownerId, setOwnerId] = useState('')
   const [carId, setCarId] = useState<string>('')
 
   const linkedCar = useMemo(
@@ -211,9 +193,9 @@ export function BookingDetailPage() {
     setVehicleModel(booking.vehicle_model)
     setVehicleVariant(booking.vehicle_variant)
     setVehicleColor(booking.vehicle_color)
-    setOtrPrice(String(booking.otr_price))
     setBookingFee(String(booking.booking_fee))
     setDiscountAmount(String(booking.discount_amount ?? 0))
+    setSpecialSupport(String(booking.special_support ?? 0))
     setBookingDate(booking.booking_date)
     setStatus(booking.status)
     setNotes(booking.notes ?? '')
@@ -223,7 +205,6 @@ export function BookingDetailPage() {
     setLoanNotes(booking.loan_notes ?? '')
     setDepositStatus(booking.deposit_status ?? 'unpaid')
     setPaymentStatus(booking.payment_status ?? 'unpaid')
-    setOwnerId(booking.owner_id)
     setCarId(booking.car_id ?? '')
   }, [booking])
 
@@ -250,12 +231,18 @@ export function BookingDetailPage() {
           vehicle_model: vehicleModel,
           vehicle_variant: vehicleVariant,
           vehicle_color: vehicleColor.trim(),
-          otr_price: Number(otrPrice) || 0,
           booking_fee: Number(bookingFee) || 0,
           discount_amount: Number(discountAmount) || 0,
           booking_date: bookingDate,
           status,
           notes: notes.trim() || null,
+          // special_support is SM-only; non-SM callers must omit it from the
+          // patch entirely or the DB guard will reject the whole PATCH.
+          ...(canApproveDiscount &&
+          Number(specialSupport || 0) !==
+            Number(booking?.special_support ?? 0)
+            ? { special_support: Number(specialSupport) || 0 }
+            : {}),
           // Send each role-gated bucket of fields ONLY when the caller is
           // allowed to write them; otherwise the DB trigger will reject the
           // whole PATCH because something is "distinct from" the old value.
@@ -273,28 +260,10 @@ export function BookingDetailPage() {
                 payment_status: paymentStatus,
               }
             : {}),
-          ...(canReassign && ownerId && ownerId !== booking?.owner_id
-            ? { owner_id: ownerId }
-            : {}),
           ...(canAssignCar && carId !== (booking?.car_id ?? '')
             ? { car_id: carId || null }
             : {}),
         },
-      })
-      setSavedAt(Date.now())
-    } catch (e) {
-      setError(formatError(e))
-    }
-  }
-
-  /** Manager-only: flip approval_status without touching other fields. */
-  async function handleApprovalDecision(decision: 'approved' | 'rejected') {
-    if (!canApproveDiscount) return
-    setError(null)
-    try {
-      await updateMut.mutateAsync({
-        id,
-        patch: { approval_status: decision },
       })
       setSavedAt(Date.now())
     } catch (e) {
@@ -434,13 +403,6 @@ export function BookingDetailPage() {
                   {LOAN_LABEL[booking.loan_status]}
                 </span>
               )}
-            {booking.approval_status !== 'not_required' && (
-              <span
-                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${APPROVAL_BADGE[booking.approval_status]}`}
-              >
-                {APPROVAL_LABEL[booking.approval_status]}
-              </span>
-            )}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -557,18 +519,6 @@ export function BookingDetailPage() {
 
         {/* ---------- Pricing ---------- */}
         <Section title="💰 Pricing (MYR)">
-          <Field label="OTR price" required>
-            <input
-              type="number"
-              required
-              min={0}
-              step="0.01"
-              value={otrPrice}
-              onChange={(e) => setOtrPrice(e.target.value)}
-              className={inputClass}
-              inputMode="decimal"
-            />
-          </Field>
           <Field label="Booking fee paid" required>
             <input
               type="number"
@@ -581,7 +531,7 @@ export function BookingDetailPage() {
               inputMode="decimal"
             />
           </Field>
-          <Field label="Discount (MYR off OTR)">
+          <Field label="Discount (MYR)">
             <input
               type="number"
               min={0}
@@ -593,43 +543,24 @@ export function BookingDetailPage() {
               placeholder="0"
             />
           </Field>
-          <div className="sm:col-span-1">
-            <label className="block text-sm">
-              <span className="mb-1 block font-medium text-gray-700">
-                Discount approval
-              </span>
-              <div
-                className={`inline-flex w-full items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm`}
-              >
-                <span
-                  className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${APPROVAL_BADGE[booking.approval_status]}`}
-                >
-                  {APPROVAL_LABEL[booking.approval_status]}
-                </span>
-                {canApproveDiscount &&
-                  booking.approval_status === 'pending' && (
-                    <span className="flex gap-1">
-                      <button
-                        type="button"
-                        onClick={() => handleApprovalDecision('approved')}
-                        disabled={updateMut.isPending}
-                        className="rounded-lg bg-green-600 px-2 py-0.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
-                      >
-                        Approve
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleApprovalDecision('rejected')}
-                        disabled={updateMut.isPending}
-                        className="rounded-lg bg-red-600 px-2 py-0.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
-                      >
-                        Reject
-                      </button>
-                    </span>
-                  )}
-              </div>
-            </label>
-          </div>
+          <Field label="Special support (MYR)">
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              disabled={!canApproveDiscount}
+              value={specialSupport}
+              onChange={(e) => setSpecialSupport(e.target.value)}
+              className={readonlyInputClass(canApproveDiscount)}
+              inputMode="decimal"
+              placeholder="0"
+            />
+            <span className="mt-1 block text-xs text-gray-500">
+              {canApproveDiscount
+                ? 'Manager-granted bonus added on top of SA commission.'
+                : '🔒 Sales Manager only — bumps the SA commission up.'}
+            </span>
+          </Field>
         </Section>
 
         {/* ---------- Dates + status ---------- */}
@@ -788,7 +719,7 @@ export function BookingDetailPage() {
               bookings will need to be re-saved to pick up the new value.
             </div>
           ) : (
-            <div className="grid grid-cols-3 gap-3 text-sm sm:gap-4">
+            <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4 sm:gap-4">
               <div className="rounded-lg border border-gray-200 bg-white p-3">
                 <div className="text-[10px] uppercase tracking-wider text-gray-500">
                   Base
@@ -803,6 +734,14 @@ export function BookingDetailPage() {
                 </div>
                 <div className="mt-1 tabular-nums text-rose-700">
                   −{formatMYR(Number(booking.discount_amount ?? 0))}
+                </div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-white p-3">
+                <div className="text-[10px] uppercase tracking-wider text-gray-500">
+                  + Special support
+                </div>
+                <div className="mt-1 tabular-nums text-emerald-700">
+                  +{formatMYR(Number(booking.special_support ?? 0))}
                 </div>
               </div>
               <div className="rounded-lg border border-blue-300 bg-blue-100/50 p-3">
@@ -919,33 +858,9 @@ export function BookingDetailPage() {
           )}
         </section>
 
-        {/* ---------- Sales Manager: reassign owner ---------- */}
-        {canReassign && profiles && (
-          <section className="rounded-xl border border-blue-200 bg-blue-50/50 p-4 sm:p-5">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-blue-900">
-                🔁 Owner
-              </h2>
-              <span className="text-xs text-gray-500">
-                Manager-only: reassign this lead
-              </span>
-            </div>
-            <Field label="Assigned to">
-              <select
-                value={ownerId}
-                onChange={(e) => setOwnerId(e.target.value)}
-                className={inputClass}
-              >
-                {profiles.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.full_name || p.email}{' '}
-                    {p.role !== 'sales_advisor' ? `· ${p.role}` : ''}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          </section>
-        )}
+        {/* Owner reassignment UI removed 2026-05-23 per request. owner_id
+            stays on the DB row and is still SM-only-writable at the trigger;
+            re-enable here if lead reassignment comes back. */}
 
         {/* ---------- Finance Admin: Loan & Insurance ----------
             SA sees a one-line summary; Finance Admin sees the full editable

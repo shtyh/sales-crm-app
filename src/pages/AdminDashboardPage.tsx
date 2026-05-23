@@ -393,8 +393,7 @@ export function AdminDashboardPage() {
                         )}
                       </div>
                       <div className="text-xs text-gray-500">
-                        {row.count} booking{row.count === 1 ? '' : 's'} ·{' '}
-                        net {formatMYR(row.revenue)}
+                        {row.count} booking{row.count === 1 ? '' : 's'}
                       </div>
                     </div>
                   </li>
@@ -440,9 +439,6 @@ export function AdminDashboardPage() {
                           </div>
                         </div>
                         <div className="shrink-0 text-right">
-                          <div className="tabular-nums text-sm text-gray-900">
-                            {formatMYR(b.otr_price)}
-                          </div>
                           <div className="text-[10px] text-gray-500">
                             {b.code}
                           </div>
@@ -643,9 +639,6 @@ function BookingListWidget({
                   </div>
                 </div>
                 <div className="shrink-0 text-right">
-                  <div className="tabular-nums text-sm text-gray-900">
-                    {formatMYR(b.otr_price)}
-                  </div>
                   <div className="text-[10px] text-gray-500">{b.code}</div>
                 </div>
               </Link>

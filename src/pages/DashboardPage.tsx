@@ -213,11 +213,8 @@ export function DashboardPage() {
                       </div>
                     </div>
                     <div className="shrink-0 text-right">
-                      <div className="tabular-nums text-sm text-gray-900">
-                        {formatMYR(b.otr_price)}
-                      </div>
                       <span
-                        className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_BADGE[b.status]}`}
+                        className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_BADGE[b.status]}`}
                       >
                         {b.status}
                       </span>

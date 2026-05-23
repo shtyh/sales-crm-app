@@ -279,16 +279,8 @@ export function FinancePage() {
                         {b.loan_bank ? ` · ${b.loan_bank}` : ''}
                       </div>
                     </div>
-                    <div className="shrink-0 text-right">
-                      <div className="tabular-nums text-sm text-gray-900">
-                        {formatMYR(
-                          Number(b.otr_price) - Number(b.discount_amount ?? 0),
-                        )}
-                      </div>
-                      <div className="text-[10px] text-gray-500">
-                        net of discount
-                      </div>
-                    </div>
+                    {/* OTR/net-price display intentionally removed
+                        2026-05-23 — OTR no longer surfaced in the UI. */}
                   </Link>
                 </li>
               )
