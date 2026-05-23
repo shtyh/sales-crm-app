@@ -34,6 +34,8 @@ type AuthState = {
   canEditCarAttributes: boolean
   /** finance_admin (or super_admin) — write a car's floor-stock fields. */
   canEditCarFloorStock: boolean
+  /** general_admin or sales_manager (or super_admin) — assign bookings.car_id. */
+  canAssignCar: boolean
   loading: boolean
   refreshProfile: () => Promise<void>
 }
@@ -52,6 +54,7 @@ const AuthContext = createContext<AuthState>({
   canReassign: false,
   canEditCarAttributes: false,
   canEditCarFloorStock: false,
+  canAssignCar: false,
   loading: true,
   refreshProfile: async () => {},
 })
@@ -199,6 +202,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         role === 'general_admin' || role === 'super_admin',
       canEditCarFloorStock:
         role === 'finance_admin' || role === 'super_admin',
+      canAssignCar:
+        role === 'general_admin' ||
+        role === 'sales_manager' ||
+        role === 'super_admin',
       loading,
       refreshProfile,
     }

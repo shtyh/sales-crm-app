@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
 import { useAuth } from '../lib/auth'
 import { useCars } from '../lib/queries'
@@ -28,9 +28,11 @@ const FS_BADGE: Record<FloorStockStatus, string> = {
 
 export function CarsPage() {
   const navigate = useNavigate()
-  const { canEditCarAttributes } = useAuth()
+  const { role, canEditCarAttributes } = useAuth()
   const { data: cars, error: carsErr } = useCars()
   const [filter, setFilter] = useState<'all' | CarStatus>('all')
+
+  if (role === 'sales_advisor') return <Navigate to="/" replace />
 
   const filtered = useMemo(
     () =>

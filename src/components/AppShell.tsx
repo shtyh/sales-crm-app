@@ -16,7 +16,8 @@ const navLinkClass = ({ isActive }: { isActive: boolean }) =>
  * inside the `<main>` slot.
  */
 export function AppShell({ children }: { children: ReactNode }) {
-  const { user, isSuperAdmin, isFinanceAdmin, canApproveDiscount } = useAuth()
+  const { user, isAdmin, isSuperAdmin, isFinanceAdmin, canApproveDiscount } =
+    useAuth()
   const navigate = useNavigate()
   const displayName =
     (user?.user_metadata?.full_name as string | undefined) ?? user?.email ?? ''
@@ -46,9 +47,11 @@ export function AppShell({ children }: { children: ReactNode }) {
               <NavLink to="/bookings" className={navLinkClass}>
                 Bookings
               </NavLink>
-              <NavLink to="/cars" className={navLinkClass}>
-                Inventory
-              </NavLink>
+              {isAdmin && (
+                <NavLink to="/cars" className={navLinkClass}>
+                  Inventory
+                </NavLink>
+              )}
               {isFinanceAdmin && (
                 <NavLink to="/finance" className={navLinkClass}>
                   Finance

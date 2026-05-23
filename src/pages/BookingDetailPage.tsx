@@ -84,6 +84,18 @@ const PAYMENT_OPTIONS: { value: PaymentStatus; label: string }[] = [
   { value: 'paid', label: 'Fully paid' },
 ]
 
+const DEPOSIT_LABEL: Record<DepositStatus, string> = Object.fromEntries(
+  DEPOSIT_OPTIONS.map((o) => [o.value, o.label]),
+) as Record<DepositStatus, string>
+
+const PAYMENT_LABEL: Record<PaymentStatus, string> = Object.fromEntries(
+  PAYMENT_OPTIONS.map((o) => [o.value, o.label]),
+) as Record<PaymentStatus, string>
+
+const LOAN_STATUS_LABEL: Record<LoanStatus, string> = Object.fromEntries(
+  LOAN_STATUSES.map((o) => [o.value, o.label]),
+) as Record<LoanStatus, string>
+
 const STATUS_BADGE: Record<BookingStatus, string> = {
   pending: 'bg-amber-100 text-amber-800',
   confirmed: 'bg-blue-100 text-blue-800',
@@ -105,14 +117,16 @@ export function BookingDetailPage() {
   const { id = '' } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const {
+    role,
     isFinanceAdmin,
     canCancel,
     canApproveDiscount,
     canEditFinanceStatus,
     canReassign,
-    canEditCarAttributes,
+    canAssignCar,
     isSuperAdmin,
   } = useAuth()
+  const isSalesAdvisor = role === 'sales_advisor'
   const qc = useQueryClient()
 
   const { data: booking, error: bookingErr, isLoading } = useBooking(id)
@@ -262,7 +276,7 @@ export function BookingDetailPage() {
           ...(canReassign && ownerId && ownerId !== booking?.owner_id
             ? { owner_id: ownerId }
             : {}),
-          ...(canEditCarAttributes && carId !== (booking?.car_id ?? '')
+          ...(canAssignCar && carId !== (booking?.car_id ?? '')
             ? { car_id: carId || null }
             : {}),
         },
@@ -662,14 +676,14 @@ export function BookingDetailPage() {
             <h2 className="text-sm font-semibold text-gray-900">
               🚙 Linked car
             </h2>
-            {!canEditCarAttributes && (
+            {!canAssignCar && (
               <span className="text-xs text-gray-500">
-                🔒 General Admin assigns inventory
+                🔒 General Admin or Sales Manager assigns inventory
               </span>
             )}
           </div>
 
-          {canEditCarAttributes ? (
+          {canAssignCar ? (
             <Field label="Inventory unit">
               <select
                 value={carId}
@@ -694,19 +708,32 @@ export function BookingDetailPage() {
               </select>
             </Field>
           ) : linkedCar ? (
-            <Link
-              to={`/cars/${linkedCar.id}`}
-              className="block rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 hover:bg-gray-100"
-            >
-              <div className="font-mono text-xs text-gray-600">
-                {linkedCar.chassis_no}
+            isSalesAdvisor ? (
+              <div className="block rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                <div className="font-mono text-xs text-gray-600">
+                  {linkedCar.chassis_no}
+                </div>
+                <div className="text-sm text-gray-900">
+                  {linkedCar.model}
+                  {linkedCar.variant ? ` · ${linkedCar.variant}` : ''}
+                  {linkedCar.color ? ` · ${linkedCar.color}` : ''}
+                </div>
               </div>
-              <div className="text-sm text-gray-900">
-                {linkedCar.model}
-                {linkedCar.variant ? ` · ${linkedCar.variant}` : ''}
-                {linkedCar.color ? ` · ${linkedCar.color}` : ''}
-              </div>
-            </Link>
+            ) : (
+              <Link
+                to={`/cars/${linkedCar.id}`}
+                className="block rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 hover:bg-gray-100"
+              >
+                <div className="font-mono text-xs text-gray-600">
+                  {linkedCar.chassis_no}
+                </div>
+                <div className="text-sm text-gray-900">
+                  {linkedCar.model}
+                  {linkedCar.variant ? ` · ${linkedCar.variant}` : ''}
+                  {linkedCar.color ? ` · ${linkedCar.color}` : ''}
+                </div>
+              </Link>
+            )
           ) : (
             <div className="rounded-lg border border-dashed border-gray-200 px-3 py-2 text-xs text-gray-500">
               No inventory unit assigned yet.
@@ -819,7 +846,9 @@ export function BookingDetailPage() {
           )}
         </section>
 
-        {/* ---------- Finance Admin: deposit + payment status ----------------- */}
+        {/* ---------- Finance Admin: deposit + payment status -----------------
+            SAs get a condensed one-line view; everyone else sees the editable
+            form (Finance Admin edits, others see disabled inputs). */}
         <section className="rounded-xl border border-amber-200 bg-amber-50/50 p-4 sm:p-5">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-amber-900">
@@ -831,40 +860,53 @@ export function BookingDetailPage() {
               </span>
             )}
           </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Field label="Deposit">
-              <select
-                disabled={!canEditFinanceStatus}
-                value={depositStatus}
-                onChange={(e) =>
-                  setDepositStatus(e.target.value as DepositStatus)
-                }
-                className={readonlyInputClass(canEditFinanceStatus)}
-              >
-                {DEPOSIT_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Payment">
-              <select
-                disabled={!canEditFinanceStatus}
-                value={paymentStatus}
-                onChange={(e) =>
-                  setPaymentStatus(e.target.value as PaymentStatus)
-                }
-                className={readonlyInputClass(canEditFinanceStatus)}
-              >
-                {PAYMENT_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          </div>
+          {isSalesAdvisor ? (
+            <div className="text-sm text-gray-800">
+              Deposit:{' '}
+              <span className="font-medium">
+                {DEPOSIT_LABEL[booking.deposit_status]}
+              </span>{' '}
+              · Payment:{' '}
+              <span className="font-medium">
+                {PAYMENT_LABEL[booking.payment_status]}
+              </span>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Field label="Deposit">
+                <select
+                  disabled={!canEditFinanceStatus}
+                  value={depositStatus}
+                  onChange={(e) =>
+                    setDepositStatus(e.target.value as DepositStatus)
+                  }
+                  className={readonlyInputClass(canEditFinanceStatus)}
+                >
+                  {DEPOSIT_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Payment">
+                <select
+                  disabled={!canEditFinanceStatus}
+                  value={paymentStatus}
+                  onChange={(e) =>
+                    setPaymentStatus(e.target.value as PaymentStatus)
+                  }
+                  className={readonlyInputClass(canEditFinanceStatus)}
+                >
+                  {PAYMENT_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+          )}
         </section>
 
         {/* ---------- Sales Manager: reassign owner ---------- */}
@@ -895,7 +937,9 @@ export function BookingDetailPage() {
           </section>
         )}
 
-        {/* ---------- Finance Admin: Loan & Insurance ---------- */}
+        {/* ---------- Finance Admin: Loan & Insurance ----------
+            SA sees a one-line summary; Finance Admin sees the full editable
+            form; other privileged roles see the form disabled. */}
         <section className="rounded-xl border border-purple-200 bg-purple-50/50 p-4 sm:p-5">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-purple-900">
@@ -906,6 +950,28 @@ export function BookingDetailPage() {
             )}
           </div>
 
+          {isSalesAdvisor ? (
+            <div className="text-sm text-gray-800">
+              Loan:{' '}
+              <span className="font-medium">
+                {booking.loan_bank || '— not set —'}
+              </span>
+              {' — '}
+              <span className="font-medium">
+                {LOAN_STATUS_LABEL[booking.loan_status]}
+              </span>
+              {' · '}Insurance:{' '}
+              <span className="font-medium">
+                {booking.insurance_company || '— not set —'}
+              </span>
+              {booking.loan_notes ? (
+                <div className="mt-1 text-xs text-gray-600">
+                  Notes: {booking.loan_notes}
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <>
           <div className="mb-3 text-xs text-gray-600">
             Deposit:{' '}
             {booking.status === 'confirmed' || booking.status === 'delivered'
@@ -993,6 +1059,8 @@ export function BookingDetailPage() {
               />
             </Field>
           </div>
+            </>
+          )}
 
           {loanStatus === 'approved' && (
             <div className="mt-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-800">

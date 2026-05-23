@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, Navigate, useParams } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
 import { AuditLogPanel } from '../components/AuditLogPanel'
 import { useAuth } from '../lib/auth'
@@ -38,7 +38,7 @@ const FS_OPTIONS: FloorStockStatus[] = [
 
 export function CarDetailPage() {
   const { id = '' } = useParams<{ id: string }>()
-  const { canEditCarAttributes, canEditCarFloorStock } = useAuth()
+  const { role, canEditCarAttributes, canEditCarFloorStock } = useAuth()
   const { data: car, error: carErr, isLoading } = useCar(id)
   const updateMut = useUpdateCar()
 
@@ -75,6 +75,8 @@ export function CarDetailPage() {
     setFloorStockStatus(car.floor_stock_status)
     setFloorStockDue(car.floor_stock_due ?? '')
   }, [car])
+
+  if (role === 'sales_advisor') return <Navigate to="/" replace />
 
   if (isLoading) {
     return (

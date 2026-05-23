@@ -74,7 +74,7 @@ These are enforced by `public.guard_booking_field_writes` BEFORE INSERT/UPDATE.
 | `loan_bank`, `loan_status`, `loan_notes`, `insurance_company` | finance_admin only |
 | `deposit_status`, `payment_status` | finance_admin only |
 | `status='cancelled'` transition | sales_manager only |
-| `car_id` | general_admin (or super_admin) |
+| `car_id` | general_admin or sales_manager (or super_admin) |
 | `base_commission` | system trigger only (snapshot on INSERT from `commission_schedules`); super_admin can override |
 | `commission_amount` | auto = greatest(0, base − discount); sales_manager can override |
 | `commission_status` | system auto-flips to `pending` when delivered+paid (or `approved` if owner is SM). sales_manager flips manually after. |
@@ -155,6 +155,7 @@ Files in `supabase/migrations/` (chronological):
 20260522_accountant_module.sql                    Phase 5 (DROPPED — see next)
 20260522_revert_accountant_module.sql             rolls back Phase 5
 20260522_commission_module.sql                    schedules + payouts + commission cols
+20260523_allow_sm_assign_car.sql                  guard car_id → general_admin OR sales_manager
 ```
 
 Some early ones were **applied by hand** in Supabase SQL editor and so don't show up in `supabase_migrations.schema_migrations`. The files are still source of truth for what should exist.
