@@ -50,9 +50,6 @@ const CarDetailPage = lazy(() =>
 const FinancePage = lazy(() =>
   import('./pages/FinancePage').then((m) => ({ default: m.FinancePage })),
 )
-const AccountsPage = lazy(() =>
-  import('./pages/AccountsPage').then((m) => ({ default: m.AccountsPage })),
-)
 
 function RouteFallback() {
   return (
@@ -71,7 +68,6 @@ function RouteFallback() {
 function RoleHome() {
   const { role, isAdmin } = useAuth()
   if (role === 'finance_admin') return <Navigate to="/finance" replace />
-  if (role === 'accountant') return <Navigate to="/accounts" replace />
   return isAdmin ? <AdminDashboardPage /> : <DashboardPage />
 }
 
@@ -160,14 +156,6 @@ function App() {
           element={
             <ProtectedRoute>
               <FinancePage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/accounts"
-          element={
-            <ProtectedRoute>
-              <AccountsPage />
             </ProtectedRoute>
           }
         />

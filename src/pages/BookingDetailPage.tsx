@@ -22,13 +22,12 @@ import type {
   Attachment,
   AttachmentKind,
   BookingStatus,
-  CommissionStatus,
   DepositStatus,
   FloorStockStatus,
   LoanStatus,
   PaymentStatus,
 } from '../lib/types'
-import { COMMISSION_LABEL, FLOOR_STOCK_LABEL } from '../lib/types'
+import { FLOOR_STOCK_LABEL } from '../lib/types'
 
 const STATUSES: { value: BookingStatus; label: string }[] = [
   { value: 'pending', label: 'Pending' },
@@ -82,13 +81,6 @@ const PAYMENT_OPTIONS: { value: PaymentStatus; label: string }[] = [
   { value: 'unpaid', label: 'Unpaid' },
   { value: 'partial', label: 'Partially paid' },
   { value: 'paid', label: 'Fully paid' },
-]
-
-const COMMISSION_OPTIONS: { value: CommissionStatus; label: string }[] = [
-  { value: 'not_eligible', label: 'Not eligible' },
-  { value: 'pending', label: 'Pending review' },
-  { value: 'approved', label: 'Approved' },
-  { value: 'paid', label: 'Paid' },
 ]
 
 const STATUS_BADGE: Record<BookingStatus, string> = {
@@ -161,11 +153,6 @@ export function BookingDetailPage() {
   const [loanNotes, setLoanNotes] = useState('')
   const [depositStatus, setDepositStatus] = useState<DepositStatus>('unpaid')
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>('unpaid')
-  const [receiptNumber, setReceiptNumber] = useState('')
-  const [invoiceNumber, setInvoiceNumber] = useState('')
-  const [commissionStatus, setCommissionStatus] =
-    useState<CommissionStatus>('not_eligible')
-  const [commissionAmount, setCommissionAmount] = useState('')
   const [ownerId, setOwnerId] = useState('')
   const [carId, setCarId] = useState<string>('')
 
@@ -221,14 +208,6 @@ export function BookingDetailPage() {
     setLoanNotes(booking.loan_notes ?? '')
     setDepositStatus(booking.deposit_status ?? 'unpaid')
     setPaymentStatus(booking.payment_status ?? 'unpaid')
-    setReceiptNumber(booking.receipt_number ?? '')
-    setInvoiceNumber(booking.invoice_number ?? '')
-    setCommissionStatus(booking.commission_status ?? 'not_eligible')
-    setCommissionAmount(
-      booking.commission_amount != null
-        ? String(booking.commission_amount)
-        : '',
-    )
     setOwnerId(booking.owner_id)
     setCarId(booking.car_id ?? '')
   }, [booking])
@@ -277,13 +256,6 @@ export function BookingDetailPage() {
             ? {
                 deposit_status: depositStatus,
                 payment_status: paymentStatus,
-                receipt_number: receiptNumber.trim() || null,
-                invoice_number: invoiceNumber.trim() || null,
-                commission_status: commissionStatus,
-                commission_amount:
-                  commissionAmount.trim() === ''
-                    ? null
-                    : Number(commissionAmount),
               }
             : {}),
           ...(canReassign && ownerId && ownerId !== booking?.owner_id
@@ -735,19 +707,18 @@ export function BookingDetailPage() {
           )}
         </section>
 
-        {/* ---------- Accountant: deposit + payment + receipt + invoice ------ */}
-        <section className="rounded-xl border border-green-200 bg-green-50/40 p-4 sm:p-5">
+        {/* ---------- Finance Admin: deposit + payment status ----------------- */}
+        <section className="rounded-xl border border-amber-200 bg-amber-50/50 p-4 sm:p-5">
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-green-900">
-              💰 Cash & paperwork
+            <h2 className="text-sm font-semibold text-amber-900">
+              💰 Finance status
             </h2>
             {!canEditFinanceStatus && (
               <span className="text-xs text-gray-500">
-                🔒 Accountant only
+                🔒 Finance Admin only
               </span>
             )}
           </div>
-
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Deposit">
               <select
@@ -764,11 +735,6 @@ export function BookingDetailPage() {
                   </option>
                 ))}
               </select>
-              {booking.deposit_confirmed_at && (
-                <span className="mt-1 block text-[10px] text-gray-500">
-                  confirmed {formatTimestamp(booking.deposit_confirmed_at)}
-                </span>
-              )}
             </Field>
             <Field label="Payment">
               <select
@@ -785,84 +751,6 @@ export function BookingDetailPage() {
                   </option>
                 ))}
               </select>
-              {paymentStatus !== 'paid' && (
-                <span className="mt-1 block text-[10px] text-gray-500">
-                  delivery blocked until "Fully paid"
-                </span>
-              )}
-            </Field>
-            <Field label="Receipt #">
-              <input
-                type="text"
-                disabled={!canEditFinanceStatus}
-                value={receiptNumber}
-                onChange={(e) => setReceiptNumber(e.target.value)}
-                className={readonlyInputClass(canEditFinanceStatus)}
-                placeholder="e.g. RC-2026-00123"
-              />
-            </Field>
-            <Field label="Invoice #">
-              <input
-                type="text"
-                disabled={!canEditFinanceStatus}
-                value={invoiceNumber}
-                onChange={(e) => setInvoiceNumber(e.target.value)}
-                className={readonlyInputClass(canEditFinanceStatus)}
-                placeholder="e.g. INV-2026-00123"
-              />
-            </Field>
-          </div>
-        </section>
-
-        {/* ---------- Accountant: commission ---------------------------------- */}
-        <section className="rounded-xl border border-blue-200 bg-blue-50/40 p-4 sm:p-5">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-blue-900">
-              💸 Commission
-            </h2>
-            {!canEditFinanceStatus && (
-              <span className="text-xs text-gray-500">
-                🔒 Accountant only
-              </span>
-            )}
-          </div>
-          <div className="mb-3 text-xs text-gray-600">
-            Auto-flips to <span className="font-medium">Pending review</span>{' '}
-            once the booking is delivered AND payment is Fully paid.
-            Accountant moves it to Approved → Paid manually.
-          </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Field label="Status">
-              <select
-                disabled={!canEditFinanceStatus}
-                value={commissionStatus}
-                onChange={(e) =>
-                  setCommissionStatus(e.target.value as CommissionStatus)
-                }
-                className={readonlyInputClass(canEditFinanceStatus)}
-              >
-                {COMMISSION_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-              <span className="mt-1 block text-[10px] text-gray-500">
-                current: {COMMISSION_LABEL[booking.commission_status]}
-              </span>
-            </Field>
-            <Field label="Amount paid (MYR)">
-              <input
-                type="number"
-                min={0}
-                step="0.01"
-                disabled={!canEditFinanceStatus}
-                value={commissionAmount}
-                onChange={(e) => setCommissionAmount(e.target.value)}
-                className={readonlyInputClass(canEditFinanceStatus)}
-                inputMode="decimal"
-                placeholder="0"
-              />
             </Field>
           </div>
         </section>

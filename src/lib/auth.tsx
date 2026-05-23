@@ -22,8 +22,7 @@ type AuthState = {
   isAdmin: boolean
   isSuperAdmin: boolean
   isFinanceAdmin: boolean
-  isAccountant: boolean
-  /** Sales manager or accountant — the two roles allowed to cancel bookings. */
+  /** Sales manager (or super_admin god mode) — only roles allowed to cancel. */
   canCancel: boolean
   /** sales_manager (or super_admin) — Approve/Reject SA discount requests. */
   canApproveDiscount: boolean
@@ -47,7 +46,6 @@ const AuthContext = createContext<AuthState>({
   isAdmin: false,
   isSuperAdmin: false,
   isFinanceAdmin: false,
-  isAccountant: false,
   canCancel: false,
   canApproveDiscount: false,
   canEditFinanceStatus: false,
@@ -185,19 +183,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAdmin: !!profile?.is_admin,
       isSuperAdmin: role === 'super_admin',
       isFinanceAdmin: role === 'finance_admin' || role === 'super_admin',
-      isAccountant: role === 'accountant' || role === 'super_admin',
-      // Per spec: SA can't cancel their own bookings (no self-dealing); only
-      // sales_manager + accountant can — plus super_admin's god mode.
+      // Accountant role removed — only sales_manager can cancel now (plus
+      // super_admin via god mode bypass at the DB level).
       canCancel:
-        role === 'sales_manager' ||
-        role === 'accountant' ||
-        role === 'super_admin',
+        role === 'sales_manager' || role === 'super_admin',
       canApproveDiscount:
         role === 'sales_manager' || role === 'super_admin',
-      // Tightened per Finance Admin spec: deposit/payment is the
-      // accountant's territory; finance_admin only watches paper credit.
+      // Cash-status ownership reverted to finance_admin after dropping the
+      // accountant role.
       canEditFinanceStatus:
-        role === 'accountant' || role === 'super_admin',
+        role === 'finance_admin' || role === 'super_admin',
       canReassign:
         role === 'sales_manager' || role === 'super_admin',
       canEditCarAttributes:

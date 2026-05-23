@@ -6,12 +6,13 @@ import { useProfiles, useUpdateProfile } from '../lib/queries'
 import { formatError } from '../lib/errors'
 import { ROLE_LABEL, type AppRole, type Profile } from '../lib/types'
 
+// `accountant` deliberately omitted — the role still exists in the enum
+// (dropping enum values is painful) but is no longer assignable.
 const ASSIGNABLE_ROLES: AppRole[] = [
   'sales_advisor',
   'sales_manager',
   'general_admin',
   'finance_admin',
-  'accountant',
   'super_admin',
 ]
 
