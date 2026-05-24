@@ -193,7 +193,7 @@ export function BookingsPage() {
                 onChange={(e) => setOwnerFilter(e.target.value)}
                 className={filterInputClass}
               >
-                <option value="">All advisors</option>
+                <option value="">All</option>
                 {ownerOptions.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.full_name || p.email}
@@ -221,7 +221,7 @@ export function BookingsPage() {
               }
               className={filterInputClass}
             >
-              <option value="">All statuses</option>
+              <option value="">All</option>
               <option value="pending">Pending</option>
               <option value="confirmed">Confirmed</option>
               <option value="delivered">Delivered</option>
@@ -235,7 +235,7 @@ export function BookingsPage() {
               onChange={(e) => handleModelChange(e.target.value)}
               className={filterInputClass}
             >
-              <option value="">All models</option>
+              <option value="">All</option>
               {modelOptions.map((m) => (
                 <option key={m} value={m}>
                   {m}
@@ -251,7 +251,7 @@ export function BookingsPage() {
               className={filterInputClass}
               disabled={variantOptions.length === 0}
             >
-              <option value="">All variants</option>
+              <option value="">All</option>
               {variantOptions.map((v) => (
                 <option key={v} value={v}>
                   {v}
@@ -266,7 +266,7 @@ export function BookingsPage() {
               onChange={(e) => setColourFilter(e.target.value)}
               className={filterInputClass}
             >
-              <option value="">All colours</option>
+              <option value="">All</option>
               {colourOptions.map((c) => (
                 <option key={c} value={c}>
                   {c}
