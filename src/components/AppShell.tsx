@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth, signOut } from '../lib/auth'
-// Top-nav exposes /commissions only to roles that have anything to do there.
+import { useWorkspace, type Workspace } from '../lib/workspace'
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
   `rounded-lg px-2.5 py-1 text-sm transition ${
@@ -14,6 +14,11 @@ const navLinkClass = ({ isActive }: { isActive: boolean }) =>
  * Page chrome shared by every authenticated screen: top bar with brand,
  * the signed-in user, and a sign-out button. Pages render their own content
  * inside the `<main>` slot.
+ *
+ * Super admin gets a Sales/Service workspace toggle that filters the nav
+ * to one side of the business at a time — purely visual, no permission
+ * change. Every other role ignores the workspace and sees their usual
+ * role-gated nav.
  */
 export function AppShell({ children }: { children: ReactNode }) {
   const {
@@ -24,9 +29,16 @@ export function AppShell({ children }: { children: ReactNode }) {
     canApproveDiscount,
     canViewCustomers,
   } = useAuth()
+  const { workspace, setWorkspace } = useWorkspace()
   const navigate = useNavigate()
   const displayName =
     (user?.user_metadata?.full_name as string | undefined) ?? user?.email ?? ''
+
+  // Workspace filter applies *only* to super_admin. For everyone else,
+  // both flags stay true and their existing role gates do the work.
+  const filtering = isSuperAdmin
+  const showSales = !filtering || workspace === 'sales'
+  const showService = !filtering || workspace === 'service'
 
   async function handleSignOut() {
     await signOut()
@@ -44,41 +56,41 @@ export function AppShell({ children }: { children: ReactNode }) {
                 SWL Motors CRM
               </span>
             </Link>
-            {/* Primary nav — always present so users can reach the booking
-                list even when the dashboard widgets happen to be empty. */}
             <nav className="ml-2 flex items-center gap-1 sm:ml-4">
               <NavLink to="/" end className={navLinkClass}>
                 Home
               </NavLink>
-              <NavLink to="/bookings" className={navLinkClass}>
-                Bookings
-              </NavLink>
-              {canViewCustomers && (
+              {showSales && (
+                <NavLink to="/bookings" className={navLinkClass}>
+                  Bookings
+                </NavLink>
+              )}
+              {showSales && canViewCustomers && (
                 <NavLink to="/customers" className={navLinkClass}>
                   Customers
                 </NavLink>
               )}
-              {isAdmin && (
+              {showSales && isAdmin && (
                 <NavLink to="/cars" className={navLinkClass}>
                   Inventory
                 </NavLink>
               )}
-              {isAdmin && (
+              {showService && isAdmin && (
                 <NavLink to="/vehicles" className={navLinkClass}>
                   Vehicles
                 </NavLink>
               )}
-              {isFinanceAdmin && (
+              {showSales && isFinanceAdmin && (
                 <NavLink to="/finance" className={navLinkClass}>
                   Finance
                 </NavLink>
               )}
-              {canApproveDiscount && (
+              {showSales && canApproveDiscount && (
                 <NavLink to="/commissions" className={navLinkClass}>
                   Commissions
                 </NavLink>
               )}
-              {isSuperAdmin && (
+              {showSales && isSuperAdmin && (
                 <NavLink
                   to="/admin/commissions"
                   className={navLinkClass}
@@ -87,12 +99,20 @@ export function AppShell({ children }: { children: ReactNode }) {
                   Rates
                 </NavLink>
               )}
-              <NavLink to="/bookings/new" className={navLinkClass}>
-                + New
-              </NavLink>
+              {showSales && (
+                <NavLink to="/bookings/new" className={navLinkClass}>
+                  + New
+                </NavLink>
+              )}
             </nav>
           </div>
           <div className="flex items-center gap-3 text-sm">
+            {isSuperAdmin && (
+              <WorkspaceToggle
+                workspace={workspace}
+                onChange={setWorkspace}
+              />
+            )}
             {isSuperAdmin && (
               <Link
                 to="/admin/users"
@@ -122,6 +142,50 @@ export function AppShell({ children }: { children: ReactNode }) {
       <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
         {children}
       </main>
+    </div>
+  )
+}
+
+/**
+ * Two-pill segmented control for the super_admin's Sales / Service
+ * workspace toggle. Renders nothing for any other role (the parent
+ * already gates rendering, but keep it self-contained for clarity).
+ */
+function WorkspaceToggle({
+  workspace,
+  onChange,
+}: {
+  workspace: Workspace
+  onChange: (next: Workspace) => void
+}) {
+  const pill = (active: boolean) =>
+    `rounded-md px-2.5 py-1 text-xs font-medium transition ${
+      active
+        ? 'bg-white text-gray-900 shadow-sm'
+        : 'text-gray-500 hover:text-gray-800'
+    }`
+  return (
+    <div
+      role="group"
+      aria-label="Workspace"
+      className="flex items-center rounded-lg border border-gray-200 bg-gray-100 p-0.5"
+    >
+      <button
+        type="button"
+        onClick={() => onChange('sales')}
+        className={pill(workspace === 'sales')}
+        title="Show sales-side nav"
+      >
+        Sales
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange('service')}
+        className={pill(workspace === 'service')}
+        title="Show service-side nav"
+      >
+        Service
+      </button>
     </div>
   )
 }
