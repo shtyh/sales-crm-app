@@ -492,3 +492,47 @@ export type BookingInsert = {
   /** FK to the customers table (created/upserted by NRIC before insert). */
   customer_id?: string | null
 }
+
+// ---------- Payments + Invoices (finance-admin owned) ---------------------
+
+export type PaymentType = 'deposit' | 'full' | 'partial'
+export type PaymentMethod = 'cash' | 'bank_transfer' | 'card'
+
+export const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
+  cash: 'Cash',
+  bank_transfer: 'Bank transfer',
+  card: 'Card',
+}
+
+export type Payment = {
+  id: string
+  booking_id: string
+  amount: number
+  payment_type: PaymentType
+  payment_method: PaymentMethod
+  received_by: string
+  received_at: string
+  notes: string | null
+  created_at: string
+}
+
+export type InvoiceStatus = 'draft' | 'issued' | 'paid'
+
+export const INVOICE_STATUS_LABEL: Record<InvoiceStatus, string> = {
+  draft: 'Draft',
+  issued: 'Issued',
+  paid: 'Paid',
+}
+
+export type Invoice = {
+  id: string
+  booking_id: string
+  customer_id: string
+  invoice_number: string | null
+  invoice_date: string
+  subtotal: number
+  tax_amount: number
+  total_amount: number
+  status: InvoiceStatus
+  created_at: string
+}

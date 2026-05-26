@@ -40,6 +40,8 @@ import {
   updateServiceOrderItem,
 } from './serviceOrderItems'
 import { listParts } from './parts'
+import { listPayments } from './payments'
+import { listInvoices } from './invoices'
 import { listAuditForRow } from './audit'
 import {
   createPayoutAndAssign,
@@ -62,7 +64,9 @@ import type {
   CommissionScheduleInsert,
   Customer,
   CustomerInsert,
+  Invoice,
   Part,
+  Payment,
   Profile,
   ServiceOrder,
   ServiceOrderInsert,
@@ -100,6 +104,8 @@ export const qk = {
   serviceOrderItems: (orderId: string) =>
     ['service-orders', orderId, 'items'] as const,
   parts: ['parts'] as const,
+  payments: ['payments'] as const,
+  invoices: ['invoices'] as const,
 }
 
 // ---------- Bookings -------------------------------------------------------
@@ -456,6 +462,24 @@ export function useParts(enabled = true) {
     enabled,
     refetchInterval: 30_000,
     refetchOnWindowFocus: true,
+  })
+}
+
+/** Every payment receipt visible to the caller. */
+export function usePayments(enabled = true) {
+  return useQuery<Payment[]>({
+    queryKey: qk.payments,
+    queryFn: listPayments,
+    enabled,
+  })
+}
+
+/** Every invoice visible to the caller. */
+export function useInvoices(enabled = true) {
+  return useQuery<Invoice[]>({
+    queryKey: qk.invoices,
+    queryFn: listInvoices,
+    enabled,
   })
 }
 

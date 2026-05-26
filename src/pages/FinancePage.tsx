@@ -2,12 +2,20 @@ import { useMemo } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
 import { useAuth } from '../lib/auth'
-import { useBookings, useCars, useProfiles } from '../lib/queries'
+import {
+  useBookings,
+  useCars,
+  useInvoices,
+  usePayments,
+  useProfiles,
+} from '../lib/queries'
 import { formatError } from '../lib/errors'
 import { formatMYR } from '../lib/format'
 import {
   FLOOR_STOCK_LABEL,
+  INVOICE_STATUS_LABEL,
   type FloorStockStatus,
+  type InvoiceStatus,
   type Profile,
 } from '../lib/types'
 
@@ -18,10 +26,23 @@ const FS_BADGE: Record<FloorStockStatus, string> = {
   paid_off: 'bg-green-100 text-green-800',
 }
 
+const INVOICE_BADGE: Record<InvoiceStatus, string> = {
+  draft: 'bg-gray-100 text-gray-700',
+  issued: 'bg-amber-100 text-amber-800',
+  paid: 'bg-green-100 text-green-800',
+}
+
 /** YYYY-MM-DD → boolean (is the due date in the past?). */
 function isOverdue(due: string | null, status: FloorStockStatus) {
   if (status === 'paid_off' || !due) return false
   return new Date(due).getTime() < new Date().setHours(0, 0, 0, 0)
+}
+
+/** Days between a YYYY-MM-DD anchor and today (floored, never negative). */
+function daysSince(anchor: string | null): number {
+  if (!anchor) return 0
+  const ms = Date.now() - new Date(anchor).getTime()
+  return Math.max(0, Math.floor(ms / 86400000))
 }
 
 export function FinancePage() {
@@ -30,6 +51,8 @@ export function FinancePage() {
   const { data: cars, error: carsErr } = useCars()
   const { data: bookings, error: bookingsErr } = useBookings()
   const { data: profiles } = useProfiles()
+  const { data: payments, error: paymentsErr } = usePayments(isFinanceAdmin)
+  const { data: invoices, error: invoicesErr } = useInvoices(isFinanceAdmin)
 
   const profileById = useMemo(() => {
     const m = new Map<string, Profile>()
@@ -37,42 +60,114 @@ export function FinancePage() {
     return m
   }, [profiles])
 
-  // Cars still on the bank's tab. Sort by due date asc — anything past due
-  // floats to the top so finance can see what's bleeding interest.
+  // Sum of money received per booking (across all payment receipts).
+  const paidByBooking = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const p of payments ?? []) {
+      m.set(p.booking_id, (m.get(p.booking_id) ?? 0) + Number(p.amount))
+    }
+    return m
+  }, [payments])
+
+  // Active = not cancelled. Cancelled bookings drop out of every queue.
+  const activeBookings = useMemo(
+    () => bookings?.filter((b) => b.status !== 'cancelled') ?? [],
+    [bookings],
+  )
+
+  // Insurance still owed: confirmed (loan-approved) booking with no insurer
+  // recorded yet. Once finance fills insurance_company, the row drops off.
+  const pendingInsurance = useMemo(
+    () =>
+      activeBookings.filter(
+        (b) =>
+          !b.insurance_company &&
+          (b.loan_status === 'approved' ||
+            b.loan_bank?.toLowerCase() === 'cash'),
+      ),
+    [activeBookings],
+  )
+
+  // Cash still owed: any active booking that hasn't been marked paid in full.
+  // Sort by oldest booking_date so the worst-stuck rows surface first.
+  const pendingPayment = useMemo(
+    () =>
+      activeBookings
+        .filter((b) => b.payment_status !== 'paid')
+        .sort((a, b) => a.booking_date.localeCompare(b.booking_date)),
+    [activeBookings],
+  )
+
+  // Invoices, newest first (the table itself is already paginated visually
+  // — we cap the rows below).
+  const invoiceRows = useMemo(
+    () => [...(invoices ?? [])],
+    [invoices],
+  )
+
+  const totalInvoices = useMemo(
+    () =>
+      (invoices ?? [])
+        .filter((i) => i.status !== 'draft')
+        .reduce((sum, i) => sum + Number(i.total_amount), 0),
+    [invoices],
+  )
+
+  const totalCommission = useMemo(
+    () =>
+      activeBookings.reduce(
+        (sum, b) => sum + Number(b.commission_amount ?? 0),
+        0,
+      ),
+    [activeBookings],
+  )
+
+  // Per-SA commission rollup for the bottom table.
+  const commissionBySA = useMemo(() => {
+    type Row = {
+      owner_id: string
+      name: string
+      sales: number
+      amount: number
+      pendingCount: number
+      paidCount: number
+    }
+    const m = new Map<string, Row>()
+    for (const b of activeBookings) {
+      const prof = profileById.get(b.owner_id)
+      const name = prof?.full_name || prof?.email || '—'
+      const row =
+        m.get(b.owner_id) ??
+        ({
+          owner_id: b.owner_id,
+          name,
+          sales: 0,
+          amount: 0,
+          pendingCount: 0,
+          paidCount: 0,
+        } as Row)
+      row.sales += 1
+      row.amount += Number(b.commission_amount ?? 0)
+      if (b.commission_status === 'paid') row.paidCount += 1
+      else if (b.commission_status === 'pending' || b.commission_status === 'approved')
+        row.pendingCount += 1
+      m.set(b.owner_id, row)
+    }
+    return [...m.values()].sort((a, b) => b.amount - a.amount)
+  }, [activeBookings, profileById])
+
+  // ---- existing floor stock + LOU state (kept as bottom sections) ----
   const inventoryQueue = useMemo(() => {
     if (!cars) return []
     return [...cars]
       .filter((c) => c.floor_stock_status !== 'paid_off')
       .sort((a, b) => {
-        // null due dates last
         if (a.floor_stock_due == null) return 1
         if (b.floor_stock_due == null) return -1
         return a.floor_stock_due.localeCompare(b.floor_stock_due)
       })
   }, [cars])
 
-  const totals = useMemo(() => {
-    let financed = 0
-    let countLocked = 0
-    let countPending = 0
-    let countOverdueLike = 0
-    for (const c of cars ?? []) {
-      if (c.floor_stock_status === 'paid_off') continue
-      financed += Number(c.financed_amount ?? 0)
-      if (c.floor_stock_status === 'locked') countLocked++
-      if (c.floor_stock_status === 'pending_settlement') countPending++
-      if (
-        c.floor_stock_status === 'overdue' ||
-        isOverdue(c.floor_stock_due, c.floor_stock_status)
-      ) {
-        countOverdueLike++
-      }
-    }
-    return { financed, countLocked, countPending, countOverdueLike }
-  }, [cars])
-
-  // LOU queue: bookings where loan_status='pending' — finance is the one
-  // talking to the bank about these.
   const louQueue = useMemo(
     () =>
       bookings
@@ -82,7 +177,9 @@ export function FinancePage() {
   )
 
   const error =
-    carsErr || bookingsErr ? formatError(carsErr ?? bookingsErr) : null
+    carsErr || bookingsErr || paymentsErr || invoicesErr
+      ? formatError(carsErr ?? bookingsErr ?? paymentsErr ?? invoicesErr)
+      : null
 
   if (loading) {
     return (
@@ -93,26 +190,22 @@ export function FinancePage() {
       </AppShell>
     )
   }
-  // Page is intended for finance_admin and super_admin. Other roles get
-  // pushed to home — they have no business here.
   if (!isFinanceAdmin) {
     return <Navigate to="/" replace />
   }
 
   return (
     <AppShell>
-      {/* Amber banner — same accent we use on finance-only fields elsewhere. */}
       <div className="-mt-6 mb-6 -mx-4 sm:-mx-6">
         <div className="bg-gradient-to-r from-amber-700 to-amber-500 px-4 py-4 text-white sm:px-6 sm:py-5">
           <div className="text-[10px] font-medium uppercase tracking-widest text-amber-200">
             ☆ Finance Admin
           </div>
           <h1 className="mt-1 text-xl font-semibold sm:text-2xl">
-            Floor stock & LOU control
+            Finance overview
           </h1>
           <p className="mt-1 text-sm text-amber-100">
-            Inventory financing on top, pending bank LOUs below. Settle cars to
-            paid_off so the showroom can deliver them.
+            Insurance, payment collection, invoices and commission at a glance.
           </p>
         </div>
       </div>
@@ -126,53 +219,258 @@ export function FinancePage() {
         </div>
       )}
 
-      {/* ---------- Headline numbers ---------- */}
+      {/* ---------- Headline cards ---------- */}
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Stat label="Cars not paid off" value={inventoryQueue.length} />
         <Stat
-          label="Overdue"
-          value={totals.countOverdueLike}
-          tone={totals.countOverdueLike > 0 ? 'red' : 'neutral'}
+          label="Pending insurance"
+          value={pendingInsurance.length}
+          tone={pendingInsurance.length > 0 ? 'amber' : 'neutral'}
         />
         <Stat
-          label="Pending settlement"
-          value={totals.countPending}
-          tone="amber"
+          label="Pending payment"
+          value={pendingPayment.length}
+          tone={pendingPayment.length > 0 ? 'red' : 'neutral'}
         />
-        <StatMoney label="Financed (open)" value={totals.financed} />
+        <StatMoney label="Invoices issued" value={totalInvoices} />
+        <StatMoney label="Total commission" value={totalCommission} />
       </div>
 
-      {/* ---------- Inventory Financing Grid ---------- */}
-      <section className="mb-6 rounded-2xl border border-gray-200 bg-white p-5">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-gray-900">
-            🚗 Inventory financing — {inventoryQueue.length} open
-          </h2>
+      {/* ---------- Pending insurance ---------- */}
+      <Section title={`🛡️ Pending insurance — ${pendingInsurance.length}`}>
+        {pendingInsurance.length === 0 ? (
+          <Empty>All confirmed bookings have an insurer recorded.</Empty>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200 text-sm">
+              <thead className="bg-gray-50 text-xs uppercase tracking-wider text-gray-500">
+                <tr>
+                  <Th>Booking</Th>
+                  <Th>Customer</Th>
+                  <Th>Vehicle</Th>
+                  <Th>Insurer</Th>
+                  <Th alignRight>OTR (RM)</Th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {pendingInsurance.map((b) => (
+                  <tr key={b.id} className="hover:bg-gray-50">
+                    <td className="whitespace-nowrap px-3 py-2">
+                      <Link
+                        to={`/bookings/${b.id}`}
+                        className="font-mono text-xs text-gray-900 hover:underline"
+                      >
+                        {b.code}
+                      </Link>
+                    </td>
+                    <td className="px-3 py-2 text-gray-700">{b.customer_name}</td>
+                    <td className="px-3 py-2 text-gray-700">
+                      {b.vehicle_model}
+                      {b.vehicle_variant ? ` · ${b.vehicle_variant}` : ''}
+                    </td>
+                    <td className="px-3 py-2">
+                      <span className="italic text-amber-700">— not set —</span>
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">
+                      {formatMYR(Number(b.otr_price))}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Section>
+
+      {/* ---------- Pending payment ---------- */}
+      <Section title={`💵 Pending payment — ${pendingPayment.length}`}>
+        {pendingPayment.length === 0 ? (
+          <Empty>Every active booking is fully paid.</Empty>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200 text-sm">
+              <thead className="bg-gray-50 text-xs uppercase tracking-wider text-gray-500">
+                <tr>
+                  <Th>Booking</Th>
+                  <Th>Customer</Th>
+                  <Th alignRight>Outstanding</Th>
+                  <Th alignRight>Days waiting</Th>
+                  <Th>Status</Th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {pendingPayment.map((b) => {
+                  const paid = paidByBooking.get(b.id) ?? 0
+                  const outstanding = Math.max(
+                    0,
+                    Number(b.otr_price) - paid,
+                  )
+                  const days = daysSince(b.booking_date)
+                  return (
+                    <tr key={b.id} className="hover:bg-gray-50">
+                      <td className="whitespace-nowrap px-3 py-2">
+                        <Link
+                          to={`/bookings/${b.id}`}
+                          className="font-mono text-xs text-gray-900 hover:underline"
+                        >
+                          {b.code}
+                        </Link>
+                      </td>
+                      <td className="px-3 py-2 text-gray-700">
+                        {b.customer_name}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-gray-900">
+                        {formatMYR(outstanding)}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">
+                        <span
+                          className={
+                            days > 30
+                              ? 'font-semibold text-red-700'
+                              : 'text-gray-700'
+                          }
+                        >
+                          {days}d
+                        </span>
+                      </td>
+                      <td className="px-3 py-2">
+                        <span className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                          {b.payment_status}
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Section>
+
+      {/* ---------- Invoices ---------- */}
+      <Section title={`🧾 Invoices — ${invoiceRows.length}`}>
+        {invoiceRows.length === 0 ? (
+          <Empty>No invoices recorded yet.</Empty>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200 text-sm">
+              <thead className="bg-gray-50 text-xs uppercase tracking-wider text-gray-500">
+                <tr>
+                  <Th>Invoice #</Th>
+                  <Th>Booking</Th>
+                  <Th alignRight>Amount</Th>
+                  <Th>Status</Th>
+                  <Th>Date</Th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {invoiceRows.slice(0, 25).map((inv) => {
+                  const booking = bookings?.find((b) => b.id === inv.booking_id)
+                  return (
+                    <tr key={inv.id} className="hover:bg-gray-50">
+                      <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-gray-900">
+                        {inv.invoice_number ?? (
+                          <span className="italic text-gray-400">— draft —</span>
+                        )}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2">
+                        {booking ? (
+                          <Link
+                            to={`/bookings/${booking.id}`}
+                            className="font-mono text-xs text-gray-900 hover:underline"
+                          >
+                            {booking.code}
+                          </Link>
+                        ) : (
+                          <span className="text-gray-400">—</span>
+                        )}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-gray-900">
+                        {formatMYR(Number(inv.total_amount))}
+                      </td>
+                      <td className="px-3 py-2">
+                        <span
+                          className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${INVOICE_BADGE[inv.status]}`}
+                        >
+                          {INVOICE_STATUS_LABEL[inv.status]}
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2 text-xs text-gray-600">
+                        {inv.invoice_date}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Section>
+
+      {/* ---------- Commission by SA ---------- */}
+      <Section title={`💼 Commission by SA — ${commissionBySA.length}`}>
+        {commissionBySA.length === 0 ? (
+          <Empty>No commission attributed yet.</Empty>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200 text-sm">
+              <thead className="bg-gray-50 text-xs uppercase tracking-wider text-gray-500">
+                <tr>
+                  <Th>Sales advisor</Th>
+                  <Th alignRight>Sales</Th>
+                  <Th alignRight>Commission</Th>
+                  <Th>Pending</Th>
+                  <Th>Paid</Th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {commissionBySA.map((row) => (
+                  <tr key={row.owner_id} className="hover:bg-gray-50">
+                    <td className="px-3 py-2 text-gray-900">{row.name}</td>
+                    <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-gray-700">
+                      {row.sales}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-gray-900">
+                      {formatMYR(row.amount)}
+                    </td>
+                    <td className="px-3 py-2 text-amber-700 tabular-nums">
+                      {row.pendingCount}
+                    </td>
+                    <td className="px-3 py-2 text-green-700 tabular-nums">
+                      {row.paidCount}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Section>
+
+      {/* ---------- Inventory financing (existing floor-stock block) ---------- */}
+      <Section
+        title={`🚗 Inventory financing — ${inventoryQueue.length} open`}
+        right={
           <Link
             to="/cars"
             className="text-xs font-medium text-gray-900 hover:underline"
           >
             All cars →
           </Link>
-        </div>
-
+        }
+      >
         {inventoryQueue.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-gray-200 p-6 text-center text-sm text-gray-500">
-            🎉 Every car is paid off.
-          </div>
+          <Empty>🎉 Every car is paid off.</Empty>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200 text-sm">
               <thead className="bg-gray-50 text-xs uppercase tracking-wider text-gray-500">
                 <tr>
-                  <th className="px-3 py-2 text-left font-medium">Chassis</th>
-                  <th className="px-3 py-2 text-left font-medium">Vehicle</th>
-                  <th className="px-3 py-2 text-left font-medium">Bank</th>
-                  <th className="px-3 py-2 text-right font-medium">
-                    Financed
-                  </th>
-                  <th className="px-3 py-2 text-left font-medium">Status</th>
-                  <th className="px-3 py-2 text-left font-medium">Due</th>
+                  <Th>Chassis</Th>
+                  <Th>Vehicle</Th>
+                  <Th>Bank</Th>
+                  <Th alignRight>Financed</Th>
+                  <Th>Status</Th>
+                  <Th>Due</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -235,23 +533,19 @@ export function FinancePage() {
             </table>
           </div>
         )}
-      </section>
+      </Section>
 
       {/* ---------- Pending LOU ledger ---------- */}
-      <section className="rounded-2xl border border-gray-200 bg-white p-5">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-gray-900">
-            📋 Pending LOU — {louQueue.length}
-          </h2>
+      <Section
+        title={`📋 Pending LOU — ${louQueue.length}`}
+        right={
           <span className="text-xs text-gray-500">
             loan_status = pending; awaiting bank decision
           </span>
-        </div>
-
+        }
+      >
         {louQueue.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-gray-200 p-6 text-center text-sm text-gray-500">
-            No bank approvals waiting.
-          </div>
+          <Empty>No bank approvals waiting.</Empty>
         ) : (
           <ul className="divide-y divide-gray-100">
             {louQueue.map((b) => {
@@ -279,16 +573,60 @@ export function FinancePage() {
                         {b.loan_bank ? ` · ${b.loan_bank}` : ''}
                       </div>
                     </div>
-                    {/* OTR/net-price display intentionally removed
-                        2026-05-23 — OTR no longer surfaced in the UI. */}
                   </Link>
                 </li>
               )
             })}
           </ul>
         )}
-      </section>
+      </Section>
     </AppShell>
+  )
+}
+
+// ---------- small presentational helpers ----------
+
+function Section({
+  title,
+  right,
+  children,
+}: {
+  title: string
+  right?: React.ReactNode
+  children: React.ReactNode
+}) {
+  return (
+    <section className="mb-6 rounded-2xl border border-gray-200 bg-white p-5">
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-gray-900">{title}</h2>
+        {right}
+      </div>
+      {children}
+    </section>
+  )
+}
+
+function Th({
+  children,
+  alignRight,
+}: {
+  children: React.ReactNode
+  alignRight?: boolean
+}) {
+  return (
+    <th
+      className={`px-3 py-2 font-medium ${alignRight ? 'text-right' : 'text-left'}`}
+    >
+      {children}
+    </th>
+  )
+}
+
+function Empty({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="rounded-lg border border-dashed border-gray-200 p-6 text-center text-sm text-gray-500">
+      {children}
+    </div>
   )
 }
 
