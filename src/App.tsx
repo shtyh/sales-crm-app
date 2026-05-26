@@ -105,11 +105,6 @@ const ServiceOpsPage = lazy(() =>
     default: m.ServiceOpsPage,
   })),
 )
-const ServiceAdvisorDashboardPage = lazy(() =>
-  import('./pages/ServiceAdvisorDashboardPage').then((m) => ({
-    default: m.ServiceAdvisorDashboardPage,
-  })),
-)
 const NewServiceOrderPage = lazy(() =>
   import('./pages/NewServiceOrderPage').then((m) => ({
     default: m.NewServiceOrderPage,
@@ -141,10 +136,10 @@ function RoleHome() {
   const { role, isAdmin } = useAuth()
   const { workspace } = useWorkspace()
 
-  // service_advisor gets their own queue-focused dashboard. Other workshop
-  // roles (manager / store_keeper / mechanic) share the broader manager
-  // view for now.
-  if (role === 'service_advisor') return <ServiceAdvisorDashboardPage />
+  // Every workshop role — service_advisor, service_manager, store_keeper,
+  // mechanic — lands on the WMS-style tile menu so they all see the
+  // same home. The advisor's own queue is one click into Job Sheet /
+  // Billing from there.
   if (
     role &&
     (WORKSHOP_ROLES as readonly string[]).includes(role)

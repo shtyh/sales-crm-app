@@ -213,7 +213,7 @@ Primary nav links by role:
 - **AdminDashboardPage** still serves super_admin and sales_manager.
   `RoleHome` dispatches:
   ```
-  workshop role         → ServiceDashboardPage / ServiceAdvisorDashboardPage
+  workshop role         → ServiceDashboardPage (all 4 — advisor, manager, store_keeper, mechanic)
   super_admin + service → ServiceDashboardPage
   finance_admin         → <Navigate to="/finance">
   general_admin         → GeneralAdminDashboardPage
