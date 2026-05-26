@@ -8,6 +8,8 @@ import {
   useVehicles,
 } from '../lib/queries'
 import { formatError } from '../lib/errors'
+import { useFormDraft } from '../lib/formDraft'
+import { useOnlineStatus } from '../lib/online'
 
 const inputClass =
   'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10 user-invalid:border-red-500 user-invalid:focus:border-red-500 user-invalid:focus:ring-red-500/20'
@@ -42,6 +44,24 @@ export function NewServiceOrderPage() {
   const [mileageIn, setMileageIn] = useState('')
   const [notes, setNotes] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const online = useOnlineStatus()
+
+  // Auto-save the form to localStorage so a tab crash or network blink
+  // doesn't wipe what the SA typed. Cleared after a successful submit.
+  // Keyed per-user so two staff on the same browser don't see each
+  // other's draft (rare but happens at the front-desk PC).
+  const draftKey = `so-intake-draft:${profile?.id ?? 'anon'}`
+  const clearDraft = useFormDraft(
+    draftKey,
+    { customerId, vehicleId, complaint, mileageIn, notes },
+    (d) => {
+      setCustomerId(d.customerId ?? '')
+      setVehicleId(d.vehicleId ?? '')
+      setComplaint(d.complaint ?? '')
+      setMileageIn(d.mileageIn ?? '')
+      setNotes(d.notes ?? '')
+    },
+  )
 
   const customerOptions = useMemo(
     () => (customers ?? []).slice().sort((a, b) => a.name.localeCompare(b.name)),
@@ -73,6 +93,7 @@ export function NewServiceOrderPage() {
         mileage_in: mileageIn ? Number(mileageIn) : null,
         notes: notes || null,
       })
+      clearDraft()
       navigate(`/service-orders/${created.id}`, { replace: true })
     } catch (e) {
       setError(formatError(e))
@@ -100,6 +121,13 @@ export function NewServiceOrderPage() {
           order is created.
         </p>
       </div>
+
+      {!online && (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          🛜 You're offline. Keep typing — everything is saved locally and
+          will sync back when the connection returns.
+        </div>
+      )}
 
       <form
         onSubmit={handleSubmit}

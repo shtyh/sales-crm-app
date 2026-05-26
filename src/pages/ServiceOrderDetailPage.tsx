@@ -11,6 +11,8 @@ import {
   useUpdateServiceOrderItem,
 } from '../lib/queries'
 import { formatError } from '../lib/errors'
+import { useFormDraft } from '../lib/formDraft'
+import { useOnlineStatus } from '../lib/online'
 import {
   QUOTE_STATUS_LABEL,
   SERVICE_ORDER_STATUS_LABEL,
@@ -68,6 +70,7 @@ export function ServiceOrderDetailPage() {
 
   const [error, setError] = useState<string | null>(null)
   const [savedAt, setSavedAt] = useState<number | null>(null)
+  const online = useOnlineStatus()
 
   useEffect(() => {
     if (!order) return
@@ -289,6 +292,13 @@ export function ServiceOrderDetailPage() {
       </form>
 
       {/* ---------- Line items ---------- */}
+      {!online && (
+        <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          🛜 Offline — header edits and new line items are saved locally and
+          will retry once the connection's back.
+        </div>
+      )}
+
       <section className="mt-6 rounded-2xl border border-gray-200 bg-white p-5">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-gray-900">
@@ -569,6 +579,7 @@ function ItemRow({
 }
 
 function AddLineItem({
+  orderId,
   onAdd,
 }: {
   orderId: string
@@ -585,6 +596,21 @@ function AddLineItem({
   const [unitPrice, setUnitPrice] = useState('')
   const [busy, setBusy] = useState(false)
 
+  // Per-order draft so the half-typed line survives a tab crash. Cleared
+  // immediately on a successful add (the form reset already wipes the
+  // in-memory state — we mirror that to localStorage here).
+  const draftKey = `so-line-draft:${orderId}`
+  const clearDraft = useFormDraft(
+    draftKey,
+    { kind, description, quantity, unitPrice },
+    (d) => {
+      setKind(d.kind ?? 'part')
+      setDescription(d.description ?? '')
+      setQuantity(d.quantity ?? '1')
+      setUnitPrice(d.unitPrice ?? '')
+    },
+  )
+
   async function handleAdd() {
     if (!description.trim()) return
     const q = Number(quantity) || 0
@@ -596,6 +622,7 @@ function AddLineItem({
       setDescription('')
       setQuantity('1')
       setUnitPrice('')
+      clearDraft()
     } finally {
       setBusy(false)
     }

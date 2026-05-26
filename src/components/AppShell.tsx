@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth, signOut } from '../lib/auth'
+import { useOnlineStatus } from '../lib/online'
 import { useWorkspace, type Workspace } from '../lib/workspace'
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
@@ -31,6 +32,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     isWorkshopOnly,
   } = useAuth()
   const { workspace, setWorkspace } = useWorkspace()
+  const online = useOnlineStatus()
   const navigate = useNavigate()
   const displayName =
     (user?.user_metadata?.full_name as string | undefined) ?? user?.email ?? ''
@@ -126,6 +128,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </nav>
           </div>
           <div className="flex items-center gap-3 text-sm">
+            <OnlineDot online={online} />
             {isSuperAdmin && (
               <WorkspaceToggle
                 workspace={workspace}
@@ -162,6 +165,27 @@ export function AppShell({ children }: { children: ReactNode }) {
         {children}
       </main>
     </div>
+  )
+}
+
+/**
+ * Tiny status pip — green when the browser thinks it's online, red when
+ * offline. We keep the dot visible always (not just when offline) so it
+ * doubles as a "this app is connected, you're good" confidence signal.
+ */
+function OnlineDot({ online }: { online: boolean }) {
+  return (
+    <span
+      title={
+        online
+          ? 'Online — changes are saving to the server'
+          : 'Offline — your changes are saved locally and will retry'
+      }
+      aria-label={online ? 'Online' : 'Offline'}
+      className={`inline-block h-2 w-2 rounded-full ${
+        online ? 'bg-green-500' : 'bg-red-500 animate-pulse'
+      }`}
+    />
   )
 }
 
