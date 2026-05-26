@@ -2,8 +2,9 @@ import { useMemo, useState } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
 import { useAuth } from '../lib/auth'
-import { useBookings, useCustomers } from '../lib/queries'
+import { useBookings, useCustomers, useDeleteCustomer } from '../lib/queries'
 import { formatError } from '../lib/errors'
+import type { Customer } from '../lib/types'
 
 /**
  * Customers directory. Lists every customer (any authenticated user can
@@ -15,10 +16,44 @@ import { formatError } from '../lib/errors'
  * (most useful info for the SA is the booking, not customer metadata).
  */
 export function CustomersPage() {
-  const { role, canViewCustomers } = useAuth()
+  const { role, canViewCustomers, isSuperAdmin } = useAuth()
   const { data: customers, error: customersErr } = useCustomers(canViewCustomers)
   const { data: bookings } = useBookings()
+  const deleteMut = useDeleteCustomer()
   const [q, setQ] = useState('')
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+
+  async function handleDelete(c: Customer, bookingCount: number) {
+    if (bookingCount > 0) {
+      window.alert(
+        `${c.name} has ${bookingCount} booking${bookingCount === 1 ? '' : 's'} on file. ` +
+          'The database will reject the delete because those bookings depend on this customer. ' +
+          'Delete or reassign the bookings first.',
+      )
+      return
+    }
+    if (
+      !window.confirm(
+        `PERMANENTLY DELETE customer ${c.name}?\n\n` +
+          'This wipes the record from the database. There is no undo.',
+      )
+    ) {
+      return
+    }
+    const typed = window.prompt(
+      `To confirm, type the NRIC exactly: ${c.nric}`,
+    )
+    if (typed !== c.nric) {
+      setDeleteError('NRIC did not match — delete aborted.')
+      return
+    }
+    setDeleteError(null)
+    try {
+      await deleteMut.mutateAsync(c.id)
+    } catch (e) {
+      setDeleteError(formatError(e))
+    }
+  }
 
   // Wait for role to load before deciding — otherwise an authorised user
   // can briefly see a redirect during the auth-init window.
@@ -89,6 +124,14 @@ export function CustomersPage() {
           {error}
         </div>
       )}
+      {deleteError && (
+        <div
+          role="alert"
+          className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+        >
+          {deleteError}
+        </div>
+      )}
 
       {!customers && !error && (
         <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center text-sm text-gray-500">
@@ -121,6 +164,9 @@ export function CustomersPage() {
                   <th className="px-4 py-3 text-left font-medium">Phone</th>
                   <th className="px-4 py-3 text-left font-medium">Email</th>
                   <th className="px-4 py-3 text-right font-medium">Bookings</th>
+                  {isSuperAdmin && (
+                    <th className="px-4 py-3 text-right font-medium">Actions</th>
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -149,6 +195,22 @@ export function CustomersPage() {
                       <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums text-gray-900">
                         {ix.count}
                       </td>
+                      {isSuperAdmin && (
+                        <td
+                          className="whitespace-nowrap px-4 py-3 text-right"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(c, ix.count)}
+                            disabled={deleteMut.isPending}
+                            className="rounded-md border border-red-200 bg-white px-2 py-1 text-xs font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-50"
+                            title="Hard-delete this customer (super_admin only)"
+                          >
+                            Delete
+                          </button>
+                        </td>
+                      )}
                     </>
                   )
                   return target ? (
@@ -206,6 +268,16 @@ export function CustomersPage() {
                     </Link>
                   ) : (
                     inner
+                  )}
+                  {isSuperAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(c, ix.count)}
+                      disabled={deleteMut.isPending}
+                      className="mt-2 w-full rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                    >
+                      Delete customer
+                    </button>
                   )}
                 </li>
               )

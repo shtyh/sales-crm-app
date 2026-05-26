@@ -1,9 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Link, Navigate, useParams } from 'react-router-dom'
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
 import { AuditLogPanel } from '../components/AuditLogPanel'
 import { useAuth } from '../lib/auth'
-import { useCar, useUpdateCar } from '../lib/queries'
+import { useCar, useDeleteCar, useUpdateCar } from '../lib/queries'
 import { formatError } from '../lib/errors'
 import { PROTON_MODELS, variantsFor } from '../data/proton-models'
 import { LOAN_BANKS } from '../data/banks-and-insurers'
@@ -38,10 +38,17 @@ const FS_OPTIONS: FloorStockStatus[] = [
 
 export function CarDetailPage() {
   const { id = '' } = useParams<{ id: string }>()
-  const { role, canEditCarAttributes, canEditCarFloorStock, canAccessSales } =
-    useAuth()
+  const navigate = useNavigate()
+  const {
+    role,
+    isSuperAdmin,
+    canEditCarAttributes,
+    canEditCarFloorStock,
+    canAccessSales,
+  } = useAuth()
   const { data: car, error: carErr, isLoading } = useCar(id)
   const updateMut = useUpdateCar()
+  const deleteMut = useDeleteCar()
 
   // Vehicle attributes (general_admin owned)
   const [chassisNo, setChassisNo] = useState('')
@@ -136,6 +143,40 @@ export function CarDetailPage() {
         },
       })
       setSavedAt(Date.now())
+    } catch (e) {
+      setError(formatError(e))
+    }
+  }
+
+  /**
+   * Hard delete — super_admin only. Two confirmations:
+   *   1. Plain "are you sure" prompt
+   *   2. Type the chassis number to confirm (defeats accidental clicks)
+   * Bookings that linked to this car will simply lose `car_id` (FK is
+   * on-delete-set-null), so they aren't blocked from existing.
+   */
+  async function handleDelete() {
+    if (!car) return
+    if (
+      !window.confirm(
+        `PERMANENTLY DELETE car ${car.chassis_no}?\n\n` +
+          'This wipes the record from the database. There is no undo. ' +
+          'Any bookings that pointed at this car will lose their car link.',
+      )
+    ) {
+      return
+    }
+    const typed = window.prompt(
+      `To confirm, type the chassis number exactly: ${car.chassis_no}`,
+    )
+    if (typed !== car.chassis_no) {
+      setError('Chassis number did not match — delete aborted.')
+      return
+    }
+    setError(null)
+    try {
+      await deleteMut.mutateAsync(id)
+      navigate('/cars', { replace: true })
     } catch (e) {
       setError(formatError(e))
     }
@@ -388,6 +429,17 @@ export function CarDetailPage() {
           >
             Back
           </Link>
+          {isSuperAdmin && (
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={deleteMut.isPending || updateMut.isPending}
+              className="rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-60"
+              title="Hard-delete this car (super_admin only)"
+            >
+              {deleteMut.isPending ? 'Deleting…' : '★ Delete'}
+            </button>
+          )}
           {canSave && (
             <button
               type="submit"

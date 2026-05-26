@@ -62,6 +62,17 @@ export async function upsertCustomerByNric(input: CustomerInsert) {
   return data as Customer
 }
 
+/**
+ * Hard-delete a customer. RLS gates this to super_admin. The bookings
+ * table has `customer_id` with `on delete restrict`, so any customer
+ * still linked to a booking will reject with a foreign-key error — the
+ * caller should surface that message to the user as-is.
+ */
+export async function deleteCustomer(id: string) {
+  const { error } = await supabase.from('customers').delete().eq('id', id)
+  if (error) throw error
+}
+
 /** Patch named fields on a customer. */
 export async function updateCustomer(
   id: string,

@@ -48,3 +48,14 @@ export async function updateCar(id: string, patch: Partial<CarInsert>) {
   if (error) throw error
   return data as Car
 }
+
+/**
+ * Hard-delete a car. RLS gates this to super_admin. Bookings reference
+ * cars via `car_id` with `on delete set null`, so a booking that was
+ * pointed at this car simply loses its link — it does not block the
+ * delete.
+ */
+export async function deleteCar(id: string) {
+  const { error } = await supabase.from('cars').delete().eq('id', id)
+  if (error) throw error
+}

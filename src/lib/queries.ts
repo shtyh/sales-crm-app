@@ -12,8 +12,9 @@ import {
 } from './bookings'
 import { listProfiles, updateProfile } from './profiles'
 import { listAllAttachments, listAttachments } from './attachments'
-import { createCar, getCar, listCars, updateCar } from './cars'
+import { createCar, deleteCar, getCar, listCars, updateCar } from './cars'
 import {
+  deleteCustomer,
   getCustomer,
   getCustomerByNric,
   listCustomers,
@@ -252,6 +253,18 @@ export function useUpdateCar() {
   })
 }
 
+/** Hard-delete a car (super_admin only — DB RLS enforces). */
+export function useDeleteCar() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => deleteCar(id),
+    onSuccess: (_, id) => {
+      qc.removeQueries({ queryKey: qk.car(id) })
+      qc.invalidateQueries({ queryKey: qk.cars })
+    },
+  })
+}
+
 // ---------- Commission schedules -------------------------------------------
 
 export function useCommissionSchedules(enabled = true) {
@@ -390,6 +403,18 @@ export function useUpdateCustomer() {
       // A customer change might affect how bookings render (customer name on
       // the list), so invalidate that too.
       qc.invalidateQueries({ queryKey: qk.bookings })
+    },
+  })
+}
+
+/** Hard-delete a customer (super_admin only — DB RLS enforces). */
+export function useDeleteCustomer() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => deleteCustomer(id),
+    onSuccess: (_, id) => {
+      qc.removeQueries({ queryKey: qk.customer(id) })
+      qc.invalidateQueries({ queryKey: qk.customers })
     },
   })
 }
