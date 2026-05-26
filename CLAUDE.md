@@ -196,9 +196,19 @@ Primary nav links by role:
   Receipt, Housekeeping, Stock Control, Inquiry, Reporting). Tiles
   without a built screen render with a "Coming soon" pill and are
   click-disabled. "Job Sheet / Billing" → `/service/ops`, "Housekeeping"
-  → `/vehicles`. The old data-dense dashboard (active jobs queue,
-  low-stock parts, voided transactions) moved verbatim to
-  **ServiceOpsPage** at `/service/ops`.
+  → `/vehicles`.
+
+- **ServiceOpsPage** (`/service/ops`) — Job Sheet / Billing screen
+  modelled on the legacy WMS table. Columns: Job No · Car/Account ·
+  Chassis · Job Date · Inv Date · Status (OPEN/CLOSED/VOID bucket) · Amt
+  Billed · Estimated · Paid · O/S Amount · Bill No · S.A · Mech. Columns
+  with no backing data yet (Inv Date, Estimated, Bill No) render `—`.
+  Counters across the top, filter chips (All / Open / Closed / Void for
+  super_admin) + search by job no / reg / chassis / customer. Action
+  bar at the bottom — only "+ New Job Sheet" and "Vehicle info" are
+  wired; the rest are placeholders waiting on quoting, invoicing,
+  payment-ledger, and warranty flows. The previous active-jobs dashboard
+  is gone (replaced by this view).
 
 - **AdminDashboardPage** still serves super_admin and sales_manager.
   `RoleHome` dispatches:

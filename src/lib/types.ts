@@ -328,7 +328,10 @@ export type ServiceOrder = {
  *  by the workshop dashboard table where we need names, not just ids. */
 export type ServiceOrderWithJoins = ServiceOrder & {
   vehicle:
-    | Pick<Vehicle, 'id' | 'registration_no' | 'model' | 'variant' | 'color'>
+    | Pick<
+        Vehicle,
+        'id' | 'registration_no' | 'chassis_no' | 'model' | 'variant' | 'color'
+      >
     | null
   customer: Pick<Customer, 'id' | 'name' | 'phone'> | null
   technician: { id: string; name: string } | null
