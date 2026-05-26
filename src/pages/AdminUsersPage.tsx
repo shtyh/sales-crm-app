@@ -1,10 +1,27 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
 import { useAuth } from '../lib/auth'
 import { useProfiles, useUpdateProfile } from '../lib/queries'
 import { formatError } from '../lib/errors'
 import { ROLE_LABEL, type AppRole, type Profile } from '../lib/types'
+import { useWorkspace } from '../lib/workspace'
+
+// Roles that belong to each side of the business. super_admin is special
+// — it straddles both worlds and is shown in every workspace.
+const SALES_ROLES: AppRole[] = [
+  'sales_advisor',
+  'sales_manager',
+  'general_admin',
+  'finance_admin',
+  'accountant',
+]
+const SERVICE_ROLES: AppRole[] = [
+  'service_advisor',
+  'service_manager',
+  'store_keeper',
+  'mechanic',
+]
 
 // `accountant` deliberately omitted — the role still exists in the enum
 // (dropping enum values is painful) but is no longer assignable.
@@ -36,9 +53,21 @@ const ROLE_BADGE: Record<AppRole, string> = {
 
 export function AdminUsersPage() {
   const { profile: currentProfile, isSuperAdmin, loading } = useAuth()
+  const { workspace } = useWorkspace()
 
   const { data: profiles, error: profilesErr } = useProfiles(isSuperAdmin)
   const updateMut = useUpdateProfile()
+
+  // Apply the same workspace filter the nav uses so when Axelrod flips to
+  // Service mode the user list narrows to workshop staff (and vice versa).
+  // super_admin always shows so he can always find himself in the list.
+  const filteredProfiles = useMemo(() => {
+    if (!profiles) return undefined
+    const allowed = workspace === 'service' ? SERVICE_ROLES : SALES_ROLES
+    return profiles.filter(
+      (p) => p.role === 'super_admin' || allowed.includes(p.role),
+    )
+  }, [profiles, workspace])
 
   const [localError, setLocalError] = useState<string | null>(null)
   const error = localError ?? (profilesErr ? formatError(profilesErr) : null)
@@ -119,8 +148,17 @@ export function AdminUsersPage() {
             Manage display names and admin rights.
           </p>
         </div>
-        <div className="text-xs text-gray-500">
-          {profiles?.length ?? 0} user{profiles?.length === 1 ? '' : 's'}
+        <div className="text-right text-xs text-gray-500">
+          <div>
+            Showing{' '}
+            <span className="font-medium text-gray-700">
+              {workspace === 'service' ? 'Service' : 'Sales'} side
+            </span>
+          </div>
+          <div>
+            {filteredProfiles?.length ?? 0} of {profiles?.length ?? 0} user
+            {profiles?.length === 1 ? '' : 's'}
+          </div>
         </div>
       </div>
 
@@ -139,7 +177,19 @@ export function AdminUsersPage() {
         </div>
       )}
 
-      {profiles && profiles.length > 0 && (
+      {profiles &&
+        filteredProfiles &&
+        profiles.length > 0 &&
+        filteredProfiles.length === 0 && (
+          <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-10 text-center text-sm text-gray-500">
+            No users in the{' '}
+            <span className="font-medium text-gray-700">{workspace}</span>{' '}
+            workspace yet. Switch workspaces (top-right toggle) to see the
+            other side.
+          </div>
+        )}
+
+      {filteredProfiles && filteredProfiles.length > 0 && (
         <>
           {/* Desktop table */}
           <div className="hidden overflow-hidden rounded-2xl border border-gray-200 bg-white sm:block">
@@ -155,7 +205,7 @@ export function AdminUsersPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {profiles.map((p) => {
+                {filteredProfiles.map((p) => {
                   const isSelf = p.id === currentProfile?.id
                   const editingThis = editing?.id === p.id
                   return (
@@ -232,7 +282,7 @@ export function AdminUsersPage() {
 
           {/* Mobile cards */}
           <ul className="space-y-3 sm:hidden">
-            {profiles.map((p) => {
+            {filteredProfiles.map((p) => {
               const isSelf = p.id === currentProfile?.id
               const editingThis = editing?.id === p.id
               return (
