@@ -53,6 +53,7 @@ export function BookingsPage() {
   // ----- Filters --------------------------------------------------------
   // Owner filter only makes sense for admins (an SA sees only their own
   // bookings). Every other filter applies to all roles.
+  const [q, setQ] = useState<string>('')
   const [ownerFilter, setOwnerFilter] = useState<string>('')
   const [dateFrom, setDateFrom] = useState<string>('')
   // The date range is always [From → today]; today is computed once per render
@@ -108,6 +109,14 @@ export function BookingsPage() {
 
   const filteredBookings = useMemo(() => {
     if (!bookings) return undefined
+    // Tokenise the search: every whitespace-separated word must match
+    // somewhere in the row. That way "han saga" finds a Han customer who
+    // booked a Saga without having to remember exact ordering.
+    const needles = q
+      .trim()
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(Boolean)
     return bookings.filter((b) => {
       if (ownerFilter && b.owner_id !== ownerFilter) return false
       // booking_date is YYYY-MM-DD so a lexicographic compare is fine.
@@ -121,10 +130,29 @@ export function BookingsPage() {
       if (modelFilter && b.vehicle_model !== modelFilter) return false
       if (variantFilter && b.vehicle_variant !== variantFilter) return false
       if (colourFilter && b.vehicle_color !== colourFilter) return false
+      if (needles.length > 0) {
+        const hay = [
+          b.code,
+          b.customer_name,
+          b.customer_nric,
+          b.customer_phone,
+          b.customer_email,
+          b.vehicle_model,
+          b.vehicle_variant,
+          b.vehicle_color,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase()
+        for (const n of needles) {
+          if (!hay.includes(n)) return false
+        }
+      }
       return true
     })
   }, [
     bookings,
+    q,
     ownerFilter,
     dateFrom,
     today,
@@ -135,6 +163,7 @@ export function BookingsPage() {
   ])
 
   const filtersActive = !!(
+    q ||
     ownerFilter ||
     dateFrom ||
     statusFilter ||
@@ -143,6 +172,7 @@ export function BookingsPage() {
     colourFilter
   )
   function clearFilters() {
+    setQ('')
     setOwnerFilter('')
     setDateFrom('')
     setStatusFilter('')
@@ -165,7 +195,7 @@ export function BookingsPage() {
 
   return (
     <AppShell>
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold text-gray-900">Bookings</h1>
           <p className="mt-1 text-sm text-gray-500">
@@ -176,12 +206,29 @@ export function BookingsPage() {
                 : "All bookings you've created."}
           </p>
         </div>
-        <Link
-          to="/bookings/new"
-          className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-gray-800"
-        >
-          + New booking
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative">
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400"
+            >
+              🔍
+            </span>
+            <input
+              type="search"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search code, customer, NRIC, vehicle…"
+              className="w-64 rounded-lg border border-gray-300 bg-white pl-7 pr-3 py-2 text-sm outline-none focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10 sm:w-80"
+            />
+          </div>
+          <Link
+            to="/bookings/new"
+            className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-gray-800"
+          >
+            + New booking
+          </Link>
+        </div>
       </div>
 
       {/* Filter toolbar — only render once we have at least one booking, so
