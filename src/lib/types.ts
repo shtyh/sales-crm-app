@@ -23,6 +23,15 @@ export type ApprovalStatus =
 export type DepositStatus = 'unpaid' | 'received' | 'refunded'
 export type PaymentStatus = 'unpaid' | 'partial' | 'paid'
 
+/** JPJ registration state. general_admin-owned. */
+export type JpjStatus = 'not_submitted' | 'submitted' | 'registered'
+
+export const JPJ_STATUS_LABEL: Record<JpjStatus, string> = {
+  not_submitted: 'Not submitted',
+  submitted: 'Submitted',
+  registered: 'Registered',
+}
+
 /** State machine for a booking's commission to a sales advisor. */
 export type CommissionStatus =
   | 'not_eligible'  // default — booking not yet delivered+paid
@@ -368,6 +377,11 @@ export type Booking = {
   deposit_status: DepositStatus
   payment_status: PaymentStatus
 
+  // general_admin-owned JPJ tracking
+  jpj_status: JpjStatus
+  jpj_submitted_at: string | null
+  jpj_expected_completion: string | null
+
   // Commission (auto-managed; manual fields gated by sales_manager)
   /** Snapshot of commission_schedules.base_commission at insert time. */
   base_commission: number | null
@@ -485,6 +499,10 @@ export type BookingInsert = {
   approval_status?: ApprovalStatus
   deposit_status?: DepositStatus
   payment_status?: PaymentStatus
+  /** general_admin JPJ tracking */
+  jpj_status?: JpjStatus
+  jpj_submitted_at?: string | null
+  jpj_expected_completion?: string | null
   /** sales_manager reassignment of leads */
   owner_id?: string
   /** general_admin links the booking to a specific physical car. */

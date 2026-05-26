@@ -11,7 +11,7 @@ import {
   updateBooking,
 } from './bookings'
 import { listProfiles, updateProfile } from './profiles'
-import { listAttachments } from './attachments'
+import { listAllAttachments, listAttachments } from './attachments'
 import { createCar, getCar, listCars, updateCar } from './cars'
 import {
   getCustomer,
@@ -86,6 +86,7 @@ export const qk = {
   profiles: ['profiles'] as const,
   attachments: (bookingId: string) =>
     ['booking-attachments', bookingId] as const,
+  allAttachments: ['booking-attachments', 'all'] as const,
   cars: ['cars'] as const,
   car: (id: string) => ['cars', id] as const,
   audit: (tableName: string, rowId: string) =>
@@ -197,6 +198,16 @@ export function useAttachments(bookingId: string) {
     queryKey: qk.attachments(bookingId),
     queryFn: () => listAttachments(bookingId),
     enabled: !!bookingId,
+  })
+}
+
+/** Every attachment across every booking. Used by the GA dashboard to
+ *  flag bookings missing required paperwork. */
+export function useAllAttachments(enabled = true) {
+  return useQuery<Attachment[]>({
+    queryKey: qk.allAttachments,
+    queryFn: listAllAttachments,
+    enabled,
   })
 }
 

@@ -36,6 +36,8 @@ type AuthState = {
   canEditCarFloorStock: boolean
   /** general_admin or sales_manager (or super_admin) — assign bookings.car_id. */
   canAssignCar: boolean
+  /** general_admin (or super_admin) — write JPJ tracking fields. */
+  canEditJpj: boolean
   /**
    * super_admin / sales_manager / general_admin — only these can browse the
    * shared customers directory. SA + finance stay scoped to their own
@@ -71,6 +73,7 @@ const AuthContext = createContext<AuthState>({
   canEditCarAttributes: false,
   canEditCarFloorStock: false,
   canAssignCar: false,
+  canEditJpj: false,
   canViewCustomers: false,
   isWorkshopOnly: false,
   canAccessSales: false,
@@ -225,6 +228,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         role === 'general_admin' ||
         role === 'sales_manager' ||
         role === 'super_admin',
+      canEditJpj:
+        role === 'general_admin' || role === 'super_admin',
       canViewCustomers:
         role === 'super_admin' ||
         role === 'sales_manager' ||

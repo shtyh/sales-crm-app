@@ -15,6 +15,18 @@ export async function listAttachments(bookingId: string) {
   return data as Attachment[]
 }
 
+/** Every attachment visible to the caller. Used by the GA dashboard to
+ *  detect which bookings are missing required paperwork. */
+export async function listAllAttachments() {
+  const { data, error } = await supabase
+    .from('booking_attachments')
+    .select('*')
+    .order('uploaded_at', { ascending: false })
+
+  if (error) throw error
+  return data as Attachment[]
+}
+
 /**
  * Upload a file to Supabase Storage AND create a matching row in
  * `booking_attachments`. If the DB insert fails we remove the storage object

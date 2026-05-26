@@ -41,6 +41,11 @@ const AdminDashboardPage = lazy(() =>
     default: m.AdminDashboardPage,
   })),
 )
+const GeneralAdminDashboardPage = lazy(() =>
+  import('./pages/GeneralAdminDashboardPage').then((m) => ({
+    default: m.GeneralAdminDashboardPage,
+  })),
+)
 const AdminUsersPage = lazy(() =>
   import('./pages/AdminUsersPage').then((m) => ({
     default: m.AdminUsersPage,
@@ -145,6 +150,7 @@ function RoleHome() {
     return <ServiceDashboardPage />
   }
   if (role === 'finance_admin') return <Navigate to="/finance" replace />
+  if (role === 'general_admin') return <GeneralAdminDashboardPage />
   return isAdmin ? <AdminDashboardPage /> : <DashboardPage />
 }
 
