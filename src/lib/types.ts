@@ -355,7 +355,6 @@ export type ServiceOrderInsert = {
   tax_amount?: number
   total_amount?: number
   // WMS-style intake fields
-  department?: string | null
   service_types?: ServiceType[]
   appointment_type?: AppointmentType
   days_to_complete?: number | null
@@ -432,7 +431,6 @@ export type ServiceOrder = {
   notes: string | null
   quote_status: QuoteStatus
   // WMS-style intake fields (2026-05-26)
-  department: string | null
   service_types: ServiceType[]
   appointment_type: AppointmentType
   days_to_complete: number | null
