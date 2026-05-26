@@ -235,6 +235,20 @@ export function NewServiceOrderPage() {
     minute: '2-digit',
     hour12: false,
   })
+  // Time Out = Time In + days_to_complete. Empty or 0 days → same day.
+  // We render the date too when the order spans more than one day so
+  // the SA can sanity-check the pickup date at a glance.
+  const days = daysToComplete ? Number(daysToComplete) : 0
+  const timeOutDate = new Date(now.getTime() + days * 86_400_000)
+  const timeOutTime = timeOutDate.toLocaleTimeString('en-MY', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
+  const timeOutLabel =
+    days > 0
+      ? `${timeOutDate.toLocaleDateString('en-MY')} · ${timeOutTime}`
+      : timeOutTime
 
   return (
     <AppShell>
@@ -433,6 +447,15 @@ export function NewServiceOrderPage() {
                 placeholder="0"
                 inputMode="numeric"
                 className={inputClass}
+              />
+            </Row>
+            <Row label="Time Out">
+              <input
+                type="text"
+                readOnly
+                value={timeOutLabel}
+                title="Auto = Time In + No of Days to Complete"
+                className={`${inputClass} bg-gray-50`}
               />
             </Row>
             <Row label="Appointment Type">
