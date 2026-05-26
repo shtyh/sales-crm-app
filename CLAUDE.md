@@ -56,10 +56,10 @@ Current real users (`select id, full_name, role from public.profiles`):
 | Table | Owner of writes | Notable columns |
 |---|---|---|
 | `profiles` | self / super_admin (role changes by super only) | `role app_role`, `is_admin` (generated = role <> 'sales_advisor'), `full_name`, `email` |
-| `customers` | any authenticated; delete super only (UI exposed on `/customers` row + mobile card; two-step NRIC-typed confirm; rejects if customer still has bookings via FK `on delete restrict`) | `nric unique`, `name`, `phone`, `email?`, `address?`. Bookings reference via `bookings.customer_id`. |
+| `customers` | any authenticated; delete super only (UI exposed on `/customers` row + mobile card; two-step NRIC-typed confirm; rejects if customer still has bookings via FK `on delete restrict`) | `nric unique`, `name`, `phone`, `email?`, `address?`. **WMS account fields (2026-05-26)**: `city`, `state`, `post_code`, `phone2`, `fax_no`, `tin_no`, `tax_no`, `sex` (M/F), `race` (C/M/I/O), `marital_status` (S/M/D), `birthday`, `sales_dealer`, `status` (active/inactive, default active), `fixed_discount_rate` (0–100), `preference_list_price` (text, default 'List Price 1'), `road_tax_renewal` / `insurance_renewal` / `driving_license_renewal` (dates), plus 5 reminder booleans (`road_tax_send_reminder`, `insurance_send_reminder`, `driving_license_send_reminder`, `birthday_send_reminder`, `send_next_service_reminder`) + `send_greeting_card`. Bookings reference via `bookings.customer_id`. |
 | `payments` | finance_admin + super write; visibility mirrors bookings; super-only delete | `booking_id` FK, `amount > 0`, `payment_type` enum (deposit/full/partial), `payment_method` enum (cash/bank_transfer/card), `received_by` FK→profiles, `received_at`, `notes?`. |
 | `invoices` | finance_admin + super write; visibility mirrors bookings; super-only delete | `booking_id` FK, `customer_id` FK, `invoice_number` unique-when-set, `invoice_date`, `subtotal`/`tax_amount`/`total_amount` numeric, `status` enum (draft/issued/paid). |
-| `vehicles` | any auth read; non-SA write; super delete | `customer_id` FK, `car_id?` (bridge to SWL inventory), `registration_no unique`, `chassis_no? unique`, model, variant, color, year, mileage, notes. |
+| `vehicles` | any auth read; non-SA write; super delete | `customer_id` FK, `car_id?` (bridge to SWL inventory), `registration_no unique`, `chassis_no? unique`, model, variant, color, year, mileage, notes. **WMS account fields (2026-05-26)**: `account_no`, `membership_no`, `engine_no`, `capacity_cc`, `year_make`, `registration_date`, `warranty_date`. |
 | `technicians` | any auth read; non-SA write; super delete | `profile_id?` (one-to-one with profiles if they log in), name, employee_no? unique, phone, specialty, is_active. |
 | `parts_inventory` | any auth read; non-SA write; super delete | `part_no unique`, name, brand, unit, unit_cost/price, stock_qty (not auto-decremented yet), reorder_level, location, is_active. |
 | `service_orders` | any auth read; non-SA write; super delete | `order_no?` unique-when-set, `customer_id` + `vehicle_id` FK, `technician_id?`, `service_advisor_id?`, status enum (open/in_progress/awaiting_parts/completed/collected/cancelled), complaint/diagnosis, mileage_in, opened_at/completed_at/collected_at, subtotal/tax/total. **Intake (2026-05-26)**: `department`, `service_types text[]` (maintenance / int_g_repair / warranty_service / service_coupon / come_back_job / body_repair / inspection), `appointment_type` ('walk_in' default / 'by_appointment'), `days_to_complete`. |
@@ -203,9 +203,22 @@ Primary nav links by role:
   plates; on blur/Enter it resolves to a matching vehicle (auto-fills
   chassis / model / owner / phone) or pops a "This is a New
   Registration Car No" alert and opens an inline modal to file the
-  vehicle + owner before the job sheet is saved. The modal upserts the
-  customer by NRIC and creates the vehicle linked to them, then the
-  parent form auto-selects the new vehicle.
+  vehicle + owner before the job sheet is saved. **The modal is a 1:1
+  port of the legacy WMS "Edit Vehicle Information" dialog** — vehicle
+  attrs across the top (Account No, Vehicle No, Chassis No, Membership
+  No, Engine No, Vehicle Colour | Car Model, Capacity, Year Make,
+  Registration Date, Warranty Date, Variant), then a Detail Information
+  section below with Owner / Address / City / State / Post Code /
+  Reg./ID/Passport No / Tel / Tel (2) / Fax / Email / Remark on the
+  left and TIN / Tax / Sex / Race / Sales Dealer / Marital Status /
+  Birthday + reminder / Status / Fixed Discount Rate / 3× renewal
+  dates each with their own Send-Reminder checkbox / Preference List
+  Price / Send Next Service Reminder / Send Greeting Card / Last
+  Updated Date on the right. The Reg./ID/Passport No field is
+  NRIC-driven: type a 12-digit NRIC that matches an existing customer
+  and every Detail field prefills from their saved record (Save then
+  patches that customer via upsert-by-NRIC). New NRIC → fields stay
+  empty for a fresh customer entry.
 
 - **ServiceOpsPage** (`/service/ops`) — Job Sheet / Billing screen
   modelled on the legacy WMS table. Columns: Job No · Car/Account ·
@@ -271,6 +284,7 @@ Files in `supabase/migrations/` (chronological):
 20260526_jpj_tracking.sql                         bookings: jpj_status enum + jpj_submitted_at + jpj_expected_completion; guard gates writes to general_admin
 20260526_insurance_amount.sql                     bookings.insurance_amount numeric(12,2); guard gates writes to finance_admin (alongside insurance_company)
 20260526_service_order_intake_fields.sql          service_orders +department, +service_types text[], +appointment_type, +days_to_complete
+20260526_wms_account_fields.sql                   vehicles +account/membership/engine/capacity/year_make/registration_date/warranty_date; customers +city/state/post_code/phone2/fax_no/tin_no/tax_no/sex/race/marital_status/birthday/sales_dealer/status/fixed_discount_rate/preference_list_price + 3 renewal dates + 5 reminder flags + send_greeting_card
 ```
 
 Some early ones were **applied by hand** in Supabase SQL editor and so don't show up in `supabase_migrations.schema_migrations`. The files are still source of truth for what should exist.

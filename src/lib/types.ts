@@ -160,6 +160,12 @@ export type CarInsert = {
   floor_stock_due?: string | null
 }
 
+/** Single-letter dropdown codes the legacy WMS uses. */
+export type CustomerSex = 'M' | 'F'
+export type CustomerRace = 'C' | 'M' | 'I' | 'O'
+export type CustomerMaritalStatus = 'S' | 'M' | 'D'
+export type CustomerStatus = 'active' | 'inactive'
+
 export type Customer = {
   id: string
   name: string
@@ -167,6 +173,31 @@ export type Customer = {
   phone: string
   email: string | null
   address: string | null
+  // WMS-style account fields (2026-05-26)
+  city: string | null
+  state: string | null
+  post_code: string | null
+  phone2: string | null
+  fax_no: string | null
+  tin_no: string | null
+  tax_no: string | null
+  sex: CustomerSex | null
+  race: CustomerRace | null
+  marital_status: CustomerMaritalStatus | null
+  birthday: string | null
+  sales_dealer: string | null
+  status: CustomerStatus
+  fixed_discount_rate: number
+  preference_list_price: string
+  road_tax_renewal: string | null
+  insurance_renewal: string | null
+  driving_license_renewal: string | null
+  road_tax_send_reminder: boolean
+  insurance_send_reminder: boolean
+  driving_license_send_reminder: boolean
+  birthday_send_reminder: boolean
+  send_next_service_reminder: boolean
+  send_greeting_card: boolean
   created_at: string
   updated_at: string
 }
@@ -177,6 +208,32 @@ export type CustomerInsert = {
   phone: string
   email?: string | null
   address?: string | null
+  // WMS account fields — all optional on insert; DB defaults kick in
+  // where appropriate.
+  city?: string | null
+  state?: string | null
+  post_code?: string | null
+  phone2?: string | null
+  fax_no?: string | null
+  tin_no?: string | null
+  tax_no?: string | null
+  sex?: CustomerSex | null
+  race?: CustomerRace | null
+  marital_status?: CustomerMaritalStatus | null
+  birthday?: string | null
+  sales_dealer?: string | null
+  status?: CustomerStatus
+  fixed_discount_rate?: number
+  preference_list_price?: string
+  road_tax_renewal?: string | null
+  insurance_renewal?: string | null
+  driving_license_renewal?: string | null
+  road_tax_send_reminder?: boolean
+  insurance_send_reminder?: boolean
+  driving_license_send_reminder?: boolean
+  birthday_send_reminder?: boolean
+  send_next_service_reminder?: boolean
+  send_greeting_card?: boolean
 }
 
 export type Vehicle = {
@@ -193,6 +250,14 @@ export type Vehicle = {
   year: number | null
   mileage: number | null
   notes: string | null
+  // WMS-style account fields (2026-05-26)
+  account_no: string | null
+  membership_no: string | null
+  engine_no: string | null
+  capacity_cc: number | null
+  year_make: number | null
+  registration_date: string | null
+  warranty_date: string | null
   created_at: string
   updated_at: string
 }
@@ -214,6 +279,13 @@ export type VehicleInsert = {
   year?: number | null
   mileage?: number | null
   notes?: string | null
+  account_no?: string | null
+  membership_no?: string | null
+  engine_no?: string | null
+  capacity_cc?: number | null
+  year_make?: number | null
+  registration_date?: string | null
+  warranty_date?: string | null
 }
 
 // ---------- Service orders (workshop side) ---------------------------------

@@ -576,15 +576,16 @@ function Row({
 }
 
 /**
- * Inline "Edit Vehicle / New Account" dialog — pops up when the SA types
- * a plate that isn't in our vehicles table. Captures the minimum we
- * need to file the car: the plate (pre-filled from the parent), basic
- * vehicle attrs, and the owner (either pick an existing customer or
- * enter NRIC/Name/Phone for a new one).
+ * Edit Vehicle Information — full WMS-style account dialog. Modelled
+ * 1:1 on the legacy form: vehicle attrs on top, Detail Information
+ * (owner + reminders + tax) below. Pops up when the SA types a plate
+ * that isn't on file.
  *
- * On save the customer is upserted by NRIC, the vehicle is created
- * linked to that customer, and the parent form receives the new
- * vehicle id so the rest of the job sheet auto-fills.
+ * Owner resolution is NRIC-driven (matching the legacy "Reg/ID/Passport
+ * No" lookup): if the typed NRIC matches an existing customer, the
+ * Owner block prefills with that customer's saved data and any edits
+ * are saved back via the same NRIC-keyed upsert. If it doesn't match,
+ * the same upsert just creates a new customer.
  */
 function RegisterVehicleModal({
   regNo,
@@ -599,26 +600,56 @@ function RegisterVehicleModal({
   const upsertCustomer = useUpsertCustomerByNric()
   const createVehicle = useCreateVehicle()
 
-  const [mode, setMode] = useState<'existing' | 'new'>('existing')
-  const [existingCustomerId, setExistingCustomerId] = useState('')
-  const [name, setName] = useState('')
-  const [nric, setNric] = useState('')
-  const [phone, setPhone] = useState('')
-  const [email, setEmail] = useState('')
-  const [address, setAddress] = useState('')
-
+  // ---------- Vehicle fields ----------
+  const [accountNo, setAccountNo] = useState('')
   const [chassisNo, setChassisNo] = useState('')
+  const [membershipNo, setMembershipNo] = useState('')
+  const [engineNo, setEngineNo] = useState('')
+  const [vehicleColour, setVehicleColour] = useState('')
   const [model, setModel] = useState<string>(PROTON_MODELS[0])
   const [variant, setVariant] = useState('')
-  const [color, setColor] = useState('')
-  const [year, setYear] = useState('')
+  const [capacityCc, setCapacityCc] = useState('')
+  const [yearMake, setYearMake] = useState('')
+  const [registrationDate, setRegistrationDate] = useState('')
+  const [warrantyDate, setWarrantyDate] = useState('')
+
+  // ---------- Owner (Detail Information) ----------
+  const [name, setName] = useState('')
+  const [address, setAddress] = useState('')
+  const [city, setCity] = useState('')
+  const [state, setState] = useState('')
+  const [postCode, setPostCode] = useState('')
+  const [nric, setNric] = useState('')
+  const [phone, setPhone] = useState('')
+  const [phone2, setPhone2] = useState('')
+  const [faxNo, setFaxNo] = useState('')
+  const [email, setEmail] = useState('')
+  const [remark, setRemark] = useState('')
+  const [tinNo, setTinNo] = useState('')
+  const [taxNo, setTaxNo] = useState('')
+  const [sex, setSex] = useState<'' | 'M' | 'F'>('')
+  const [race, setRace] = useState<'' | 'C' | 'M' | 'I' | 'O'>('')
+  const [salesDealer, setSalesDealer] = useState('')
+  const [maritalStatus, setMaritalStatus] = useState<'' | 'S' | 'M' | 'D'>('')
+  const [birthday, setBirthday] = useState('')
+  const [birthdayReminder, setBirthdayReminder] = useState(true)
+  const [status, setStatus] = useState<'active' | 'inactive'>('active')
+  const [fixedDiscountRate, setFixedDiscountRate] = useState('0.00')
+  const [roadTaxRenewal, setRoadTaxRenewal] = useState('')
+  const [roadTaxReminder, setRoadTaxReminder] = useState(true)
+  const [insuranceRenewal, setInsuranceRenewal] = useState('')
+  const [insuranceReminder, setInsuranceReminder] = useState(true)
+  const [drivingLicenseRenewal, setDrivingLicenseRenewal] = useState('')
+  const [drivingLicenseReminder, setDrivingLicenseReminder] = useState(true)
+  const [preferenceListPrice, setPreferenceListPrice] = useState('List Price 1')
+  const [sendNextServiceReminder, setSendNextServiceReminder] = useState(true)
+  const [sendGreetingCard, setSendGreetingCard] = useState(true)
 
   const [error, setError] = useState<string | null>(null)
   const saving = upsertCustomer.isPending || createVehicle.isPending
   const variants = variantsFor(model)
   const palette = coloursFor(model)
 
-  // Close on Escape — keyboard parity with native dialogs.
   const overlayRef = useRef<HTMLDivElement | null>(null)
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -628,48 +659,104 @@ function RegisterVehicleModal({
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  const customerOptions = useMemo(
-    () =>
-      (customers ?? [])
-        .slice()
-        .sort((a, b) => a.name.localeCompare(b.name)),
-    [customers],
-  )
-
   function handleModelChange(next: string) {
     setModel(next)
     if (!variantsFor(next).includes(variant)) setVariant('')
     const p = coloursFor(next)
-    if (p.length > 0 && !p.includes(color)) setColor('')
+    if (p.length > 0 && !p.includes(vehicleColour)) setVehicleColour('')
+  }
+
+  // NRIC lookup: when the user finishes typing a 12-digit NRIC, check
+  // if a customer already exists. If yes, prefill every Owner field so
+  // they're editing the existing record (and the upsert on save will
+  // patch it). If no, leave the fields untouched for a fresh entry.
+  function lookupCustomerByNric(value: string) {
+    const trimmed = value.trim()
+    if (!trimmed || !customers) return
+    const match = customers.find((c) => c.nric === trimmed)
+    if (!match) return
+    setName(match.name)
+    setPhone(match.phone)
+    setEmail(match.email ?? '')
+    setAddress(match.address ?? '')
+    setCity(match.city ?? '')
+    setState(match.state ?? '')
+    setPostCode(match.post_code ?? '')
+    setPhone2(match.phone2 ?? '')
+    setFaxNo(match.fax_no ?? '')
+    setTinNo(match.tin_no ?? '')
+    setTaxNo(match.tax_no ?? '')
+    setSex(match.sex ?? '')
+    setRace(match.race ?? '')
+    setMaritalStatus(match.marital_status ?? '')
+    setSalesDealer(match.sales_dealer ?? '')
+    setBirthday(match.birthday ?? '')
+    setStatus(match.status)
+    setFixedDiscountRate(String(match.fixed_discount_rate ?? '0'))
+    setRoadTaxRenewal(match.road_tax_renewal ?? '')
+    setInsuranceRenewal(match.insurance_renewal ?? '')
+    setDrivingLicenseRenewal(match.driving_license_renewal ?? '')
+    setRoadTaxReminder(match.road_tax_send_reminder)
+    setInsuranceReminder(match.insurance_send_reminder)
+    setDrivingLicenseReminder(match.driving_license_send_reminder)
+    setBirthdayReminder(match.birthday_send_reminder)
+    setSendNextServiceReminder(match.send_next_service_reminder)
+    setSendGreetingCard(match.send_greeting_card)
+    setPreferenceListPrice(match.preference_list_price)
   }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     setError(null)
     try {
-      let customerId = existingCustomerId
-      if (mode === 'new') {
-        const upserted = await upsertCustomer.mutateAsync({
-          name: name.trim(),
-          nric: nric.trim(),
-          phone: phone.trim(),
-          email: email.trim() || null,
-          address: address.trim() || null,
-        })
-        customerId = upserted.id
-      }
-      if (!customerId) {
-        setError('Pick an existing customer or fill in new-customer details.')
-        return
-      }
+      // Upsert the customer keyed on NRIC — creates if new, updates if
+      // we found a match. All Detail Information fields ride along.
+      const upserted = await upsertCustomer.mutateAsync({
+        name: name.trim(),
+        nric: nric.trim(),
+        phone: phone.trim(),
+        email: email.trim() || null,
+        address: address.trim() || null,
+        city: city.trim() || null,
+        state: state.trim() || null,
+        post_code: postCode.trim() || null,
+        phone2: phone2.trim() || null,
+        fax_no: faxNo.trim() || null,
+        tin_no: tinNo.trim() || null,
+        tax_no: taxNo.trim() || null,
+        sex: sex || null,
+        race: race || null,
+        marital_status: maritalStatus || null,
+        sales_dealer: salesDealer.trim() || null,
+        birthday: birthday || null,
+        status,
+        fixed_discount_rate: Number(fixedDiscountRate) || 0,
+        preference_list_price: preferenceListPrice,
+        road_tax_renewal: roadTaxRenewal || null,
+        insurance_renewal: insuranceRenewal || null,
+        driving_license_renewal: drivingLicenseRenewal || null,
+        road_tax_send_reminder: roadTaxReminder,
+        insurance_send_reminder: insuranceReminder,
+        driving_license_send_reminder: drivingLicenseReminder,
+        birthday_send_reminder: birthdayReminder,
+        send_next_service_reminder: sendNextServiceReminder,
+        send_greeting_card: sendGreetingCard,
+      })
       const created = await createVehicle.mutateAsync({
-        customer_id: customerId,
+        customer_id: upserted.id,
         registration_no: regNo,
         chassis_no: chassisNo || null,
         model,
         variant: variant || null,
-        color: color || null,
-        year: year ? Number(year) : null,
+        color: vehicleColour || null,
+        year: yearMake ? Number(yearMake) : null,
+        account_no: accountNo.trim() || null,
+        membership_no: membershipNo.trim() || null,
+        engine_no: engineNo.trim() || null,
+        capacity_cc: capacityCc ? Number(capacityCc) : null,
+        year_make: yearMake ? Number(yearMake) : null,
+        registration_date: registrationDate || null,
+        warranty_date: warrantyDate || null,
       })
       onCreated(created.id, created.registration_no)
     } catch (e) {
@@ -682,46 +769,35 @@ function RegisterVehicleModal({
       ref={overlayRef}
       role="dialog"
       aria-modal="true"
-      aria-label="Register new vehicle"
-      className="fixed inset-0 z-30 flex items-center justify-center bg-black/40 px-4 py-6"
+      aria-label="Edit Vehicle Information"
+      className="fixed inset-0 z-30 flex items-start justify-center bg-black/40 px-4 py-6 sm:items-center"
       onClick={(e) => {
         if (e.target === overlayRef.current) onClose()
       }}
     >
       <form
         onSubmit={handleSubmit}
-        className="max-h-full w-full max-w-2xl overflow-y-auto rounded-2xl border border-gray-300 bg-white p-5 shadow-xl"
+        className="max-h-full w-full max-w-5xl overflow-y-auto rounded-2xl border border-gray-300 bg-white p-5 shadow-xl"
       >
-        <div className="mb-3 border-b border-gray-200 pb-2">
-          <div className="text-[10px] font-medium uppercase tracking-widest text-gray-500">
+        <div className="mb-4 border-b border-gray-200 pb-2">
+          <h2 className="text-base font-semibold text-gray-900">
             Edit Vehicle Information
-          </div>
-          <h2 className="mt-0.5 text-base font-semibold text-gray-900">
-            New registration: <span className="font-mono">{regNo}</span>
           </h2>
-          <p className="mt-1 text-xs text-gray-500">
-            File the car and its owner so this plate can be picked up on
-            future job sheets.
+          <p className="mt-0.5 text-xs text-gray-500">
+            New registration: <span className="font-mono">{regNo}</span>
           </p>
         </div>
 
-        {/* ---------- Vehicle ---------- */}
-        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Row label="Vehicle No">
+        {/* ============ TOP: Vehicle attrs (two columns) ============ */}
+        <div className="grid grid-cols-1 gap-x-6 gap-y-2.5 sm:grid-cols-2">
+          {/* Left column */}
+          <Row label="Account No">
             <input
               type="text"
-              readOnly
-              value={regNo}
-              className={`${inputClass} bg-gray-50 font-mono`}
-            />
-          </Row>
-          <Row label="Chassis No">
-            <input
-              type="text"
-              value={chassisNo}
-              onChange={(e) => setChassisNo(e.target.value.toUpperCase())}
+              value={accountNo}
+              onChange={(e) => setAccountNo(e.target.value)}
               className={inputClass}
-              placeholder="17-char VIN (optional)"
+              placeholder="Optional"
             />
           </Row>
           <Row label="Car Model" required>
@@ -738,6 +814,109 @@ function RegisterVehicleModal({
               ))}
             </select>
           </Row>
+
+          <Row label="Vehicle No">
+            <input
+              type="text"
+              readOnly
+              value={regNo}
+              className={`${inputClass} bg-gray-50 font-mono`}
+            />
+          </Row>
+          <Row label="Capacity (cc)">
+            <input
+              type="number"
+              min={0}
+              step={1}
+              value={capacityCc}
+              onChange={(e) => setCapacityCc(e.target.value)}
+              className={inputClass}
+              placeholder="e.g. 1500"
+              inputMode="numeric"
+            />
+          </Row>
+
+          <Row label="Chassis No">
+            <input
+              type="text"
+              value={chassisNo}
+              onChange={(e) => setChassisNo(e.target.value.toUpperCase())}
+              className={inputClass}
+              placeholder="17-char VIN"
+            />
+          </Row>
+          <Row label="Year Make">
+            <input
+              type="number"
+              min={1980}
+              max={new Date().getFullYear() + 1}
+              value={yearMake}
+              onChange={(e) => setYearMake(e.target.value)}
+              className={inputClass}
+              placeholder="e.g. 2024"
+              inputMode="numeric"
+            />
+          </Row>
+
+          <Row label="Membership No">
+            <input
+              type="text"
+              value={membershipNo}
+              onChange={(e) => setMembershipNo(e.target.value)}
+              className={inputClass}
+              placeholder="Optional"
+            />
+          </Row>
+          <Row label="Registration Date">
+            <input
+              type="date"
+              value={registrationDate}
+              onChange={(e) => setRegistrationDate(e.target.value)}
+              className={inputClass}
+            />
+          </Row>
+
+          <Row label="Engine No">
+            <input
+              type="text"
+              value={engineNo}
+              onChange={(e) => setEngineNo(e.target.value.toUpperCase())}
+              className={inputClass}
+              placeholder="Optional"
+            />
+          </Row>
+          <Row label="Warranty Date">
+            <input
+              type="date"
+              value={warrantyDate}
+              onChange={(e) => setWarrantyDate(e.target.value)}
+              className={inputClass}
+            />
+          </Row>
+
+          <Row label="Vehicle Colour">
+            {palette.length > 0 ? (
+              <select
+                value={vehicleColour}
+                onChange={(e) => setVehicleColour(e.target.value)}
+                className={inputClass}
+              >
+                <option value="">— Not specified —</option>
+                {palette.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type="text"
+                value={vehicleColour}
+                onChange={(e) => setVehicleColour(e.target.value)}
+                className={inputClass}
+              />
+            )}
+          </Row>
           <Row label="Variant">
             <select
               value={variant}
@@ -752,100 +931,21 @@ function RegisterVehicleModal({
               ))}
             </select>
           </Row>
-          <Row label="Vehicle Colour">
-            {palette.length > 0 ? (
-              <select
-                value={color}
-                onChange={(e) => setColor(e.target.value)}
-                className={inputClass}
-              >
-                <option value="">— Not specified —</option>
-                {palette.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <input
-                type="text"
-                value={color}
-                onChange={(e) => setColor(e.target.value)}
-                className={inputClass}
-                placeholder="e.g. Snow White"
-              />
-            )}
-          </Row>
-          <Row label="Year Make">
-            <input
-              type="number"
-              min={1980}
-              max={new Date().getFullYear() + 1}
-              value={year}
-              onChange={(e) => setYear(e.target.value)}
-              placeholder="e.g. 2024"
-              inputMode="numeric"
-              className={inputClass}
-            />
-          </Row>
         </div>
 
-        {/* ---------- Owner ---------- */}
-        <div className="mb-2 border-t border-gray-200 pt-3">
-          <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
-            Owner
-          </div>
-          <div className="mt-2 flex gap-1.5">
-            <button
-              type="button"
-              onClick={() => setMode('existing')}
-              className={`rounded-full px-3 py-1 text-xs font-medium transition ${
-                mode === 'existing'
-                  ? 'bg-gray-900 text-white'
-                  : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              Existing customer
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode('new')}
-              className={`rounded-full px-3 py-1 text-xs font-medium transition ${
-                mode === 'new'
-                  ? 'bg-gray-900 text-white'
-                  : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              + New customer
-            </button>
-          </div>
+        {/* ============ DIVIDER ============ */}
+        <div className="my-5 flex items-center gap-3">
+          <span className="text-xs font-medium uppercase tracking-widest text-blue-600">
+            Detail Information
+          </span>
+          <span className="h-px flex-1 bg-blue-200" />
         </div>
 
-        {mode === 'existing' ? (
-          <div className="mt-3">
-            <Row label="Pick customer" required>
-              <select
-                required
-                value={existingCustomerId}
-                onChange={(e) => setExistingCustomerId(e.target.value)}
-                className={inputClass}
-                disabled={!customers}
-              >
-                <option value="" disabled>
-                  {customers ? '— Select —' : 'Loading customers…'}
-                </option>
-                {customerOptions.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} ·{' '}
-                    {c.nric.slice(-4).padStart(c.nric.length, '•')}
-                  </option>
-                ))}
-              </select>
-            </Row>
-          </div>
-        ) : (
-          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Row label="Owner name" required>
+        {/* ============ BOTTOM: Detail Information ============ */}
+        <div className="grid grid-cols-1 gap-x-6 gap-y-2.5 sm:grid-cols-2">
+          {/* ---------- Left column: contact + address ---------- */}
+          <div className="space-y-2.5">
+            <Row label="Owner" required>
               <input
                 type="text"
                 required
@@ -855,7 +955,40 @@ function RegisterVehicleModal({
                 placeholder="Full name as on IC"
               />
             </Row>
-            <Row label="NRIC" required>
+            <Row label="Address">
+              <textarea
+                rows={3}
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                className={`${inputClass} min-h-16`}
+              />
+            </Row>
+            <Row label="City">
+              <input
+                type="text"
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+                className={inputClass}
+              />
+            </Row>
+            <Row label="State">
+              <input
+                type="text"
+                value={state}
+                onChange={(e) => setState(e.target.value)}
+                className={inputClass}
+              />
+            </Row>
+            <Row label="Post Code">
+              <input
+                type="text"
+                value={postCode}
+                onChange={(e) => setPostCode(e.target.value)}
+                className={inputClass}
+                maxLength={6}
+              />
+            </Row>
+            <Row label="Reg./ID/Passport No" required>
               <input
                 type="text"
                 required
@@ -863,14 +996,15 @@ function RegisterVehicleModal({
                 onChange={(e) =>
                   setNric(e.target.value.replace(/\D/g, '').slice(0, 12))
                 }
+                onBlur={(e) => lookupCustomerByNric(e.target.value)}
                 className={inputClass}
-                placeholder="12 digits, no dashes"
+                placeholder="12-digit NRIC, no dashes"
                 inputMode="numeric"
                 pattern="\d{12}"
-                title="NRIC must be 12 digits"
+                title="12 digits — if it matches an existing customer, their details auto-fill on blur"
               />
             </Row>
-            <Row label="Phone" required>
+            <Row label="Tel No / HP No" required>
               <input
                 type="tel"
                 required
@@ -882,7 +1016,24 @@ function RegisterVehicleModal({
                 placeholder="01x… (10–11 digits)"
                 inputMode="numeric"
                 pattern="\d{10,11}"
-                title="Phone must be 10–11 digits"
+              />
+            </Row>
+            <Row label="Tel No (2)">
+              <input
+                type="tel"
+                value={phone2}
+                onChange={(e) => setPhone2(e.target.value)}
+                className={inputClass}
+                placeholder="Optional"
+              />
+            </Row>
+            <Row label="Fax No">
+              <input
+                type="tel"
+                value={faxNo}
+                onChange={(e) => setFaxNo(e.target.value)}
+                className={inputClass}
+                placeholder="Optional"
               />
             </Row>
             <Row label="Email">
@@ -891,22 +1042,198 @@ function RegisterVehicleModal({
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className={inputClass}
-                placeholder="Optional"
               />
             </Row>
-            <div className="sm:col-span-2">
-              <Row label="Address">
-                <input
-                  type="text"
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  className={inputClass}
-                  placeholder="Optional"
-                />
-              </Row>
-            </div>
+            <Row label="Remark">
+              <input
+                type="text"
+                value={remark}
+                onChange={(e) => setRemark(e.target.value)}
+                className={inputClass}
+                placeholder="(visual only — not stored)"
+                title="Customer-level remark isn't persisted today; use Internal notes on the job sheet instead."
+              />
+            </Row>
           </div>
-        )}
+
+          {/* ---------- Right column: tax / demographics / reminders ---------- */}
+          <div className="space-y-2.5">
+            <Row label="TIN No">
+              <input
+                type="text"
+                value={tinNo}
+                onChange={(e) => setTinNo(e.target.value)}
+                className={inputClass}
+              />
+            </Row>
+            <Row label="Tax No">
+              <input
+                type="text"
+                value={taxNo}
+                onChange={(e) => setTaxNo(e.target.value)}
+                className={inputClass}
+              />
+            </Row>
+            <Row label="Sex (M/F)">
+              <select
+                value={sex}
+                onChange={(e) => setSex(e.target.value as '' | 'M' | 'F')}
+                className={inputClass}
+              >
+                <option value="">—</option>
+                <option value="M">M</option>
+                <option value="F">F</option>
+              </select>
+            </Row>
+            <Row label="Race (C/M/I/O)">
+              <select
+                value={race}
+                onChange={(e) =>
+                  setRace(e.target.value as '' | 'C' | 'M' | 'I' | 'O')
+                }
+                className={inputClass}
+              >
+                <option value="">—</option>
+                <option value="C">C — Chinese</option>
+                <option value="M">M — Malay</option>
+                <option value="I">I — Indian</option>
+                <option value="O">O — Others</option>
+              </select>
+            </Row>
+            <Row label="Sales Dealer">
+              <input
+                type="text"
+                value={salesDealer}
+                onChange={(e) => setSalesDealer(e.target.value)}
+                className={inputClass}
+              />
+            </Row>
+            <Row label="Marital Status (S/M/D)">
+              <select
+                value={maritalStatus}
+                onChange={(e) =>
+                  setMaritalStatus(e.target.value as '' | 'S' | 'M' | 'D')
+                }
+                className={inputClass}
+              >
+                <option value="">—</option>
+                <option value="S">S — Single</option>
+                <option value="M">M — Married</option>
+                <option value="D">D — Divorced</option>
+              </select>
+            </Row>
+            <RowWithReminder
+              label="Birthday (dd/mm/yyyy)"
+              reminder={birthdayReminder}
+              onReminderChange={setBirthdayReminder}
+            >
+              <input
+                type="date"
+                value={birthday}
+                onChange={(e) => setBirthday(e.target.value)}
+                className={inputClass}
+              />
+            </RowWithReminder>
+            <Row label="Status">
+              <select
+                value={status}
+                onChange={(e) =>
+                  setStatus(e.target.value as 'active' | 'inactive')
+                }
+                className={inputClass}
+              >
+                <option value="active">AC — Active</option>
+                <option value="inactive">IN — Inactive</option>
+              </select>
+            </Row>
+            <Row label="Fixed Discount Rate (%)">
+              <input
+                type="number"
+                min={0}
+                max={100}
+                step={0.01}
+                value={fixedDiscountRate}
+                onChange={(e) => setFixedDiscountRate(e.target.value)}
+                className={inputClass}
+              />
+            </Row>
+            <RowWithReminder
+              label="Road Tax Renewal"
+              reminder={roadTaxReminder}
+              onReminderChange={setRoadTaxReminder}
+            >
+              <input
+                type="date"
+                value={roadTaxRenewal}
+                onChange={(e) => setRoadTaxRenewal(e.target.value)}
+                className={inputClass}
+              />
+            </RowWithReminder>
+            <RowWithReminder
+              label="Insurance Renewal"
+              reminder={insuranceReminder}
+              onReminderChange={setInsuranceReminder}
+            >
+              <input
+                type="date"
+                value={insuranceRenewal}
+                onChange={(e) => setInsuranceRenewal(e.target.value)}
+                className={inputClass}
+              />
+            </RowWithReminder>
+            <RowWithReminder
+              label="Driving License Renewal"
+              reminder={drivingLicenseReminder}
+              onReminderChange={setDrivingLicenseReminder}
+            >
+              <input
+                type="date"
+                value={drivingLicenseRenewal}
+                onChange={(e) => setDrivingLicenseRenewal(e.target.value)}
+                className={inputClass}
+              />
+            </RowWithReminder>
+            <Row label="Preference List Price">
+              <select
+                value={preferenceListPrice}
+                onChange={(e) => setPreferenceListPrice(e.target.value)}
+                className={inputClass}
+              >
+                <option>List Price 1</option>
+                <option>List Price 2</option>
+                <option>List Price 3</option>
+              </select>
+            </Row>
+            <div className="pt-1">
+              <label className="flex items-center gap-2 text-sm text-gray-800">
+                <input
+                  type="checkbox"
+                  checked={sendNextServiceReminder}
+                  onChange={(e) =>
+                    setSendNextServiceReminder(e.target.checked)
+                  }
+                />
+                Send Next Service Reminder
+              </label>
+              <label className="mt-1 flex items-center gap-2 text-sm text-gray-800">
+                <input
+                  type="checkbox"
+                  checked={sendGreetingCard}
+                  onChange={(e) => setSendGreetingCard(e.target.checked)}
+                />
+                Send Greeting Card
+              </label>
+            </div>
+            <Row label="Last Updated Date">
+              <input
+                type="text"
+                readOnly
+                value="— auto on save —"
+                className={`${inputClass} bg-gray-50 italic text-gray-500`}
+              />
+            </Row>
+          </div>
+        </div>
 
         {error && (
           <div
@@ -923,17 +1250,52 @@ function RegisterVehicleModal({
             onClick={onClose}
             className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
           >
-            Cancel
+            Close
           </button>
           <button
             type="submit"
             disabled={saving}
             className="rounded-md bg-gray-900 px-4 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-gray-800 disabled:opacity-60"
           >
-            {saving ? 'Saving…' : 'Save vehicle + owner'}
+            {saving ? 'Saving…' : 'Save'}
           </button>
         </div>
       </form>
+    </div>
+  )
+}
+
+/**
+ * Row variant with a "Send Reminder" checkbox inline on the right —
+ * mirrors the legacy WMS dialog where every renewal date paired with a
+ * checkbox to opt the customer into automated reminders.
+ */
+function RowWithReminder({
+  label,
+  reminder,
+  onReminderChange,
+  children,
+}: {
+  label: string
+  reminder: boolean
+  onReminderChange: (next: boolean) => void
+  children: React.ReactNode
+}) {
+  return (
+    <div className="grid grid-cols-[7.5rem_1fr_auto] items-center gap-2">
+      <span className={labelClass}>{label}</span>
+      {children}
+      <label
+        className="flex shrink-0 items-center gap-1 text-[11px] text-gray-600"
+        title="Send a reminder when this date approaches"
+      >
+        <input
+          type="checkbox"
+          checked={reminder}
+          onChange={(e) => onReminderChange(e.target.checked)}
+        />
+        Send Reminder
+      </label>
     </div>
   )
 }
