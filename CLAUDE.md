@@ -190,6 +190,16 @@ Primary nav links by role:
   null/zero`. Pending payment = `OTR - (Σ payments + loan_amount) > 0`
   (only rows with a positive shortfall are listed).
 
+- **ServiceDashboardPage** (`/` for workshop roles + super_admin in
+  Service workspace) — rebuilt 2026-05-26 as a 6-tile main menu
+  mirroring the legacy WMS system (Job Sheet / Billing, Payment /
+  Receipt, Housekeeping, Stock Control, Inquiry, Reporting). Tiles
+  without a built screen render with a "Coming soon" pill and are
+  click-disabled. "Job Sheet / Billing" → `/service/ops`, "Housekeeping"
+  → `/vehicles`. The old data-dense dashboard (active jobs queue,
+  low-stock parts, voided transactions) moved verbatim to
+  **ServiceOpsPage** at `/service/ops`.
+
 - **AdminDashboardPage** still serves super_admin and sales_manager.
   `RoleHome` dispatches:
   ```

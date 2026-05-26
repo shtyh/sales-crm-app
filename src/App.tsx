@@ -100,6 +100,11 @@ const ServiceDashboardPage = lazy(() =>
     default: m.ServiceDashboardPage,
   })),
 )
+const ServiceOpsPage = lazy(() =>
+  import('./pages/ServiceOpsPage').then((m) => ({
+    default: m.ServiceOpsPage,
+  })),
+)
 const ServiceAdvisorDashboardPage = lazy(() =>
   import('./pages/ServiceAdvisorDashboardPage').then((m) => ({
     default: m.ServiceAdvisorDashboardPage,
@@ -295,6 +300,14 @@ function App() {
           element={
             <ProtectedRoute>
               <ServiceDashboardPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/service/ops"
+          element={
+            <ProtectedRoute>
+              <ServiceOpsPage />
             </ProtectedRoute>
           }
         />
