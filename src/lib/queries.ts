@@ -12,6 +12,13 @@ import {
 } from './bookings'
 import { listProfiles, updateProfile } from './profiles'
 import { listAllAttachments, listAttachments } from './attachments'
+import {
+  checkIn,
+  checkOut,
+  getMyToday,
+  listAllAttendance,
+  listMyAttendance,
+} from './attendance'
 import { createCar, deleteCar, getCar, listCars, updateCar } from './cars'
 import {
   deleteCustomer,
@@ -55,6 +62,9 @@ import {
 } from './commissions'
 import type {
   Attachment,
+  Attendance,
+  AttendanceCheckOut,
+  AttendanceInsert,
   AuditLogEntry,
   Booking,
   BookingInsert,
@@ -111,6 +121,11 @@ export const qk = {
   technicians: ['technicians'] as const,
   payments: ['payments'] as const,
   invoices: ['invoices'] as const,
+  attendanceAll: ['attendance', 'all'] as const,
+  attendanceMine: (profileId: string) =>
+    ['attendance', 'mine', profileId] as const,
+  attendanceToday: (profileId: string, workDate: string) =>
+    ['attendance', 'today', profileId, workDate] as const,
 }
 
 // ---------- Bookings -------------------------------------------------------
@@ -637,5 +652,67 @@ export function useAuditForRow(
     // Audit data isn't latency-critical; keep it fresh for a minute so we
     // refresh after navigating back from making changes.
     staleTime: 60_000,
+  })
+}
+
+// ---------- Attendance (clock in / out) ------------------------------------
+
+/** Every attendance row visible (RLS: own + admins see all). */
+export function useAllAttendance(enabled = true) {
+  return useQuery<Attendance[]>({
+    queryKey: qk.attendanceAll,
+    queryFn: listAllAttendance,
+    enabled,
+  })
+}
+
+/** This profile's own attendance history. */
+export function useMyAttendance(profileId: string | null | undefined) {
+  return useQuery<Attendance[]>({
+    queryKey: qk.attendanceMine(profileId ?? ''),
+    queryFn: () => listMyAttendance(profileId as string),
+    enabled: !!profileId,
+  })
+}
+
+/** Today's attendance row for this profile (Asia/KL date). null if not yet. */
+export function useMyToday(
+  profileId: string | null | undefined,
+  workDate: string,
+) {
+  return useQuery<Attendance | null>({
+    queryKey: qk.attendanceToday(profileId ?? '', workDate),
+    queryFn: () => getMyToday(profileId as string, workDate),
+    enabled: !!profileId,
+    refetchOnWindowFocus: true,
+  })
+}
+
+export function useCheckIn() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: AttendanceInsert) => checkIn(input),
+    onSuccess: (row) => {
+      qc.setQueryData<Attendance>(
+        qk.attendanceToday(row.profile_id, row.work_date),
+        row,
+      )
+      qc.invalidateQueries({ queryKey: ['attendance'] })
+    },
+  })
+}
+
+export function useCheckOut() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: AttendanceCheckOut }) =>
+      checkOut(id, patch),
+    onSuccess: (row) => {
+      qc.setQueryData<Attendance>(
+        qk.attendanceToday(row.profile_id, row.work_date),
+        row,
+      )
+      qc.invalidateQueries({ queryKey: ['attendance'] })
+    },
   })
 }

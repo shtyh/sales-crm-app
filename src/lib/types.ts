@@ -360,6 +360,38 @@ export type ServiceOrderInsert = {
   days_to_complete?: number | null
 }
 
+export type Attendance = {
+  id: string
+  profile_id: string
+  work_date: string
+  check_in_at: string
+  check_in_lat: number
+  check_in_lng: number
+  check_in_distance_m: number
+  check_out_at: string | null
+  check_out_lat: number | null
+  check_out_lng: number | null
+  check_out_distance_m: number | null
+  created_at: string
+  updated_at: string
+}
+
+export type AttendanceInsert = {
+  profile_id: string
+  work_date: string
+  check_in_at?: string
+  check_in_lat: number
+  check_in_lng: number
+  check_in_distance_m: number
+}
+
+export type AttendanceCheckOut = {
+  check_out_at: string
+  check_out_lat: number
+  check_out_lng: number
+  check_out_distance_m: number
+}
+
 export type Technician = {
   id: string
   profile_id: string | null

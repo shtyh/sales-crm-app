@@ -135,6 +135,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               displayName={displayName}
               email={isSuperAdmin ? '' : email}
               online={online}
+              isAdmin={isAdmin}
               isSuperAdmin={isSuperAdmin}
               onSignOut={handleSignOut}
             />
@@ -157,12 +158,14 @@ function UserMenu({
   displayName,
   email,
   online,
+  isAdmin,
   isSuperAdmin,
   onSignOut,
 }: {
   displayName: string
   email: string
   online: boolean
+  isAdmin: boolean
   isSuperAdmin: boolean
   onSignOut: () => void
 }) {
@@ -237,6 +240,17 @@ function UserMenu({
               {online ? 'Online' : 'Offline'}
             </div>
           </div>
+          <MenuLink to="/clock-in" onClick={() => setOpen(false)}>
+            🕒 Clock in / out
+          </MenuLink>
+          <MenuLink to="/attendance" onClick={() => setOpen(false)}>
+            My attendance
+          </MenuLink>
+          {isAdmin && (
+            <MenuLink to="/admin/attendance" onClick={() => setOpen(false)}>
+              Team attendance
+            </MenuLink>
+          )}
           <MenuLink to="/account" onClick={() => setOpen(false)}>
             Account
           </MenuLink>

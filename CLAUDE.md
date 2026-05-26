@@ -71,6 +71,7 @@ Current real users (`select id, full_name, role from public.profiles`):
 | `commission_payouts` | sales_manager + super_admin | batch label, paid_at, paid_by |
 | `audit_log` | trigger only (postgres) | reads = super_admin only; one row per INSERT/UPDATE/DELETE on bookings + cars |
 | storage bucket `booking-files` | matches `booking_attachments` ownership | private |
+| `attendance` | own row write/read; is_admin reads all; super_admin delete | one row per `(profile_id, work_date)`. check_in_* required at insert (lat/lng/distance_m + timestamp); check_out_* set later via UPDATE. work_date is Asia/KL local YYYY-MM-DD, FE-supplied. |
 
 ## bookings.* column ownership matrix
 
@@ -143,6 +144,9 @@ Trigger `sync_car_status_from_booking` fires AFTER INSERT/UPDATE/DELETE on booki
 | `/admin/commissions` | CommissionSchedulesPage (base rates) | super_admin only |
 | `/admin/users` | AdminUsersPage | super_admin only |
 | `/account` | AccountPage (personal display name) | any auth |
+| `/clock-in` | ClockInPage (GPS-gated check in / out) | any auth |
+| `/attendance` | MyAttendancePage (own calendar + monthly summary) | any auth |
+| `/admin/attendance` | TeamAttendancePage (today + month-by-employee) | is_admin only |
 
 Top nav layout (2026-05-26 cleanup):
 
@@ -247,6 +251,17 @@ Primary nav links by role:
   payment-ledger, and warranty flows. The previous active-jobs dashboard
   is gone (replaced by this view).
 
+- **Clock-in system** (2026-05-26) — `/clock-in` runs the browser
+  Geolocation API on mount, computes haversine distance to the office
+  (5.3449, 100.4891 — Bukit Mertajam, 500 m radius from `src/lib/geo.ts`),
+  and gates Check In behind being inside the geofence. Check Out is
+  unconstrained but still records distance for audit. One attendance
+  row per `(profile_id, work_date)`. `/attendance` is the employee's
+  own calendar + monthly summary (late = check-in hour ≥ 9 local).
+  `/admin/attendance` is the manager view (Today tab: who's in / late
+  / not yet / done; Month tab: employees × days dot grid + per-row
+  late count). Both dashboards entered from the avatar dropdown.
+
 - **AdminDashboardPage** still serves super_admin and sales_manager.
   `RoleHome` dispatches:
   ```
@@ -301,6 +316,7 @@ Files in `supabase/migrations/` (chronological):
 20260526_service_order_intake_fields.sql          service_orders +department, +service_types text[], +appointment_type, +days_to_complete
 20260526_drop_service_order_department.sql        drops service_orders.department (added + reverted same day; workshop doesn't use it)
 20260526_wms_account_fields.sql                   vehicles +account/membership/engine/capacity/year_make/registration_date/warranty_date; customers +city/state/post_code/phone2/fax_no/tin_no/tax_no/sex/race/marital_status/birthday/sales_dealer/status/fixed_discount_rate/preference_list_price + 3 renewal dates + 5 reminder flags + send_greeting_card
+20260526_attendance.sql                            attendance table (one row per profile per work_date), check-in/out lat-lng-distance, RLS: own + is_admin select-all, super delete
 ```
 
 Some early ones were **applied by hand** in Supabase SQL editor and so don't show up in `supabase_migrations.schema_migrations`. The files are still source of truth for what should exist.

@@ -110,6 +110,19 @@ const BillingPage = lazy(() =>
     default: m.BillingPage,
   })),
 )
+const ClockInPage = lazy(() =>
+  import('./pages/ClockInPage').then((m) => ({ default: m.ClockInPage })),
+)
+const MyAttendancePage = lazy(() =>
+  import('./pages/MyAttendancePage').then((m) => ({
+    default: m.MyAttendancePage,
+  })),
+)
+const TeamAttendancePage = lazy(() =>
+  import('./pages/TeamAttendancePage').then((m) => ({
+    default: m.TeamAttendancePage,
+  })),
+)
 const NewServiceOrderPage = lazy(() =>
   import('./pages/NewServiceOrderPage').then((m) => ({
     default: m.NewServiceOrderPage,
@@ -332,6 +345,30 @@ function App() {
           element={
             <ProtectedRoute>
               <BillingPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/clock-in"
+          element={
+            <ProtectedRoute>
+              <ClockInPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/attendance"
+          element={
+            <ProtectedRoute>
+              <MyAttendancePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/attendance"
+          element={
+            <ProtectedRoute>
+              <TeamAttendancePage />
             </ProtectedRoute>
           }
         />
