@@ -153,10 +153,18 @@ export function NewBookingPage() {
               type="text"
               required
               value={customerNric}
-              onChange={(e) => setCustomerNric(e.target.value)}
+              onChange={(e) =>
+                // Strip non-digits as the SA types so 970624-07-5367 / spaces
+                // / dashes silently normalise to the bare 12-digit form the
+                // DB CHECK constraint expects.
+                setCustomerNric(e.target.value.replace(/\D/g, ''))
+              }
               className={inputClass}
-              placeholder="YYMMDD-PB-XXXX"
+              placeholder="970624075367"
               inputMode="numeric"
+              pattern="[0-9]{12}"
+              maxLength={12}
+              title="NRIC must be exactly 12 digits"
             />
             {matched && (
               <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-medium text-green-700">
@@ -179,10 +187,16 @@ export function NewBookingPage() {
               type="tel"
               required
               value={customerPhone}
-              onChange={(e) => setCustomerPhone(e.target.value)}
+              onChange={(e) =>
+                setCustomerPhone(e.target.value.replace(/\D/g, ''))
+              }
               className={inputClass}
-              placeholder="+60 11-1234 5678"
-              inputMode="tel"
+              placeholder="0123456789"
+              inputMode="numeric"
+              pattern="[0-9]{10,11}"
+              minLength={10}
+              maxLength={11}
+              title="Phone must be 10 or 11 digits"
             />
           </Field>
           <Field label="Email">

@@ -495,9 +495,14 @@ export function BookingDetailPage() {
               type="text"
               required
               value={customerNric}
-              onChange={(e) => setCustomerNric(e.target.value)}
+              onChange={(e) =>
+                setCustomerNric(e.target.value.replace(/\D/g, ''))
+              }
               className={inputClass}
               inputMode="numeric"
+              pattern="[0-9]{12}"
+              maxLength={12}
+              title="NRIC must be exactly 12 digits"
             />
           </Field>
           <Field label="Phone" required>
@@ -505,9 +510,15 @@ export function BookingDetailPage() {
               type="tel"
               required
               value={customerPhone}
-              onChange={(e) => setCustomerPhone(e.target.value)}
+              onChange={(e) =>
+                setCustomerPhone(e.target.value.replace(/\D/g, ''))
+              }
               className={inputClass}
-              inputMode="tel"
+              inputMode="numeric"
+              pattern="[0-9]{10,11}"
+              minLength={10}
+              maxLength={11}
+              title="Phone must be 10 or 11 digits"
             />
           </Field>
           <Field label="Email">
