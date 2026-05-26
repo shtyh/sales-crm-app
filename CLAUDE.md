@@ -55,6 +55,11 @@ Current real users (`select id, full_name, role from public.profiles`):
 | `customers` | any authenticated; delete super only | `nric unique`, `name`, `phone`, `email?`, `address?`. Bookings reference via `bookings.customer_id`. |
 | `payments` | finance_admin + super write; visibility mirrors bookings; super-only delete | `booking_id` FK, `amount > 0`, `payment_type` enum (deposit/full/partial), `payment_method` enum (cash/bank_transfer/card), `received_by` FK→profiles, `received_at`, `notes?`. |
 | `invoices` | finance_admin + super write; visibility mirrors bookings; super-only delete | `booking_id` FK, `customer_id` FK, `invoice_number` unique-when-set, `invoice_date`, `subtotal`/`tax_amount`/`total_amount` numeric, `status` enum (draft/issued/paid). |
+| `vehicles` | any auth read; non-SA write; super delete | `customer_id` FK, `car_id?` (bridge to SWL inventory), `registration_no unique`, `chassis_no? unique`, model, variant, color, year, mileage, notes. |
+| `technicians` | any auth read; non-SA write; super delete | `profile_id?` (one-to-one with profiles if they log in), name, employee_no? unique, phone, specialty, is_active. |
+| `parts_inventory` | any auth read; non-SA write; super delete | `part_no unique`, name, brand, unit, unit_cost/price, stock_qty (not auto-decremented yet), reorder_level, location, is_active. |
+| `service_orders` | any auth read; non-SA write; super delete | `order_no?` unique-when-set, `customer_id` + `vehicle_id` FK, `technician_id?`, `service_advisor_id?`, status enum (open/in_progress/awaiting_parts/completed/collected/cancelled), complaint/diagnosis, mileage_in, opened_at/completed_at/collected_at, subtotal/tax/total. |
+| `service_order_items` | any auth read; non-SA write; super delete | `service_order_id` FK (cascade), `kind` enum (part/labour), `part_id?` (required when kind=part), description, quantity, unit_price, line_total. |
 | `bookings` | per-column gated by trigger | see below |
 | `booking_attachments` | booking owner + any admin | `kind` enum (bank_transaction / bank_statement / lou / cancellation_form / other) |
 | `cars` | per-column gated by trigger | `chassis_no unique`, `floor_stock_*`, `status enum(in_stock/reserved/delivered/returned)` |
@@ -168,6 +173,7 @@ Files in `supabase/migrations/` (chronological):
 20260526_loan_amount.sql                          bookings.loan_amount + finance-admin gate (for HP letter)
 20260526_payments_table.sql                       first-class payments ledger linked to bookings + profiles
 20260526_invoices_table.sql                       invoices table linked to bookings + customers
+20260526_service_module.sql                       Service: vehicles, technicians, parts_inventory, service_orders, service_order_items
 ```
 
 Some early ones were **applied by hand** in Supabase SQL editor and so don't show up in `supabase_migrations.schema_migrations`. The files are still source of truth for what should exist.
