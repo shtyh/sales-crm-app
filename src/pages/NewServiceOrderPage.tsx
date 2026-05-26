@@ -76,7 +76,6 @@ export function NewServiceOrderPage() {
   const [registerOpen, setRegisterOpen] = useState(false)
   const [pendingNewReg, setPendingNewReg] = useState('')
   // Intake metadata
-  const [department, setDepartment] = useState('')
   const [mileageIn, setMileageIn] = useState('')
   const [daysToComplete, setDaysToComplete] = useState('')
   const [complaint, setComplaint] = useState('')
@@ -96,7 +95,6 @@ export function NewServiceOrderPage() {
       regNoInput,
       technicianId,
       serviceAdvisorId,
-      department,
       mileageIn,
       daysToComplete,
       complaint,
@@ -109,7 +107,6 @@ export function NewServiceOrderPage() {
       setRegNoInput(d.regNoInput ?? '')
       setTechnicianId(d.technicianId ?? '')
       setServiceAdvisorId(d.serviceAdvisorId ?? '')
-      setDepartment(d.department ?? '')
       setMileageIn(d.mileageIn ?? '')
       setDaysToComplete(d.daysToComplete ?? '')
       setComplaint(d.complaint ?? '')
@@ -206,6 +203,10 @@ export function NewServiceOrderPage() {
       setError('Pick a vehicle that has a customer on file.')
       return
     }
+    if (mileageIn.trim() === '') {
+      setError('Mileage is required.')
+      return
+    }
     try {
       const created = await createMut.mutateAsync({
         customer_id: customer.id,
@@ -213,9 +214,8 @@ export function NewServiceOrderPage() {
         technician_id: technicianId || null,
         service_advisor_id: serviceAdvisorId || null,
         complaint: complaint || null,
-        mileage_in: mileageIn ? Number(mileageIn) : null,
+        mileage_in: Number(mileageIn),
         notes: notes || null,
-        department: department || null,
         service_types: serviceTypes,
         appointment_type: appointmentType,
         days_to_complete: daysToComplete ? Number(daysToComplete) : null,
@@ -319,15 +319,6 @@ export function NewServiceOrderPage() {
                 ))}
               </select>
             </Row>
-            <Row label="Department">
-              <input
-                type="text"
-                value={department}
-                onChange={(e) => setDepartment(e.target.value)}
-                placeholder="e.g. Mechanical · Body shop · Detailing"
-                className={inputClass}
-              />
-            </Row>
             <Row label="Vehicle No" required>
               <div className="flex w-full items-center gap-1.5">
                 <input
@@ -411,9 +402,10 @@ export function NewServiceOrderPage() {
                 className={`${inputClass} bg-gray-50`}
               />
             </Row>
-            <Row label="Mileage">
+            <Row label="Mileage" required>
               <input
                 type="number"
+                required
                 min={0}
                 step={1}
                 value={mileageIn}
@@ -532,7 +524,7 @@ export function NewServiceOrderPage() {
           </Link>
           <button
             type="submit"
-            disabled={submitting || !vehicleId}
+            disabled={submitting || !vehicleId || mileageIn.trim() === ''}
             className="rounded-md bg-gray-900 px-4 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-gray-800 disabled:opacity-60"
           >
             {submitting ? 'Saving…' : 'Save'}
