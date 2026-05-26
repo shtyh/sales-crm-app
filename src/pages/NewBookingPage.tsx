@@ -160,7 +160,7 @@ export function NewBookingPage() {
                 setCustomerNric(e.target.value.replace(/\D/g, ''))
               }
               className={inputClass}
-              placeholder="970624075367"
+              placeholder="990999XXXXXX"
               inputMode="numeric"
               pattern="[0-9]{12}"
               maxLength={12}
