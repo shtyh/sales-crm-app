@@ -46,7 +46,14 @@ create trigger customers_set_updated_at
 before update on public.customers
 for each row execute function public.set_updated_at();
 
--- 2. RLS -------------------------------------------------------------------
+-- 2. GRANTs + RLS ----------------------------------------------------------
+-- Supabase's stock posture for new tables created via SQL doesn't grant
+-- anything to `authenticated`, so RLS policies on their own are useless
+-- (PostgREST rejects the request at the privilege layer with 'permission
+-- denied for table customers' before RLS even runs). Granting CRUD here;
+-- per-row rules below handle the actual gating.
+grant select, insert, update, delete on public.customers to authenticated;
+
 -- Permissive read/write to any authenticated user: every role that can see
 -- a booking already sees the customer details on that booking, so the
 -- customers table doesn't expose anything new. DELETE is super-only because
