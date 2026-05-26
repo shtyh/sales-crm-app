@@ -198,6 +198,15 @@ Primary nav links by role:
   click-disabled. "Job Sheet / Billing" → `/service/ops`, "Housekeeping"
   → `/vehicles`.
 
+- **NewServiceOrderPage** (`/service-orders/new`) — Job Sheet intake.
+  Vehicle No is a free-text field with autocomplete from existing
+  plates; on blur/Enter it resolves to a matching vehicle (auto-fills
+  chassis / model / owner / phone) or pops a "This is a New
+  Registration Car No" alert and opens an inline modal to file the
+  vehicle + owner before the job sheet is saved. The modal upserts the
+  customer by NRIC and creates the vehicle linked to them, then the
+  parent form auto-selects the new vehicle.
+
 - **ServiceOpsPage** (`/service/ops`) — Job Sheet / Billing screen
   modelled on the legacy WMS table. Columns: Job No · Car/Account ·
   Chassis · Job Date · Inv Date · Status (OPEN/CLOSED/VOID bucket) · Amt

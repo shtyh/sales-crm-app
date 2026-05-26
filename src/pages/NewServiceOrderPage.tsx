@@ -1,17 +1,24 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
 import { useAuth } from '../lib/auth'
 import {
   useCreateServiceOrder,
+  useCreateVehicle,
   useCustomers,
   useProfiles,
   useTechnicians,
+  useUpsertCustomerByNric,
   useVehicles,
 } from '../lib/queries'
 import { formatError } from '../lib/errors'
 import { useFormDraft } from '../lib/formDraft'
 import { useOnlineStatus } from '../lib/online'
+import {
+  PROTON_MODELS,
+  coloursFor,
+  variantsFor,
+} from '../data/proton-models'
 import {
   SERVICE_TYPE_LABEL,
   type AppointmentType,
@@ -59,8 +66,15 @@ export function NewServiceOrderPage() {
 
   // Required
   const [vehicleId, setVehicleId] = useState('')
+  // The reg-no input is a free-text field — the matched vehicle drives
+  // the auto-fill panel below it. The string is canonicalised to upper-
+  // case + trimmed before any match check, so "ggg 1234 " still maps.
+  const [regNoInput, setRegNoInput] = useState('')
   const [technicianId, setTechnicianId] = useState('')
   const [serviceAdvisorId, setServiceAdvisorId] = useState(profile?.id ?? '')
+  // Modal state for the "this is a new registration" flow.
+  const [registerOpen, setRegisterOpen] = useState(false)
+  const [pendingNewReg, setPendingNewReg] = useState('')
   // Intake metadata
   const [department, setDepartment] = useState('')
   const [mileageIn, setMileageIn] = useState('')
@@ -79,6 +93,7 @@ export function NewServiceOrderPage() {
     draftKey,
     {
       vehicleId,
+      regNoInput,
       technicianId,
       serviceAdvisorId,
       department,
@@ -91,6 +106,7 @@ export function NewServiceOrderPage() {
     },
     (d) => {
       setVehicleId(d.vehicleId ?? '')
+      setRegNoInput(d.regNoInput ?? '')
       setTechnicianId(d.technicianId ?? '')
       setServiceAdvisorId(d.serviceAdvisorId ?? '')
       setDepartment(d.department ?? '')
@@ -150,6 +166,37 @@ export function NewServiceOrderPage() {
     setServiceTypes((cur) =>
       cur.includes(s) ? cur.filter((x) => x !== s) : [...cur, s],
     )
+  }
+
+  // Reg input → vehicle id resolver. Runs on blur and on Enter — picks
+  // the matching vehicle if there is one, otherwise pops the new-reg
+  // alert and offers the registration modal.
+  function resolveReg() {
+    const norm = regNoInput.trim().toUpperCase().replace(/\s+/g, ' ')
+    if (!norm) {
+      setVehicleId('')
+      return
+    }
+    const match = vehicles?.find(
+      (v) => v.registration_no.toUpperCase().replace(/\s+/g, ' ') === norm,
+    )
+    if (match) {
+      setVehicleId(match.id)
+      setRegNoInput(match.registration_no)
+      return
+    }
+    // Not found — mirror the legacy WMS popup, then open the modal.
+    window.alert('This is a New Registration Car No.')
+    setPendingNewReg(norm)
+    setRegisterOpen(true)
+  }
+
+  // When the modal finishes creating a vehicle, switch focus to it.
+  function handleVehicleRegistered(newVehicleId: string, newRegNo: string) {
+    setVehicleId(newVehicleId)
+    setRegNoInput(newRegNo)
+    setRegisterOpen(false)
+    setPendingNewReg('')
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -282,23 +329,43 @@ export function NewServiceOrderPage() {
               />
             </Row>
             <Row label="Vehicle No" required>
-              <select
-                required
-                value={vehicleId}
-                onChange={(e) => setVehicleId(e.target.value)}
-                className={inputClass}
-                disabled={!vehicles}
-              >
-                <option value="" disabled>
-                  {vehicles ? '— Select vehicle —' : 'Loading vehicles…'}
-                </option>
-                {vehicleOptions.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.registration_no} · {v.model}
-                    {v.variant ? ` ${v.variant}` : ''}
-                  </option>
-                ))}
-              </select>
+              <div className="flex w-full items-center gap-1.5">
+                <input
+                  list="vehicle-regs"
+                  required
+                  value={regNoInput}
+                  onChange={(e) =>
+                    setRegNoInput(e.target.value.toUpperCase())
+                  }
+                  onBlur={resolveReg}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      resolveReg()
+                    }
+                  }}
+                  className={inputClass}
+                  placeholder={
+                    vehicles ? 'Type or pick a plate…' : 'Loading…'
+                  }
+                  disabled={!vehicles}
+                  autoComplete="off"
+                />
+                <datalist id="vehicle-regs">
+                  {vehicleOptions.map((v) => (
+                    <option
+                      key={v.id}
+                      value={v.registration_no}
+                      label={`${v.model}${v.variant ? ` ${v.variant}` : ''}`}
+                    />
+                  ))}
+                </datalist>
+              </div>
+              {regNoInput && !vehicleId && (
+                <span className="mt-1 block text-[11px] text-amber-700">
+                  Press Tab or Enter to look this plate up.
+                </span>
+              )}
             </Row>
             <Row label="Chassis No">
               <input
@@ -472,6 +539,18 @@ export function NewServiceOrderPage() {
           </button>
         </div>
       </form>
+
+      {registerOpen && (
+        <RegisterVehicleModal
+          regNo={pendingNewReg}
+          onClose={() => {
+            setRegisterOpen(false)
+            setPendingNewReg('')
+            setRegNoInput('')
+          }}
+          onCreated={handleVehicleRegistered}
+        />
+      )}
     </AppShell>
   )
 }
@@ -493,5 +572,368 @@ function Row({
       </span>
       {children}
     </label>
+  )
+}
+
+/**
+ * Inline "Edit Vehicle / New Account" dialog — pops up when the SA types
+ * a plate that isn't in our vehicles table. Captures the minimum we
+ * need to file the car: the plate (pre-filled from the parent), basic
+ * vehicle attrs, and the owner (either pick an existing customer or
+ * enter NRIC/Name/Phone for a new one).
+ *
+ * On save the customer is upserted by NRIC, the vehicle is created
+ * linked to that customer, and the parent form receives the new
+ * vehicle id so the rest of the job sheet auto-fills.
+ */
+function RegisterVehicleModal({
+  regNo,
+  onClose,
+  onCreated,
+}: {
+  regNo: string
+  onClose: () => void
+  onCreated: (vehicleId: string, regNo: string) => void
+}) {
+  const { data: customers } = useCustomers(true)
+  const upsertCustomer = useUpsertCustomerByNric()
+  const createVehicle = useCreateVehicle()
+
+  const [mode, setMode] = useState<'existing' | 'new'>('existing')
+  const [existingCustomerId, setExistingCustomerId] = useState('')
+  const [name, setName] = useState('')
+  const [nric, setNric] = useState('')
+  const [phone, setPhone] = useState('')
+  const [email, setEmail] = useState('')
+  const [address, setAddress] = useState('')
+
+  const [chassisNo, setChassisNo] = useState('')
+  const [model, setModel] = useState<string>(PROTON_MODELS[0])
+  const [variant, setVariant] = useState('')
+  const [color, setColor] = useState('')
+  const [year, setYear] = useState('')
+
+  const [error, setError] = useState<string | null>(null)
+  const saving = upsertCustomer.isPending || createVehicle.isPending
+  const variants = variantsFor(model)
+  const palette = coloursFor(model)
+
+  // Close on Escape — keyboard parity with native dialogs.
+  const overlayRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const customerOptions = useMemo(
+    () =>
+      (customers ?? [])
+        .slice()
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [customers],
+  )
+
+  function handleModelChange(next: string) {
+    setModel(next)
+    if (!variantsFor(next).includes(variant)) setVariant('')
+    const p = coloursFor(next)
+    if (p.length > 0 && !p.includes(color)) setColor('')
+  }
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault()
+    setError(null)
+    try {
+      let customerId = existingCustomerId
+      if (mode === 'new') {
+        const upserted = await upsertCustomer.mutateAsync({
+          name: name.trim(),
+          nric: nric.trim(),
+          phone: phone.trim(),
+          email: email.trim() || null,
+          address: address.trim() || null,
+        })
+        customerId = upserted.id
+      }
+      if (!customerId) {
+        setError('Pick an existing customer or fill in new-customer details.')
+        return
+      }
+      const created = await createVehicle.mutateAsync({
+        customer_id: customerId,
+        registration_no: regNo,
+        chassis_no: chassisNo || null,
+        model,
+        variant: variant || null,
+        color: color || null,
+        year: year ? Number(year) : null,
+      })
+      onCreated(created.id, created.registration_no)
+    } catch (e) {
+      setError(formatError(e))
+    }
+  }
+
+  return (
+    <div
+      ref={overlayRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Register new vehicle"
+      className="fixed inset-0 z-30 flex items-center justify-center bg-black/40 px-4 py-6"
+      onClick={(e) => {
+        if (e.target === overlayRef.current) onClose()
+      }}
+    >
+      <form
+        onSubmit={handleSubmit}
+        className="max-h-full w-full max-w-2xl overflow-y-auto rounded-2xl border border-gray-300 bg-white p-5 shadow-xl"
+      >
+        <div className="mb-3 border-b border-gray-200 pb-2">
+          <div className="text-[10px] font-medium uppercase tracking-widest text-gray-500">
+            Edit Vehicle Information
+          </div>
+          <h2 className="mt-0.5 text-base font-semibold text-gray-900">
+            New registration: <span className="font-mono">{regNo}</span>
+          </h2>
+          <p className="mt-1 text-xs text-gray-500">
+            File the car and its owner so this plate can be picked up on
+            future job sheets.
+          </p>
+        </div>
+
+        {/* ---------- Vehicle ---------- */}
+        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Row label="Vehicle No">
+            <input
+              type="text"
+              readOnly
+              value={regNo}
+              className={`${inputClass} bg-gray-50 font-mono`}
+            />
+          </Row>
+          <Row label="Chassis No">
+            <input
+              type="text"
+              value={chassisNo}
+              onChange={(e) => setChassisNo(e.target.value.toUpperCase())}
+              className={inputClass}
+              placeholder="17-char VIN (optional)"
+            />
+          </Row>
+          <Row label="Car Model" required>
+            <select
+              required
+              value={model}
+              onChange={(e) => handleModelChange(e.target.value)}
+              className={inputClass}
+            >
+              {PROTON_MODELS.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+          </Row>
+          <Row label="Variant">
+            <select
+              value={variant}
+              onChange={(e) => setVariant(e.target.value)}
+              className={inputClass}
+            >
+              <option value="">— Not specified —</option>
+              {variants.map((v) => (
+                <option key={v} value={v}>
+                  {v}
+                </option>
+              ))}
+            </select>
+          </Row>
+          <Row label="Vehicle Colour">
+            {palette.length > 0 ? (
+              <select
+                value={color}
+                onChange={(e) => setColor(e.target.value)}
+                className={inputClass}
+              >
+                <option value="">— Not specified —</option>
+                {palette.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type="text"
+                value={color}
+                onChange={(e) => setColor(e.target.value)}
+                className={inputClass}
+                placeholder="e.g. Snow White"
+              />
+            )}
+          </Row>
+          <Row label="Year Make">
+            <input
+              type="number"
+              min={1980}
+              max={new Date().getFullYear() + 1}
+              value={year}
+              onChange={(e) => setYear(e.target.value)}
+              placeholder="e.g. 2024"
+              inputMode="numeric"
+              className={inputClass}
+            />
+          </Row>
+        </div>
+
+        {/* ---------- Owner ---------- */}
+        <div className="mb-2 border-t border-gray-200 pt-3">
+          <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
+            Owner
+          </div>
+          <div className="mt-2 flex gap-1.5">
+            <button
+              type="button"
+              onClick={() => setMode('existing')}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                mode === 'existing'
+                  ? 'bg-gray-900 text-white'
+                  : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              Existing customer
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode('new')}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                mode === 'new'
+                  ? 'bg-gray-900 text-white'
+                  : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              + New customer
+            </button>
+          </div>
+        </div>
+
+        {mode === 'existing' ? (
+          <div className="mt-3">
+            <Row label="Pick customer" required>
+              <select
+                required
+                value={existingCustomerId}
+                onChange={(e) => setExistingCustomerId(e.target.value)}
+                className={inputClass}
+                disabled={!customers}
+              >
+                <option value="" disabled>
+                  {customers ? '— Select —' : 'Loading customers…'}
+                </option>
+                {customerOptions.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} ·{' '}
+                    {c.nric.slice(-4).padStart(c.nric.length, '•')}
+                  </option>
+                ))}
+              </select>
+            </Row>
+          </div>
+        ) : (
+          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Row label="Owner name" required>
+              <input
+                type="text"
+                required
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className={inputClass}
+                placeholder="Full name as on IC"
+              />
+            </Row>
+            <Row label="NRIC" required>
+              <input
+                type="text"
+                required
+                value={nric}
+                onChange={(e) =>
+                  setNric(e.target.value.replace(/\D/g, '').slice(0, 12))
+                }
+                className={inputClass}
+                placeholder="12 digits, no dashes"
+                inputMode="numeric"
+                pattern="\d{12}"
+                title="NRIC must be 12 digits"
+              />
+            </Row>
+            <Row label="Phone" required>
+              <input
+                type="tel"
+                required
+                value={phone}
+                onChange={(e) =>
+                  setPhone(e.target.value.replace(/\D/g, '').slice(0, 11))
+                }
+                className={inputClass}
+                placeholder="01x… (10–11 digits)"
+                inputMode="numeric"
+                pattern="\d{10,11}"
+                title="Phone must be 10–11 digits"
+              />
+            </Row>
+            <Row label="Email">
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className={inputClass}
+                placeholder="Optional"
+              />
+            </Row>
+            <div className="sm:col-span-2">
+              <Row label="Address">
+                <input
+                  type="text"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  className={inputClass}
+                  placeholder="Optional"
+                />
+              </Row>
+            </div>
+          </div>
+        )}
+
+        {error && (
+          <div
+            role="alert"
+            className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+          >
+            {error}
+          </div>
+        )}
+
+        <div className="mt-5 flex flex-wrap items-center justify-end gap-2 border-t border-gray-200 pt-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={saving}
+            className="rounded-md bg-gray-900 px-4 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-gray-800 disabled:opacity-60"
+          >
+            {saving ? 'Saving…' : 'Save vehicle + owner'}
+          </button>
+        </div>
+      </form>
+    </div>
   )
 }
