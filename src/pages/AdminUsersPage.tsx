@@ -13,6 +13,10 @@ const ASSIGNABLE_ROLES: AppRole[] = [
   'sales_manager',
   'general_admin',
   'finance_admin',
+  'service_advisor',
+  'service_manager',
+  'store_keeper',
+  'mechanic',
   'super_admin',
 ]
 
@@ -23,6 +27,11 @@ const ROLE_BADGE: Record<AppRole, string> = {
   finance_admin: 'bg-amber-100 text-amber-800',
   accountant: 'bg-green-100 text-green-800',
   sales_advisor: 'bg-gray-100 text-gray-700',
+  // Workshop roles — teal/cyan family so they're visually distinct from sales.
+  service_manager: 'bg-cyan-100 text-cyan-800',
+  service_advisor: 'bg-teal-100 text-teal-800',
+  store_keeper: 'bg-indigo-100 text-indigo-800',
+  mechanic: 'bg-slate-200 text-slate-800',
 }
 
 export function AdminUsersPage() {

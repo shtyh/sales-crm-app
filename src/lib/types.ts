@@ -251,6 +251,11 @@ export type AppRole =
   | 'finance_admin'
   | 'accountant'
   | 'sales_advisor'
+  // Workshop side — added 2026-05-26.
+  | 'service_manager'
+  | 'service_advisor'
+  | 'store_keeper'
+  | 'mechanic'
 
 export const ROLE_LABEL: Record<AppRole, string> = {
   super_admin: 'Super Admin',
@@ -259,6 +264,10 @@ export const ROLE_LABEL: Record<AppRole, string> = {
   finance_admin: 'Finance Admin',
   accountant: 'Accountant',
   sales_advisor: 'Sales Advisor',
+  service_manager: 'Service Manager',
+  service_advisor: 'Service Advisor',
+  store_keeper: 'Store Keeper',
+  mechanic: 'Mechanic',
 }
 
 export type Profile = {

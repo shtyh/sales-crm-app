@@ -39,6 +39,10 @@ Enum `public.app_role`:
 | `finance_admin` | Finance Admin | `/finance` (amber) | Owns `loan_bank`, `loan_status`, `loan_notes`, `insurance_company`, `deposit_status`, `payment_status` on bookings, and `floor_stock_*` on cars. |
 | `sales_advisor` | Sales Advisor | `/` (DashboardPage, plain) | Default role for new users. Creates own bookings. Can set discount (routes through SM for approval). Sees own commission. |
 | `accountant` | — | — | **DEPRECATED.** Enum value remains but no one is assignable to it (filtered out of UI dropdown). All accountant responsibilities are folded into `finance_admin`. See migration `20260522_revert_accountant_module.sql`. |
+| `service_manager` | Service Manager | `/` (AdminDashboard) | Workshop side. Currently same write surface as other non-SA roles via the Phase-1 permissive RLS on the Service tables. |
+| `service_advisor` | Service Advisor | `/` (AdminDashboard) | Workshop intake. Same Phase-1 surface as above. |
+| `store_keeper` | Store Keeper | `/` (AdminDashboard) | Parts inventory custodian. Same Phase-1 surface as above. |
+| `mechanic` | Mechanic | `/` (AdminDashboard) | Technician. Same Phase-1 surface as above. |
 
 Current real users (`select id, full_name, role from public.profiles`):
 
@@ -174,6 +178,7 @@ Files in `supabase/migrations/` (chronological):
 20260526_payments_table.sql                       first-class payments ledger linked to bookings + profiles
 20260526_invoices_table.sql                       invoices table linked to bookings + customers
 20260526_service_module.sql                       Service: vehicles, technicians, parts_inventory, service_orders, service_order_items
+20260526_service_roles_and_order_no.sql           +4 workshop roles (service_manager / service_advisor / store_keeper / mechanic); auto SO-YYMMDD-NNNN order_no
 ```
 
 Some early ones were **applied by hand** in Supabase SQL editor and so don't show up in `supabase_migrations.schema_migrations`. The files are still source of truth for what should exist.
