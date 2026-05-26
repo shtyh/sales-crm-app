@@ -65,6 +65,21 @@ const CustomersPage = lazy(() =>
     default: m.CustomersPage,
   })),
 )
+const VehiclesPage = lazy(() =>
+  import('./pages/VehiclesPage').then((m) => ({
+    default: m.VehiclesPage,
+  })),
+)
+const NewVehiclePage = lazy(() =>
+  import('./pages/NewVehiclePage').then((m) => ({
+    default: m.NewVehiclePage,
+  })),
+)
+const VehicleDetailPage = lazy(() =>
+  import('./pages/VehicleDetailPage').then((m) => ({
+    default: m.VehicleDetailPage,
+  })),
+)
 
 function RouteFallback() {
   return (
@@ -195,6 +210,30 @@ function App() {
           element={
             <ProtectedRoute>
               <CustomersPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/vehicles"
+          element={
+            <ProtectedRoute>
+              <VehiclesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/vehicles/new"
+          element={
+            <ProtectedRoute>
+              <NewVehiclePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/vehicles/:id"
+          element={
+            <ProtectedRoute>
+              <VehicleDetailPage />
             </ProtectedRoute>
           }
         />

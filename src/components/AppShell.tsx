@@ -63,6 +63,11 @@ export function AppShell({ children }: { children: ReactNode }) {
                   Inventory
                 </NavLink>
               )}
+              {isAdmin && (
+                <NavLink to="/vehicles" className={navLinkClass}>
+                  Vehicles
+                </NavLink>
+              )}
               {isFinanceAdmin && (
                 <NavLink to="/finance" className={navLinkClass}>
                   Finance

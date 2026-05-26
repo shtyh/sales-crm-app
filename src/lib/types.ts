@@ -170,6 +170,84 @@ export type CustomerInsert = {
   address?: string | null
 }
 
+export type Vehicle = {
+  id: string
+  customer_id: string
+  /** Optional bridge to a SWL inventory cars row (when the workshop is
+   *  servicing a car SWL originally sold). */
+  car_id: string | null
+  registration_no: string
+  chassis_no: string | null
+  model: string
+  variant: string | null
+  color: string | null
+  year: number | null
+  mileage: number | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+/** Same shape as Vehicle but with the customer joined in for convenience
+ *  on list / detail views. */
+export type VehicleWithCustomer = Vehicle & {
+  customer: Pick<Customer, 'id' | 'name' | 'nric' | 'phone'> | null
+}
+
+export type VehicleInsert = {
+  customer_id: string
+  car_id?: string | null
+  registration_no: string
+  chassis_no?: string | null
+  model: string
+  variant?: string | null
+  color?: string | null
+  year?: number | null
+  mileage?: number | null
+  notes?: string | null
+}
+
+// ---------- Service orders (workshop side) ---------------------------------
+
+export type ServiceOrderStatus =
+  | 'open'
+  | 'in_progress'
+  | 'awaiting_parts'
+  | 'completed'
+  | 'collected'
+  | 'cancelled'
+
+export const SERVICE_ORDER_STATUS_LABEL: Record<ServiceOrderStatus, string> = {
+  open: 'Open',
+  in_progress: 'In progress',
+  awaiting_parts: 'Awaiting parts',
+  completed: 'Completed',
+  collected: 'Collected',
+  cancelled: 'Cancelled',
+}
+
+export type ServiceOrder = {
+  id: string
+  order_no: string | null
+  customer_id: string
+  vehicle_id: string
+  technician_id: string | null
+  service_advisor_id: string | null
+  status: ServiceOrderStatus
+  complaint: string | null
+  diagnosis: string | null
+  mileage_in: number | null
+  opened_at: string
+  completed_at: string | null
+  collected_at: string | null
+  subtotal: number
+  tax_amount: number
+  total_amount: number
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
 export type Booking = {
   id: string
   code: string

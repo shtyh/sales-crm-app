@@ -20,6 +20,13 @@ import {
   updateCustomer,
   upsertCustomerByNric,
 } from './customers'
+import {
+  createVehicle,
+  getVehicle,
+  listServiceOrdersByVehicle,
+  listVehicles,
+  updateVehicle,
+} from './vehicles'
 import { listAuditForRow } from './audit'
 import {
   createPayoutAndAssign,
@@ -43,6 +50,10 @@ import type {
   Customer,
   CustomerInsert,
   Profile,
+  ServiceOrder,
+  Vehicle,
+  VehicleInsert,
+  VehicleWithCustomer,
 } from './types'
 
 // Query keys — centralised so we can invalidate from anywhere without
@@ -62,6 +73,10 @@ export const qk = {
   customers: ['customers'] as const,
   customer: (id: string) => ['customers', id] as const,
   customerByNric: (nric: string) => ['customers', 'by-nric', nric] as const,
+  vehicles: ['vehicles'] as const,
+  vehicle: (id: string) => ['vehicles', id] as const,
+  serviceOrdersByVehicle: (vehicleId: string) =>
+    ['service-orders', 'by-vehicle', vehicleId] as const,
 }
 
 // ---------- Bookings -------------------------------------------------------
@@ -336,6 +351,62 @@ export function useUpdateCustomer() {
       // the list), so invalidate that too.
       qc.invalidateQueries({ queryKey: qk.bookings })
     },
+  })
+}
+
+// ---------- Vehicles (workshop) -------------------------------------------
+
+export function useVehicles(enabled = true) {
+  return useQuery<VehicleWithCustomer[]>({
+    queryKey: qk.vehicles,
+    queryFn: listVehicles,
+    enabled,
+  })
+}
+
+export function useVehicle(id: string | null | undefined) {
+  return useQuery<VehicleWithCustomer | null>({
+    queryKey: qk.vehicle(id ?? ''),
+    queryFn: () => getVehicle(id as string),
+    enabled: !!id,
+  })
+}
+
+export function useCreateVehicle() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: VehicleInsert) => createVehicle(input),
+    onSuccess: (created) => {
+      qc.invalidateQueries({ queryKey: qk.vehicles })
+      // Seed the cache so navigating straight to the detail page is instant.
+      qc.setQueryData<Vehicle>(qk.vehicle(created.id), created)
+    },
+  })
+}
+
+export function useUpdateVehicle() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      id,
+      patch,
+    }: {
+      id: string
+      patch: Partial<VehicleInsert>
+    }) => updateVehicle(id, patch),
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: qk.vehicles })
+      qc.invalidateQueries({ queryKey: qk.vehicle(vars.id) })
+    },
+  })
+}
+
+/** Service history on a given vehicle. Returns [] until the SO pages exist. */
+export function useServiceOrdersByVehicle(vehicleId: string | null | undefined) {
+  return useQuery<ServiceOrder[]>({
+    queryKey: qk.serviceOrdersByVehicle(vehicleId ?? ''),
+    queryFn: () => listServiceOrdersByVehicle(vehicleId as string),
+    enabled: !!vehicleId,
   })
 }
 
