@@ -56,10 +56,10 @@ export function AppShell({ children }: { children: ReactNode }) {
     showService = false
   }
 
+  // Super admin no longer sees + New booking — they shouldn't be creating
+  // bookings in real life, and hiding it keeps their nav cleaner.
   const canCreateBooking =
-    role === 'sales_advisor' ||
-    role === 'sales_manager' ||
-    role === 'super_admin'
+    role === 'sales_advisor' || role === 'sales_manager'
 
   async function handleSignOut() {
     await signOut()
@@ -138,7 +138,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             )}
             <UserMenu
               displayName={displayName}
-              email={email}
+              email={isSuperAdmin ? '' : email}
               online={online}
               isSuperAdmin={isSuperAdmin}
               onSignOut={handleSignOut}

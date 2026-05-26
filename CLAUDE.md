@@ -151,7 +151,7 @@ Top nav layout (2026-05-26 cleanup):
 ```
 
 * **+ New** is rendered as a primary pill on the right (not inside the nav list). Shown only when `canCreateBooking` (sales_advisor / sales_manager / super_admin).
-* **Avatar dropdown** consolidates: name / email / online dot, `/account`, super_admin shortcuts (Manage users → `/admin/users`, Commission rates → `/admin/commissions`), and Logout. Initials are derived from full_name or email; the avatar is rose-tinted for super_admin and gray for everyone else.
+* **Avatar dropdown** consolidates: name / email / online dot, `/account`, super_admin shortcuts (Manage users → `/admin/users`, Commission rates → `/admin/commissions`), and Logout. Initials are derived from full_name or email; the avatar is rose-tinted for super_admin and gray for everyone else. **The email line is hidden for super_admin** (their email is intentionally not surfaced in the UI).
 * **Workspace toggle** (super_admin only) sits between + New and the avatar.
 
 Primary nav links by role:
@@ -162,7 +162,7 @@ Primary nav links by role:
 | sales_manager | Home · Bookings · Customers · Inventory · Commissions |
 | general_admin | Home · Bookings · Customers · Inventory |
 | finance_admin | Bookings · Inventory · Finance (Home link hidden — Finance is the landing) |
-| super_admin (Sales workspace) | Home · Bookings · Customers · Inventory · Commissions |
+| super_admin (Sales workspace) | Home · Bookings · Customers · Inventory · Commissions (no + New — super admin doesn't author bookings) |
 | super_admin (Service workspace) | Home · Vehicles · + Job order |
 | workshop roles | Home · Vehicles · + Job order |
 
