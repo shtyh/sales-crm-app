@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
 import { useAuth } from '../lib/auth'
 import { useBookings, useProfiles } from '../lib/queries'
@@ -26,7 +26,10 @@ function formatDate(iso: string) {
 
 export function BookingsPage() {
   const navigate = useNavigate()
-  const { isAdmin } = useAuth()
+  const { isAdmin, canAccessSales } = useAuth()
+  // Sales-side page: workshop-only roles (service_*, store_keeper, mechanic)
+  // shouldn't see the bookings list. Bounce them to /.
+  if (canAccessSales === false) return <Navigate to="/" replace />
 
   const { data: bookings, error: bookingsErr } = useBookings()
   // Only admins use the owner column → only admins need the profile lookup.

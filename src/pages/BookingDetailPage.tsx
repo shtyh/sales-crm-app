@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { AppShell } from '../components/AppShell'
 import { AttachmentSection } from '../components/AttachmentSection'
@@ -117,6 +117,7 @@ export function BookingDetailPage() {
     canApproveDiscount,
     canEditFinanceStatus,
     canAssignCar,
+    canAccessSales,
     isSuperAdmin,
   } = useAuth()
   const isSalesAdvisor = role === 'sales_advisor'
@@ -419,6 +420,10 @@ export function BookingDetailPage() {
       setError(formatError(e))
     }
   }
+
+  // Sales-side page: workshop-only roles aren't supposed to see bookings.
+  // Run AFTER hooks above so React rules-of-hooks are satisfied.
+  if (canAccessSales === false) return <Navigate to="/" replace />
 
   if (isLoading) {
     return (

@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
+import { useAuth } from '../lib/auth'
 import {
   useCreateBooking,
   useCustomerByNric,
@@ -25,6 +26,9 @@ const today = () => new Date().toISOString().slice(0, 10)
 
 export function NewBookingPage() {
   const navigate = useNavigate()
+  const { canAccessSales } = useAuth()
+  // Workshop-only roles can't create bookings — bounce them home.
+  if (canAccessSales === false) return <Navigate to="/" replace />
 
   const [customerName, setCustomerName] = useState('')
   const [customerNric, setCustomerNric] = useState('')

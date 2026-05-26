@@ -42,6 +42,16 @@ type AuthState = {
    * booking flow.
    */
   canViewCustomers: boolean
+  /**
+   * Workshop-only roles: service_advisor / service_manager / store_keeper /
+   * mechanic. They have no business on the sales side, so we hide every
+   * sales nav link and bounce them off /bookings, /cars, /finance, etc.
+   * super_admin is NOT workshop-only — they use the workspace toggle to
+   * choose a side.
+   */
+  isWorkshopOnly: boolean
+  /** Inverse of isWorkshopOnly. Used as the redirect gate on sales pages. */
+  canAccessSales: boolean
   loading: boolean
   refreshProfile: () => Promise<void>
 }
@@ -62,6 +72,8 @@ const AuthContext = createContext<AuthState>({
   canEditCarFloorStock: false,
   canAssignCar: false,
   canViewCustomers: false,
+  isWorkshopOnly: false,
+  canAccessSales: false,
   loading: true,
   refreshProfile: async () => {},
 })
@@ -217,6 +229,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         role === 'super_admin' ||
         role === 'sales_manager' ||
         role === 'general_admin',
+      isWorkshopOnly:
+        role === 'service_advisor' ||
+        role === 'service_manager' ||
+        role === 'store_keeper' ||
+        role === 'mechanic',
+      canAccessSales:
+        // Anyone who isn't a workshop-only role can poke at sales. Includes
+        // super_admin, sales-side staff, and finance_admin. While the role
+        // is still loading (null) we conservatively allow access so we
+        // don't flash a redirect before profile resolves.
+        role == null ||
+        !(
+          role === 'service_advisor' ||
+          role === 'service_manager' ||
+          role === 'store_keeper' ||
+          role === 'mechanic'
+        ),
       loading,
       refreshProfile,
     }

@@ -28,17 +28,31 @@ export function AppShell({ children }: { children: ReactNode }) {
     isFinanceAdmin,
     canApproveDiscount,
     canViewCustomers,
+    isWorkshopOnly,
   } = useAuth()
   const { workspace, setWorkspace } = useWorkspace()
   const navigate = useNavigate()
   const displayName =
     (user?.user_metadata?.full_name as string | undefined) ?? user?.email ?? ''
 
-  // Workspace filter applies *only* to super_admin. For everyone else,
-  // both flags stay true and their existing role gates do the work.
-  const filtering = isSuperAdmin
-  const showSales = !filtering || workspace === 'sales'
-  const showService = !filtering || workspace === 'service'
+  // Decide which side(s) of the nav to show:
+  //   * super_admin: the workspace toggle picks one side at a time.
+  //   * workshop-only roles (service_*, store_keeper, mechanic): always
+  //     service-only; they have no business on the sales nav.
+  //   * everyone else: sales nav by default; service links still appear
+  //     where their existing per-flag gates allow.
+  let showSales: boolean
+  let showService: boolean
+  if (isSuperAdmin) {
+    showSales = workspace === 'sales'
+    showService = workspace === 'service'
+  } else if (isWorkshopOnly) {
+    showSales = false
+    showService = true
+  } else {
+    showSales = true
+    showService = true
+  }
 
   async function handleSignOut() {
     await signOut()

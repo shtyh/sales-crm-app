@@ -38,7 +38,8 @@ const FS_OPTIONS: FloorStockStatus[] = [
 
 export function CarDetailPage() {
   const { id = '' } = useParams<{ id: string }>()
-  const { role, canEditCarAttributes, canEditCarFloorStock } = useAuth()
+  const { role, canEditCarAttributes, canEditCarFloorStock, canAccessSales } =
+    useAuth()
   const { data: car, error: carErr, isLoading } = useCar(id)
   const updateMut = useUpdateCar()
 
@@ -76,7 +77,9 @@ export function CarDetailPage() {
     setFloorStockDue(car.floor_stock_due ?? '')
   }, [car])
 
-  if (role === 'sales_advisor') return <Navigate to="/" replace />
+  if (role === 'sales_advisor' || canAccessSales === false) {
+    return <Navigate to="/" replace />
+  }
 
   if (isLoading) {
     return (

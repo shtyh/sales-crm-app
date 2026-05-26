@@ -28,11 +28,16 @@ const FS_BADGE: Record<FloorStockStatus, string> = {
 
 export function CarsPage() {
   const navigate = useNavigate()
-  const { role, canEditCarAttributes } = useAuth()
+  const { role, canEditCarAttributes, canAccessSales } = useAuth()
   const { data: cars, error: carsErr } = useCars()
   const [filter, setFilter] = useState<'all' | CarStatus>('all')
 
-  if (role === 'sales_advisor') return <Navigate to="/" replace />
+  // Sales-side page: bounce the original sales_advisor (kept off Inventory
+  // since 2026-05-22) and the new workshop-only roles too. Anyone else with
+  // a loaded role goes through.
+  if (role === 'sales_advisor' || canAccessSales === false) {
+    return <Navigate to="/" replace />
+  }
 
   const filtered = useMemo(
     () =>
