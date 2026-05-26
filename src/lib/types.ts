@@ -205,6 +205,9 @@ export type Booking = {
 
   loan_status: LoanStatus
   loan_notes: string | null
+  /** Bank-disbursed loan amount (MYR). Finance Admin owns. Used by the
+   *  HP disbursement letter at print time. Null until set. */
+  loan_amount: number | null
 
   // finance_admin-owned cash status
   deposit_status: DepositStatus
@@ -312,6 +315,7 @@ export type BookingInsert = {
   insurance_company?: string | null
   loan_status?: LoanStatus
   loan_notes?: string | null
+  loan_amount?: number | null
   // Update-only fields (defaults on DB; not meant for INSERT). Typed here
   // because we reuse this shape as Partial<BookingInsert> for PATCHes.
   approval_status?: ApprovalStatus

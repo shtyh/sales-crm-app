@@ -16,6 +16,9 @@ import {
   useUpdateCustomer,
 } from '../lib/queries'
 import { formatError } from '../lib/errors'
+// hpDocument pulls in jszip (~90 KB gz). Only loaded on Print-HP click so
+// the read-a-booking path stays lean.
+// (dynamic-imported inside handlePrintHp)
 import {
   PROTON_MODELS,
   coloursFor,
@@ -108,6 +111,7 @@ export function BookingDetailPage() {
   const navigate = useNavigate()
   const {
     role,
+    isAdmin,
     isFinanceAdmin,
     canCancel,
     canApproveDiscount,
@@ -160,6 +164,7 @@ export function BookingDetailPage() {
   const [insuranceCompany, setInsuranceCompany] = useState('')
   const [loanStatus, setLoanStatus] = useState<LoanStatus>('not_applicable')
   const [loanNotes, setLoanNotes] = useState('')
+  const [loanAmount, setLoanAmount] = useState('')
   const [depositStatus, setDepositStatus] = useState<DepositStatus>('unpaid')
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>('unpaid')
   const [carId, setCarId] = useState<string>('')
@@ -227,6 +232,9 @@ export function BookingDetailPage() {
     setInsuranceCompany(booking.insurance_company ?? '')
     setLoanStatus(booking.loan_status ?? 'not_applicable')
     setLoanNotes(booking.loan_notes ?? '')
+    setLoanAmount(
+      booking.loan_amount != null ? String(booking.loan_amount) : '',
+    )
     setDepositStatus(booking.deposit_status ?? 'unpaid')
     setPaymentStatus(booking.payment_status ?? 'unpaid')
     setCarId(booking.car_id ?? '')
@@ -297,6 +305,8 @@ export function BookingDetailPage() {
                 insurance_company: insuranceCompany || null,
                 loan_status: loanStatus,
                 loan_notes: loanNotes.trim() || null,
+                loan_amount:
+                  loanAmount.trim() === '' ? null : Number(loanAmount),
               }
             : {}),
           ...(canEditFinanceStatus
@@ -330,6 +340,28 @@ export function BookingDetailPage() {
         patch: { commission_status: decision } as never,
       })
       setSavedAt(Date.now())
+    } catch (e) {
+      setError(formatError(e))
+    }
+  }
+
+  async function handlePrintHp() {
+    if (!booking) return
+    if (booking.loan_amount == null) {
+      setError(
+        'Loan amount is not set yet — Finance Admin must fill it in (and save) before the HP letter can be generated.',
+      )
+      return
+    }
+    setError(null)
+    try {
+      const customerName =
+        customerQuery.data?.name ?? booking.customer_name
+      const { generateHpLetter } = await import('../lib/hpDocument')
+      await generateHpLetter({
+        customerName,
+        loanAmount: Number(booking.loan_amount),
+      })
     } catch (e) {
       setError(formatError(e))
     }
@@ -451,6 +483,21 @@ export function BookingDetailPage() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {booking.status === 'delivered' && isAdmin && (
+            <button
+              type="button"
+              onClick={handlePrintHp}
+              disabled={saving || cancelling || deleteMut.isPending}
+              title={
+                booking.loan_amount == null
+                  ? 'Set the loan amount in the Finance section first, then save.'
+                  : 'Download the HP disbursement letter pre-filled for this customer.'
+              }
+              className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-800 transition hover:bg-emerald-100 disabled:opacity-50"
+            >
+              🖨 Print HP form
+            </button>
+          )}
           {booking.status !== 'cancelled' && canCancel && (
             <button
               type="button"
@@ -1103,20 +1150,35 @@ export function BookingDetailPage() {
                 ))}
               </select>
             </Field>
-            <Field label="Loan notes">
+            <Field label="Loan amount (MYR)">
               <input
-                type="text"
+                type="number"
+                min={0}
+                step="0.01"
+                inputMode="decimal"
                 disabled={!isFinanceAdmin}
-                value={loanNotes}
-                onChange={(e) => setLoanNotes(e.target.value)}
+                value={loanAmount}
+                onChange={(e) => setLoanAmount(e.target.value)}
                 className={readonlyInputClass(isFinanceAdmin)}
-                placeholder={
-                  loanStatus === 'rejected'
-                    ? 'Why rejected? Next bank to try?'
-                    : 'Any context to remember'
-                }
+                placeholder="e.g. 95000"
               />
             </Field>
+            <div className="sm:col-span-2">
+              <Field label="Loan notes">
+                <input
+                  type="text"
+                  disabled={!isFinanceAdmin}
+                  value={loanNotes}
+                  onChange={(e) => setLoanNotes(e.target.value)}
+                  className={readonlyInputClass(isFinanceAdmin)}
+                  placeholder={
+                    loanStatus === 'rejected'
+                      ? 'Why rejected? Next bank to try?'
+                      : 'Any context to remember'
+                  }
+                />
+              </Field>
+            </div>
           </div>
             </>
           )}
