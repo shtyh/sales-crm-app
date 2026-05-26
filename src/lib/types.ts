@@ -366,6 +366,8 @@ export type Booking = {
   // Finance-admin-only fields
   loan_bank: string | null
   insurance_company: string | null
+  /** Insurance premium in MYR. Finance Admin owns. */
+  insurance_amount: number | null
 
   loan_status: LoanStatus
   loan_notes: string | null
@@ -491,6 +493,7 @@ export type BookingInsert = {
   notes?: string | null
   loan_bank?: string | null
   insurance_company?: string | null
+  insurance_amount?: number | null
   loan_status?: LoanStatus
   loan_notes?: string | null
   loan_amount?: number | null

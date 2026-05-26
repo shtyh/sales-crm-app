@@ -18,6 +18,12 @@ const STATUS_OPTIONS: CarStatus[] = [
   'returned',
 ]
 
+// Banks SWL Motors has floor-stock facilities with. Add a new entry here
+// when finance signs a new facility — keep the list tight to avoid free
+// text typos that break the dashboard groupings.
+const FLOOR_STOCK_BANKS = ['Public Bank'] as const
+type Funding = 'cash' | 'floor_stock'
+
 export function NewCarPage() {
   const navigate = useNavigate()
   const { canEditCarAttributes, loading } = useAuth()
@@ -29,6 +35,8 @@ export function NewCarPage() {
   const [color, setColor] = useState('')
   const [arrivedAt, setArrivedAt] = useState(today())
   const [status, setStatus] = useState<CarStatus>('in_stock')
+  const [funding, setFunding] = useState<Funding>('floor_stock')
+  const [bank, setBank] = useState<string>(FLOOR_STOCK_BANKS[0])
   const [error, setError] = useState<string | null>(null)
 
   if (loading) {
@@ -53,6 +61,12 @@ export function NewCarPage() {
     e.preventDefault()
     setError(null)
     try {
+      // Funding choice maps directly to two floor-stock columns:
+      //   * cash        → no bank, mark paid_off so the showroom can
+      //                    deliver immediately (no settlement step).
+      //   * floor_stock → record the bank, leave status at the default
+      //                    'locked' until finance settles.
+      const isCash = funding === 'cash'
       const created = await createMut.mutateAsync({
         chassis_no: chassisNo.trim(),
         model,
@@ -60,6 +74,8 @@ export function NewCarPage() {
         color: color.trim() || null,
         arrived_at: arrivedAt,
         status,
+        floor_stock_bank: isCash ? null : bank,
+        floor_stock_status: isCash ? 'paid_off' : 'locked',
       })
       navigate(`/cars/${created.id}`, { replace: true })
     } catch (e) {
@@ -77,8 +93,8 @@ export function NewCarPage() {
         </Link>
         <h1 className="mt-2 text-xl font-semibold text-gray-900">New car</h1>
         <p className="mt-1 text-sm text-gray-500">
-          Finance fields (bank, financed amount, floor-stock status) are filled
-          in later by the Finance Admin.
+          Pick the funding source up front. Financed amount and due date are
+          filled in later from the bank&rsquo;s letter.
         </p>
       </div>
 
@@ -177,6 +193,76 @@ export function NewCarPage() {
               ))}
             </select>
           </label>
+
+          <fieldset className="block text-sm sm:col-span-2">
+            <legend className="mb-1 block font-medium text-gray-700">
+              Funding source<span className="ml-0.5 text-red-500">*</span>
+            </legend>
+            <div className="flex flex-wrap gap-2">
+              <label
+                className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 ${
+                  funding === 'cash'
+                    ? 'border-gray-900 bg-gray-900/5'
+                    : 'border-gray-300 bg-white'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="funding"
+                  value="cash"
+                  checked={funding === 'cash'}
+                  onChange={() => setFunding('cash')}
+                />
+                <span>Cash</span>
+                <span className="text-xs text-gray-500">
+                  no bank · marked paid_off
+                </span>
+              </label>
+              <label
+                className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 ${
+                  funding === 'floor_stock'
+                    ? 'border-gray-900 bg-gray-900/5'
+                    : 'border-gray-300 bg-white'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="funding"
+                  value="floor_stock"
+                  checked={funding === 'floor_stock'}
+                  onChange={() => setFunding('floor_stock')}
+                />
+                <span>Floor stock</span>
+                <span className="text-xs text-gray-500">
+                  bank-financed · default locked
+                </span>
+              </label>
+            </div>
+          </fieldset>
+
+          {funding === 'floor_stock' && (
+            <label className="block text-sm sm:col-span-2">
+              <span className="mb-1 block font-medium text-gray-700">
+                Floor-stock bank<span className="ml-0.5 text-red-500">*</span>
+              </span>
+              <select
+                value={bank}
+                onChange={(e) => setBank(e.target.value)}
+                required
+                className={inputClass}
+              >
+                {FLOOR_STOCK_BANKS.map((b) => (
+                  <option key={b} value={b}>
+                    {b}
+                  </option>
+                ))}
+              </select>
+              <span className="mt-1 block text-xs text-gray-500">
+                Only Public Bank is set up today. Ask finance to add new
+                facilities before they show up here.
+              </span>
+            </label>
+          )}
         </div>
 
         {error && (

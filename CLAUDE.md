@@ -34,9 +34,9 @@ Enum `public.app_role`:
 | Role | Frontend label | Lands on | Notes |
 |---|---|---|---|
 | `super_admin` | Super Admin | `/` (AdminDashboard, red banner) | God mode — every guard trigger early-returns. Only role allowed to DELETE bookings + manage roles + edit `commission_schedules`. |
-| `general_admin` | General Admin | `/` (AdminDashboard, purple) | Inserts cars, edits vehicle attributes, edits non-financial booking fields. |
+| `general_admin` | General Admin | `/` (GeneralAdminDashboard, purple) | Edits non-financial booking fields. Owns JPJ tracking (jpj_status / jpj_submitted_at / jpj_expected_completion). Inventory writes moved to finance_admin 2026-05-26. |
 | `sales_manager` | Sales Manager | `/` (AdminDashboard, blue) | Cancels bookings, approves SA discount, approves SA commission, reassigns leads (owner_id), creates payout batches. Dual identity: also takes own bookings. |
-| `finance_admin` | Finance Admin | `/finance` (amber) | Owns `loan_bank`, `loan_status`, `loan_notes`, `insurance_company`, `deposit_status`, `payment_status` on bookings, and `floor_stock_*` on cars. |
+| `finance_admin` | Finance Admin | `/finance` (amber) | Owns `loan_bank`, `loan_status`, `loan_notes`, `loan_amount`, `insurance_company`, `insurance_amount`, `deposit_status`, `payment_status` on bookings, and **all** `cars.*` columns (vehicle attributes transferred from general_admin 2026-05-26, plus the existing floor stock columns). Now also the only role that can `+ New car`. |
 | `sales_advisor` | Sales Advisor | `/` (DashboardPage, plain) | Default role for new users. Creates own bookings. Can set discount (routes through SM for approval). Sees own commission. |
 | `accountant` | — | — | **DEPRECATED.** Enum value remains but no one is assignable to it (filtered out of UI dropdown). All accountant responsibilities are folded into `finance_admin`. See migration `20260522_revert_accountant_module.sql`. |
 | `service_manager` | Service Manager | `/` (AdminDashboard) | Workshop side. Currently same write surface as other non-SA roles via the Phase-1 permissive RLS on the Service tables. |
@@ -84,8 +84,9 @@ These are enforced by `public.guard_booking_field_writes` BEFORE INSERT/UPDATE.
 | `special_support` | sales_manager only — RM bonus that adds to commission |
 | `approval_status` | legacy, sales_manager only when explicit. No longer auto-flipped. |
 | `owner_id` (lead reassignment) | sales_manager only (UI hidden 2026-05-23) |
-| `loan_bank`, `loan_status`, `loan_notes`, `insurance_company` | finance_admin only |
+| `loan_bank`, `loan_status`, `loan_notes`, `loan_amount`, `insurance_company`, `insurance_amount` | finance_admin only |
 | `deposit_status`, `payment_status` | finance_admin only |
+| `jpj_status`, `jpj_submitted_at`, `jpj_expected_completion` | general_admin only |
 | `status='cancelled'` transition | sales_manager only |
 | `car_id` | general_admin or sales_manager (or super_admin) |
 | `base_commission` | system trigger only (snapshot on INSERT from `commission_schedules`); super_admin can override |
@@ -99,8 +100,10 @@ Enforced by `public.guard_car_field_writes`. Bypasses guard when transaction-loc
 
 | Column | Who |
 |---|---|
-| `chassis_no`, `model`, `variant`, `color`, `arrived_at`, `status` | general_admin only |
+| `chassis_no`, `model`, `variant`, `color`, `arrived_at`, `status` | finance_admin only (was general_admin until 2026-05-26 — `20260526_transfer_car_attrs_to_finance_admin.sql`) |
 | `floor_stock_bank`, `financed_amount`, `floor_stock_status`, `floor_stock_due` | finance_admin only |
+
+RLS `cars_insert` / `cars_update` policies were also restricted to finance_admin in the same migration.
 
 ## Red lines (enforced in DB triggers)
 
@@ -127,20 +130,63 @@ Trigger `sync_car_status_from_booking` fires AFTER INSERT/UPDATE/DELETE on booki
 | Path | Component | Who sees it |
 |---|---|---|
 | `/login` | LoginPage | anon |
-| `/` | RoleHome → AdminDashboardPage or DashboardPage; finance_admin redirected to `/finance` | any auth |
+| `/` | RoleHome → role-specific dashboard. finance_admin → redirect to `/finance`; general_admin → `GeneralAdminDashboardPage`; workshop roles → service dashboards; everyone else → AdminDashboardPage or DashboardPage. | any auth |
 | `/bookings` | BookingsPage (list) | any auth |
-| `/bookings/new` | NewBookingPage | any auth (RLS still gates insert) |
+| `/bookings/new` | NewBookingPage | sales_advisor / sales_manager / super_admin (nav link hidden from others; RLS still gates insert) |
 | `/bookings/:id` | BookingDetailPage | any auth (RLS still gates select) |
 | `/cars` | CarsPage (list) | any auth |
-| `/cars/new` | NewCarPage | general_admin + super_admin |
+| `/cars/new` | NewCarPage | finance_admin + super_admin (was general_admin until 2026-05-26) |
 | `/cars/:id` | CarDetailPage | any auth; column gates within the page |
-| `/finance` | FinancePage | finance_admin + super_admin only |
+| `/finance` | FinancePage (overview cards + insurance / payment / invoice / commission tables, plus floor-stock + LOU below) | finance_admin + super_admin only |
 | `/commissions` | CommissionsPage (SM payout flow) | sales_manager + super_admin |
 | `/admin/commissions` | CommissionSchedulesPage (base rates) | super_admin only |
 | `/admin/users` | AdminUsersPage | super_admin only |
 | `/account` | AccountPage (personal display name) | any auth |
 
-Top nav shows role-appropriate links (Bookings, Inventory, +New always; Finance / Commissions / Rates / Super Admin link conditionally).
+Top nav, by role (2026-05-26):
+
+| Role | Sees in nav |
+|---|---|
+| sales_advisor | Home · Bookings · + New |
+| sales_manager | Home · Bookings · Customers · Inventory · Commissions · + New |
+| general_admin | Home · Bookings · Customers · Inventory |
+| finance_admin | Bookings · Inventory · Finance (Home link hidden — Finance is the landing) |
+| super_admin (Sales workspace) | Home · Bookings · Customers · Inventory · Commissions · Rates · + New |
+| super_admin (Service workspace) | Home · Vehicles · + Job order |
+| workshop roles | Home · Vehicles · + Job order |
+
+## Dashboards (role-specific landings)
+
+- **GeneralAdminDashboardPage** (`/` for general_admin) — sales-ops queue:
+  3 cards (Waiting for documents · Submitted to JPJ · Ready to deliver),
+  filter chips, and 3 tables. "Missing documents" is **derived** (no
+  checklist columns): IC / Phone / Address from `customers` (with
+  snapshot fallback from `bookings.customer_*`); Bank transaction + LOU
+  from `booking_attachments` by `kind`. LOU is auto-satisfied when
+  `bookings.loan_bank='cash'`. JPJ status / submitted / expected dates
+  edit inline via `useUpdateBooking` and save on change. "Ready to
+  deliver" rule: docs complete + insurance_company set + payment_status
+  = 'paid' + jpj_status = 'registered' + car_id assigned.
+
+- **FinancePage** (`/` for finance_admin → redirected to `/finance`) —
+  overview-first repurpose 2026-05-26. Top: 4 cards (Pending insurance ·
+  Pending payment · Invoices issued RM · Total commission RM). Then 4
+  tables (insurance / payment / invoices / commission-by-SA). Then the
+  existing Inventory financing (floor stock) + Pending LOU sections.
+  Pending insurance = `insurance_company is null OR insurance_amount is
+  null/zero`. Pending payment = `OTR - (Σ payments + loan_amount) > 0`
+  (only rows with a positive shortfall are listed).
+
+- **AdminDashboardPage** still serves super_admin and sales_manager.
+  `RoleHome` dispatches:
+  ```
+  workshop role         → ServiceDashboardPage / ServiceAdvisorDashboardPage
+  super_admin + service → ServiceDashboardPage
+  finance_admin         → <Navigate to="/finance">
+  general_admin         → GeneralAdminDashboardPage
+  else if isAdmin       → AdminDashboardPage
+  else                  → DashboardPage  (sales_advisor)
+  ```
 
 ## Performance work already done
 
@@ -179,6 +225,9 @@ Files in `supabase/migrations/` (chronological):
 20260526_invoices_table.sql                       invoices table linked to bookings + customers
 20260526_service_module.sql                       Service: vehicles, technicians, parts_inventory, service_orders, service_order_items
 20260526_service_roles_and_order_no.sql           +4 workshop roles (service_manager / service_advisor / store_keeper / mechanic); auto SO-YYMMDD-NNNN order_no
+20260526_transfer_car_attrs_to_finance_admin.sql  cars insert/update RLS + guard now finance_admin (was general_admin)
+20260526_jpj_tracking.sql                         bookings: jpj_status enum + jpj_submitted_at + jpj_expected_completion; guard gates writes to general_admin
+20260526_insurance_amount.sql                     bookings.insurance_amount numeric(12,2); guard gates writes to finance_admin (alongside insurance_company)
 ```
 
 Some early ones were **applied by hand** in Supabase SQL editor and so don't show up in `supabase_migrations.schema_migrations`. The files are still source of truth for what should exist.

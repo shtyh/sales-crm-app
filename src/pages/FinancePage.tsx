@@ -75,28 +75,37 @@ export function FinancePage() {
     [bookings],
   )
 
-  // Insurance still owed: confirmed (loan-approved) booking with no insurer
-  // recorded yet. Once finance fills insurance_company, the row drops off.
+  // Insurance is "pending" when either the insurer hasn't been chosen
+  // OR the premium amount hasn't been keyed in yet. Both pieces are
+  // finance-admin owned.
   const pendingInsurance = useMemo(
     () =>
       activeBookings.filter(
         (b) =>
-          !b.insurance_company &&
-          (b.loan_status === 'approved' ||
-            b.loan_bank?.toLowerCase() === 'cash'),
+          !b.insurance_company ||
+          b.insurance_amount == null ||
+          Number(b.insurance_amount) <= 0,
       ),
     [activeBookings],
   )
 
-  // Cash still owed: any active booking that hasn't been marked paid in full.
-  // Sort by oldest booking_date so the worst-stuck rows surface first.
-  const pendingPayment = useMemo(
-    () =>
-      activeBookings
-        .filter((b) => b.payment_status !== 'paid')
-        .sort((a, b) => a.booking_date.localeCompare(b.booking_date)),
-    [activeBookings],
-  )
+  // Outstanding cash = OTR − (sum of every payment receipt + bank loan
+  // amount). Only rows with a positive shortfall belong on the dashboard.
+  // Sorted by largest shortfall first so the worst gaps surface first.
+  type PendingRow = (typeof activeBookings)[number] & {
+    __outstanding: number
+  }
+  const pendingPayment = useMemo<PendingRow[]>(() => {
+    return activeBookings
+      .map((b) => {
+        const paid = paidByBooking.get(b.id) ?? 0
+        const loan = Number(b.loan_amount ?? 0)
+        const outstanding = Number(b.otr_price) - paid - loan
+        return { ...b, __outstanding: outstanding }
+      })
+      .filter((b) => b.__outstanding > 0)
+      .sort((a, b) => b.__outstanding - a.__outstanding)
+  }, [activeBookings, paidByBooking])
 
   // Invoices, newest first (the table itself is already paginated visually
   // — we cap the rows below).
@@ -238,7 +247,7 @@ export function FinancePage() {
       {/* ---------- Pending insurance ---------- */}
       <Section title={`🛡️ Pending insurance — ${pendingInsurance.length}`}>
         {pendingInsurance.length === 0 ? (
-          <Empty>All confirmed bookings have an insurer recorded.</Empty>
+          <Empty>All bookings have an insurer and premium recorded.</Empty>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200 text-sm">
@@ -248,7 +257,7 @@ export function FinancePage() {
                   <Th>Customer</Th>
                   <Th>Vehicle</Th>
                   <Th>Insurer</Th>
-                  <Th alignRight>OTR (RM)</Th>
+                  <Th alignRight>Premium (RM)</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -268,10 +277,18 @@ export function FinancePage() {
                       {b.vehicle_variant ? ` · ${b.vehicle_variant}` : ''}
                     </td>
                     <td className="px-3 py-2">
-                      <span className="italic text-amber-700">— not set —</span>
+                      {b.insurance_company ? (
+                        <span className="text-gray-700">{b.insurance_company}</span>
+                      ) : (
+                        <span className="italic text-amber-700">— not set —</span>
+                      )}
                     </td>
                     <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">
-                      {formatMYR(Number(b.otr_price))}
+                      {b.insurance_amount != null && Number(b.insurance_amount) > 0 ? (
+                        formatMYR(Number(b.insurance_amount))
+                      ) : (
+                        <span className="italic text-amber-700">— not set —</span>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -282,9 +299,19 @@ export function FinancePage() {
       </Section>
 
       {/* ---------- Pending payment ---------- */}
-      <Section title={`💵 Pending payment — ${pendingPayment.length}`}>
+      <Section
+        title={`💵 Pending payment — ${pendingPayment.length}`}
+        right={
+          <span className="text-xs text-gray-500">
+            shortfall = OTR − (deposits + downpayment + loan)
+          </span>
+        }
+      >
         {pendingPayment.length === 0 ? (
-          <Empty>Every active booking is fully paid.</Empty>
+          <Empty>
+            Every active booking is fully covered by deposit + downpayment +
+            loan.
+          </Empty>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200 text-sm">
@@ -292,18 +319,17 @@ export function FinancePage() {
                 <tr>
                   <Th>Booking</Th>
                   <Th>Customer</Th>
-                  <Th alignRight>Outstanding</Th>
+                  <Th alignRight>OTR</Th>
+                  <Th alignRight>Received</Th>
+                  <Th alignRight>Loan</Th>
+                  <Th alignRight>Shortfall</Th>
                   <Th alignRight>Days waiting</Th>
-                  <Th>Status</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {pendingPayment.map((b) => {
                   const paid = paidByBooking.get(b.id) ?? 0
-                  const outstanding = Math.max(
-                    0,
-                    Number(b.otr_price) - paid,
-                  )
+                  const loan = Number(b.loan_amount ?? 0)
                   const days = daysSince(b.booking_date)
                   return (
                     <tr key={b.id} className="hover:bg-gray-50">
@@ -318,8 +344,17 @@ export function FinancePage() {
                       <td className="px-3 py-2 text-gray-700">
                         {b.customer_name}
                       </td>
-                      <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-gray-900">
-                        {formatMYR(outstanding)}
+                      <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-gray-700">
+                        {formatMYR(Number(b.otr_price))}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-gray-700">
+                        {formatMYR(paid)}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-gray-700">
+                        {loan > 0 ? formatMYR(loan) : <span className="text-gray-400">—</span>}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums font-semibold text-red-700">
+                        {formatMYR(b.__outstanding)}
                       </td>
                       <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">
                         <span
@@ -330,11 +365,6 @@ export function FinancePage() {
                           }
                         >
                           {days}d
-                        </span>
-                      </td>
-                      <td className="px-3 py-2">
-                        <span className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
-                          {b.payment_status}
                         </span>
                       </td>
                     </tr>
