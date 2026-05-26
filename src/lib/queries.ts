@@ -13,6 +13,13 @@ import {
 import { listProfiles, updateProfile } from './profiles'
 import { listAttachments } from './attachments'
 import { createCar, getCar, listCars, updateCar } from './cars'
+import {
+  getCustomer,
+  getCustomerByNric,
+  listCustomers,
+  updateCustomer,
+  upsertCustomerByNric,
+} from './customers'
 import { listAuditForRow } from './audit'
 import {
   createPayoutAndAssign,
@@ -33,6 +40,8 @@ import type {
   CommissionPayoutInsert,
   CommissionSchedule,
   CommissionScheduleInsert,
+  Customer,
+  CustomerInsert,
   Profile,
 } from './types'
 
@@ -50,6 +59,9 @@ export const qk = {
     ['audit', tableName, rowId] as const,
   commissionSchedules: ['commission-schedules'] as const,
   commissionPayouts: ['commission-payouts'] as const,
+  customers: ['customers'] as const,
+  customer: (id: string) => ['customers', id] as const,
+  customerByNric: (nric: string) => ['customers', 'by-nric', nric] as const,
 }
 
 // ---------- Bookings -------------------------------------------------------
@@ -253,6 +265,75 @@ export function useCreatePayout() {
     }) => createPayoutAndAssign(input, bookingIds),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.commissionPayouts })
+      qc.invalidateQueries({ queryKey: qk.bookings })
+    },
+  })
+}
+
+// ---------- Customers ------------------------------------------------------
+
+export function useCustomers(enabled = true) {
+  return useQuery<Customer[]>({
+    queryKey: qk.customers,
+    queryFn: listCustomers,
+    enabled,
+  })
+}
+
+export function useCustomer(id: string | null | undefined) {
+  return useQuery<Customer | null>({
+    queryKey: qk.customer(id ?? ''),
+    queryFn: () => getCustomer(id as string),
+    enabled: !!id,
+  })
+}
+
+/**
+ * Look up a customer by NRIC. Used by NewBookingPage to pre-fill the form
+ * when the SA types in an NRIC that already exists. NRIC is trimmed before
+ * use; an empty string disables the query so React Query doesn't fire for
+ * every keystroke.
+ */
+export function useCustomerByNric(nric: string) {
+  const trimmed = nric.trim()
+  return useQuery<Customer | null>({
+    queryKey: qk.customerByNric(trimmed),
+    queryFn: () => getCustomerByNric(trimmed),
+    enabled: trimmed.length > 0,
+    // Don't refetch every focus — the moment the user navigates back, they
+    // probably just want what's already cached.
+    staleTime: 30_000,
+  })
+}
+
+export function useUpsertCustomerByNric() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: CustomerInsert) => upsertCustomerByNric(input),
+    onSuccess: (saved) => {
+      qc.setQueryData<Customer>(qk.customer(saved.id), saved)
+      qc.setQueryData<Customer>(qk.customerByNric(saved.nric), saved)
+      qc.invalidateQueries({ queryKey: qk.customers })
+    },
+  })
+}
+
+export function useUpdateCustomer() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      id,
+      patch,
+    }: {
+      id: string
+      patch: Partial<CustomerInsert>
+    }) => updateCustomer(id, patch),
+    onSuccess: (saved) => {
+      qc.setQueryData<Customer>(qk.customer(saved.id), saved)
+      qc.setQueryData<Customer>(qk.customerByNric(saved.nric), saved)
+      qc.invalidateQueries({ queryKey: qk.customers })
+      // A customer change might affect how bookings render (customer name on
+      // the list), so invalidate that too.
       qc.invalidateQueries({ queryKey: qk.bookings })
     },
   })

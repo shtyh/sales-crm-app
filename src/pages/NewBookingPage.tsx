@@ -1,7 +1,11 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
-import { useCreateBooking } from '../lib/queries'
+import {
+  useCreateBooking,
+  useCustomerByNric,
+  useUpsertCustomerByNric,
+} from '../lib/queries'
 import { formatError } from '../lib/errors'
 import {
   PROTON_MODELS,
@@ -26,6 +30,7 @@ export function NewBookingPage() {
   const [customerNric, setCustomerNric] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
   const [customerEmail, setCustomerEmail] = useState('')
+  const [customerAddress, setCustomerAddress] = useState('')
 
   const [vehicleModel, setVehicleModel] = useState<string>(PROTON_MODELS[0])
   const [vehicleVariant, setVehicleVariant] = useState('')
@@ -43,12 +48,32 @@ export function NewBookingPage() {
   const [notes, setNotes] = useState('')
 
   const createMut = useCreateBooking()
-  const submitting = createMut.isPending
+  const upsertCustomerMut = useUpsertCustomerByNric()
+  const submitting = createMut.isPending || upsertCustomerMut.isPending
   const [error, setError] = useState<string | null>(null)
 
-  // Reset variant + colour whenever the model changes — both are
-  // model-specific and the previously-picked options may not exist for the
-  // new model.
+  // Debounce NRIC input — after the SA stops typing for 400ms, hit the
+  // customers table to see if this person already exists. We don't want a
+  // query per keystroke (NRICs are 12 digits).
+  const [debouncedNric, setDebouncedNric] = useState('')
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedNric(customerNric.trim()), 400)
+    return () => clearTimeout(t)
+  }, [customerNric])
+  const existing = useCustomerByNric(debouncedNric)
+
+  // Once we get a match, pre-fill the customer fields — but only for fields
+  // the SA hasn't filled in themselves. This way, typing in someone else's
+  // NRIC by mistake won't wipe what they've already entered, and a fresh
+  // form just gets populated.
+  useEffect(() => {
+    if (!existing.data) return
+    setCustomerName((curr) => curr || existing.data!.name)
+    setCustomerPhone((curr) => curr || existing.data!.phone)
+    setCustomerEmail((curr) => curr || existing.data!.email || '')
+    setCustomerAddress((curr) => curr || existing.data!.address || '')
+  }, [existing.data])
+
   function handleModelChange(newModel: string) {
     setVehicleModel(newModel)
     setVehicleVariant('')
@@ -59,11 +84,26 @@ export function NewBookingPage() {
     e.preventDefault()
     setError(null)
     try {
+      // Step 1: upsert the customer by NRIC. If the row already exists this
+      // updates it with the latest contact details the SA typed; otherwise
+      // it inserts a new customer. Either way we get back the customer id.
+      const customer = await upsertCustomerMut.mutateAsync({
+        name: customerName,
+        nric: customerNric,
+        phone: customerPhone,
+        email: customerEmail || null,
+        address: customerAddress || null,
+      })
+
+      // Step 2: create the booking, pointing at the customer. We still
+      // populate the customer_* snapshot columns so historical lookups +
+      // existing UI keep working.
       const created = await createMut.mutateAsync({
-        customer_name: customerName.trim(),
-        customer_nric: customerNric.trim(),
-        customer_phone: customerPhone.trim(),
-        customer_email: customerEmail.trim() || null,
+        customer_name: customer.name,
+        customer_nric: customer.nric,
+        customer_phone: customer.phone,
+        customer_email: customer.email,
+        customer_id: customer.id,
         vehicle_model: vehicleModel,
         vehicle_variant: vehicleVariant,
         vehicle_color: vehicleColor.trim(),
@@ -84,6 +124,9 @@ export function NewBookingPage() {
   }
 
   const variants = variantsFor(vehicleModel)
+  // Show a small badge when the NRIC matches an existing customer, so the SA
+  // knows the pre-fill is from a real record and not random typing.
+  const matched = !!existing.data && existing.data.nric === debouncedNric
 
   return (
     <AppShell>
@@ -105,16 +148,6 @@ export function NewBookingPage() {
       >
         {/* ---------- Customer ---------- */}
         <Section title="👤 Customer">
-          <Field label="Full name" required>
-            <input
-              type="text"
-              required
-              value={customerName}
-              onChange={(e) => setCustomerName(e.target.value)}
-              className={inputClass}
-              placeholder="As shown on IC"
-            />
-          </Field>
           <Field label="NRIC" required>
             <input
               type="text"
@@ -124,6 +157,21 @@ export function NewBookingPage() {
               className={inputClass}
               placeholder="YYMMDD-PB-XXXX"
               inputMode="numeric"
+            />
+            {matched && (
+              <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-medium text-green-700">
+                ✓ Existing customer — fields auto-filled
+              </span>
+            )}
+          </Field>
+          <Field label="Full name" required>
+            <input
+              type="text"
+              required
+              value={customerName}
+              onChange={(e) => setCustomerName(e.target.value)}
+              className={inputClass}
+              placeholder="As shown on IC"
             />
           </Field>
           <Field label="Phone" required>
@@ -146,6 +194,17 @@ export function NewBookingPage() {
               placeholder="you@example.com"
             />
           </Field>
+          <div className="sm:col-span-2">
+            <Field label="Address">
+              <textarea
+                rows={2}
+                value={customerAddress}
+                onChange={(e) => setCustomerAddress(e.target.value)}
+                className={`${inputClass} min-h-16`}
+                placeholder="Street, postcode, state…"
+              />
+            </Field>
+          </div>
         </Section>
 
         {/* ---------- Vehicle ---------- */}

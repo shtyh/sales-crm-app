@@ -151,6 +151,25 @@ export type CarInsert = {
   floor_stock_due?: string | null
 }
 
+export type Customer = {
+  id: string
+  name: string
+  nric: string
+  phone: string
+  email: string | null
+  address: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type CustomerInsert = {
+  name: string
+  nric: string
+  phone: string
+  email?: string | null
+  address?: string | null
+}
+
 export type Booking = {
   id: string
   code: string
@@ -202,6 +221,9 @@ export type Booking = {
 
   /** Which car in inventory this booking is fulfilled by. */
   car_id: string | null
+  /** Canonical customer link. Older rows may still be null until the FE
+   *  is fully migrated; falls back to the customer_* snapshot fields. */
+  customer_id: string | null
 
   status: BookingStatus
   notes: string | null
@@ -299,4 +321,6 @@ export type BookingInsert = {
   owner_id?: string
   /** general_admin links the booking to a specific physical car. */
   car_id?: string | null
+  /** FK to the customers table (created/upserted by NRIC before insert). */
+  customer_id?: string | null
 }

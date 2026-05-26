@@ -10,8 +10,10 @@ import {
   useAttachments,
   useBooking,
   useCars,
+  useCustomer,
   useDeleteBooking,
   useUpdateBooking,
+  useUpdateCustomer,
 } from '../lib/queries'
 import { formatError } from '../lib/errors'
 import {
@@ -126,6 +128,10 @@ export function BookingDetailPage() {
   const { data: cars } = useCars()
   const updateMut = useUpdateBooking()
   const deleteMut = useDeleteBooking()
+  // Customer record linked to this booking, when present. Falls back to the
+  // booking's customer_* snapshot for legacy rows that haven't been backfilled.
+  const customerQuery = useCustomer(booking?.customer_id ?? null)
+  const updateCustomerMut = useUpdateCustomer()
 
   const loadError = bookingErr
     ? formatError(bookingErr)
@@ -138,6 +144,7 @@ export function BookingDetailPage() {
   const [customerNric, setCustomerNric] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
   const [customerEmail, setCustomerEmail] = useState('')
+  const [customerAddress, setCustomerAddress] = useState('')
   const [vehicleModel, setVehicleModel] = useState<string>(PROTON_MODELS[0])
   const [vehicleVariant, setVehicleVariant] = useState('')
   const [vehicleColor, setVehicleColor] = useState('')
@@ -188,12 +195,25 @@ export function BookingDetailPage() {
   }, [attachments])
 
   // Sync server data into the form once it arrives (or after a refresh).
+  // Customer fields prefer the canonical customer record; the booking's
+  // customer_* snapshot is only a fallback for rows that pre-date the
+  // customers table (customer_id null).
   useEffect(() => {
     if (!booking) return
-    setCustomerName(booking.customer_name)
-    setCustomerNric(booking.customer_nric)
-    setCustomerPhone(booking.customer_phone)
-    setCustomerEmail(booking.customer_email ?? '')
+    const c = customerQuery.data
+    if (c) {
+      setCustomerName(c.name)
+      setCustomerNric(c.nric)
+      setCustomerPhone(c.phone)
+      setCustomerEmail(c.email ?? '')
+      setCustomerAddress(c.address ?? '')
+    } else {
+      setCustomerName(booking.customer_name)
+      setCustomerNric(booking.customer_nric)
+      setCustomerPhone(booking.customer_phone)
+      setCustomerEmail(booking.customer_email ?? '')
+      setCustomerAddress('')
+    }
     setVehicleModel(booking.vehicle_model)
     setVehicleVariant(booking.vehicle_variant)
     setVehicleColor(booking.vehicle_color)
@@ -210,7 +230,7 @@ export function BookingDetailPage() {
     setDepositStatus(booking.deposit_status ?? 'unpaid')
     setPaymentStatus(booking.payment_status ?? 'unpaid')
     setCarId(booking.car_id ?? '')
-  }, [booking])
+  }, [booking, customerQuery.data])
 
   function handleModelChange(newModel: string) {
     setVehicleModel(newModel)
@@ -229,6 +249,23 @@ export function BookingDetailPage() {
     e.preventDefault()
     setError(null)
     try {
+      // If this booking is linked to a customer row, save customer-level
+      // fields to the customer table first. The booking row keeps a
+      // snapshot of the same values for backward compat / historical
+      // reads, but the customer record is the canonical source.
+      if (booking?.customer_id) {
+        await updateCustomerMut.mutateAsync({
+          id: booking.customer_id,
+          patch: {
+            name: customerName,
+            nric: customerNric,
+            phone: customerPhone,
+            email: customerEmail || null,
+            address: customerAddress || null,
+          },
+        })
+      }
+
       await updateMut.mutateAsync({
         id,
         patch: {
@@ -481,6 +518,23 @@ export function BookingDetailPage() {
               className={inputClass}
             />
           </Field>
+          <div className="sm:col-span-2">
+            <Field label="Address">
+              <textarea
+                rows={2}
+                value={customerAddress}
+                onChange={(e) => setCustomerAddress(e.target.value)}
+                className={`${inputClass} min-h-16`}
+                placeholder="Street, postcode, state…"
+              />
+            </Field>
+          </div>
+          {booking?.customer_id && (
+            <div className="sm:col-span-2 text-[11px] text-gray-500">
+              ℹ Customer record is shared — edits here update every booking
+              for this NRIC.
+            </div>
+          )}
         </Section>
 
         {/* ---------- Vehicle ---------- */}
