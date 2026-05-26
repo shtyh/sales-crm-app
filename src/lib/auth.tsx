@@ -218,7 +218,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       canReassign:
         role === 'sales_manager' || role === 'super_admin',
       canEditCarAttributes:
-        role === 'general_admin' || role === 'super_admin',
+        role === 'finance_admin' || role === 'super_admin',
       canEditCarFloorStock:
         role === 'finance_admin' || role === 'super_admin',
       canAssignCar:

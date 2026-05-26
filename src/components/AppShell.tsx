@@ -82,9 +82,11 @@ export function AppShell({ children }: { children: ReactNode }) {
               </span>
             </Link>
             <nav className="ml-2 flex items-center gap-1 sm:ml-4">
-              <NavLink to="/" end className={navLinkClass}>
-                Home
-              </NavLink>
+              {!isFinanceAdmin && (
+                <NavLink to="/" end className={navLinkClass}>
+                  Home
+                </NavLink>
+              )}
               {showSales && (
                 <NavLink to="/bookings" className={navLinkClass}>
                   Bookings
