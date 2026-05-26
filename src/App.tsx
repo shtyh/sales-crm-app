@@ -2,7 +2,17 @@ import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { useAuth } from './lib/auth'
+import { useWorkspace } from './lib/workspace'
 import './App.css'
+
+// Workshop roles get the service dashboard as their home. super_admin
+// gets it too whenever they've toggled into Service workspace.
+const WORKSHOP_ROLES = [
+  'service_manager',
+  'service_advisor',
+  'store_keeper',
+  'mechanic',
+] as const
 
 // Each page is its own JS chunk — the user only downloads what they actually
 // visit. Named exports → wrap with .then(...) so React.lazy gets a default.
@@ -80,6 +90,11 @@ const VehicleDetailPage = lazy(() =>
     default: m.VehicleDetailPage,
   })),
 )
+const ServiceDashboardPage = lazy(() =>
+  import('./pages/ServiceDashboardPage').then((m) => ({
+    default: m.ServiceDashboardPage,
+  })),
+)
 
 function RouteFallback() {
   return (
@@ -91,12 +106,25 @@ function RouteFallback() {
 
 /**
  * Renders the right home page based on the signed-in user's role.
+ *   workshop roles → service dashboard
+ *   super_admin in Service workspace → service dashboard (per the toggle)
  *   finance_admin → /finance (inventory + LOU)
  *   any other privileged role → admin overview
  *   sales_advisor → personal sales dashboard
  */
 function RoleHome() {
   const { role, isAdmin } = useAuth()
+  const { workspace } = useWorkspace()
+
+  if (
+    role &&
+    (WORKSHOP_ROLES as readonly string[]).includes(role)
+  ) {
+    return <ServiceDashboardPage />
+  }
+  if (role === 'super_admin' && workspace === 'service') {
+    return <ServiceDashboardPage />
+  }
   if (role === 'finance_admin') return <Navigate to="/finance" replace />
   return isAdmin ? <AdminDashboardPage /> : <DashboardPage />
 }
@@ -234,6 +262,14 @@ function App() {
           element={
             <ProtectedRoute>
               <VehicleDetailPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/service"
+          element={
+            <ProtectedRoute>
+              <ServiceDashboardPage />
             </ProtectedRoute>
           }
         />

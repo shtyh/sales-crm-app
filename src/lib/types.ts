@@ -226,6 +226,23 @@ export const SERVICE_ORDER_STATUS_LABEL: Record<ServiceOrderStatus, string> = {
   cancelled: 'Cancelled',
 }
 
+export type Part = {
+  id: string
+  part_no: string
+  name: string
+  description: string | null
+  brand: string | null
+  unit: string
+  unit_cost: number
+  unit_price: number
+  stock_qty: number
+  reorder_level: number
+  location: string | null
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
 export type ServiceOrder = {
   id: string
   order_no: string | null
@@ -246,6 +263,16 @@ export type ServiceOrder = {
   notes: string | null
   created_at: string
   updated_at: string
+}
+
+/** Service order joined with its vehicle, customer, and technician — used
+ *  by the workshop dashboard table where we need names, not just ids. */
+export type ServiceOrderWithJoins = ServiceOrder & {
+  vehicle:
+    | Pick<Vehicle, 'id' | 'registration_no' | 'model' | 'variant' | 'color'>
+    | null
+  customer: Pick<Customer, 'id' | 'name' | 'phone'> | null
+  technician: { id: string; name: string } | null
 }
 
 export type Booking = {

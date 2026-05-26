@@ -27,6 +27,8 @@ import {
   listVehicles,
   updateVehicle,
 } from './vehicles'
+import { listServiceOrders } from './serviceOrders'
+import { listParts } from './parts'
 import { listAuditForRow } from './audit'
 import {
   createPayoutAndAssign,
@@ -49,8 +51,10 @@ import type {
   CommissionScheduleInsert,
   Customer,
   CustomerInsert,
+  Part,
   Profile,
   ServiceOrder,
+  ServiceOrderWithJoins,
   Vehicle,
   VehicleInsert,
   VehicleWithCustomer,
@@ -77,6 +81,8 @@ export const qk = {
   vehicle: (id: string) => ['vehicles', id] as const,
   serviceOrdersByVehicle: (vehicleId: string) =>
     ['service-orders', 'by-vehicle', vehicleId] as const,
+  serviceOrders: ['service-orders'] as const,
+  parts: ['parts'] as const,
 }
 
 // ---------- Bookings -------------------------------------------------------
@@ -407,6 +413,32 @@ export function useServiceOrdersByVehicle(vehicleId: string | null | undefined) 
     queryKey: qk.serviceOrdersByVehicle(vehicleId ?? ''),
     queryFn: () => listServiceOrdersByVehicle(vehicleId as string),
     enabled: !!vehicleId,
+  })
+}
+
+// ---------- Workshop dashboard (service orders + parts) -------------------
+
+/** Every service order with vehicle/customer/technician joined. 30s
+ *  polling so the workshop dashboard updates near-real-time without
+ *  paying for Supabase Realtime sockets. */
+export function useServiceOrders(enabled = true) {
+  return useQuery<ServiceOrderWithJoins[]>({
+    queryKey: qk.serviceOrders,
+    queryFn: listServiceOrders,
+    enabled,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
+  })
+}
+
+/** Every part. Low-stock filter applied client-side in the dashboard. */
+export function useParts(enabled = true) {
+  return useQuery<Part[]>({
+    queryKey: qk.parts,
+    queryFn: listParts,
+    enabled,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
   })
 }
 
