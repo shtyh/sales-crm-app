@@ -144,17 +144,29 @@ Trigger `sync_car_status_from_booking` fires AFTER INSERT/UPDATE/DELETE on booki
 | `/admin/users` | AdminUsersPage | super_admin only |
 | `/account` | AccountPage (personal display name) | any auth |
 
-Top nav, by role (2026-05-26):
+Top nav layout (2026-05-26 cleanup):
 
-| Role | Sees in nav |
+```
+[brand]  [primary nav links...]                    [+New] [toggle] [avatar▾]
+```
+
+* **+ New** is rendered as a primary pill on the right (not inside the nav list). Shown only when `canCreateBooking` (sales_advisor / sales_manager / super_admin).
+* **Avatar dropdown** consolidates: name / email / online dot, `/account`, super_admin shortcuts (Manage users → `/admin/users`, Commission rates → `/admin/commissions`), and Logout. Initials are derived from full_name or email; the avatar is rose-tinted for super_admin and gray for everyone else.
+* **Workspace toggle** (super_admin only) sits between + New and the avatar.
+
+Primary nav links by role:
+
+| Role | Sees in primary nav |
 |---|---|
-| sales_advisor | Home · Bookings · + New |
-| sales_manager | Home · Bookings · Customers · Inventory · Commissions · + New |
+| sales_advisor | Home · Bookings |
+| sales_manager | Home · Bookings · Customers · Inventory · Commissions |
 | general_admin | Home · Bookings · Customers · Inventory |
 | finance_admin | Bookings · Inventory · Finance (Home link hidden — Finance is the landing) |
-| super_admin (Sales workspace) | Home · Bookings · Customers · Inventory · Commissions · Rates · + New |
+| super_admin (Sales workspace) | Home · Bookings · Customers · Inventory · Commissions |
 | super_admin (Service workspace) | Home · Vehicles · + Job order |
 | workshop roles | Home · Vehicles · + Job order |
+
+(super_admin's `Rates` link moved into the avatar dropdown; the old "★ Super Admin" pill is gone — its destination lives in the dropdown's Manage users entry.)
 
 ## Dashboards (role-specific landings)
 
