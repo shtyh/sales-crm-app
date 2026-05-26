@@ -13,15 +13,6 @@ import {
   coloursFor,
   variantsFor,
 } from '../data/proton-models'
-import type { BookingStatus } from '../lib/types'
-
-const STATUSES: { value: BookingStatus; label: string }[] = [
-  { value: 'pending', label: 'Pending' },
-  { value: 'confirmed', label: 'Confirmed' },
-  { value: 'delivered', label: 'Delivered' },
-  { value: 'cancelled', label: 'Cancelled' },
-]
-
 const today = () => new Date().toISOString().slice(0, 10)
 
 export function NewBookingPage() {
@@ -48,7 +39,6 @@ export function NewBookingPage() {
 
   const [bookingDate, setBookingDate] = useState(today())
 
-  const [status, setStatus] = useState<BookingStatus>('pending')
   const [notes, setNotes] = useState('')
 
   const createMut = useCreateBooking()
@@ -115,7 +105,6 @@ export function NewBookingPage() {
         booking_fee: Number(bookingFee) || 0,
         discount_amount: Number(discountAmount) || 0,
         booking_date: bookingDate,
-        status,
         notes: notes.trim() || null,
       })
       navigate('/bookings', {
@@ -315,8 +304,8 @@ export function NewBookingPage() {
           </Field>
         </Section>
 
-        {/* ---------- Dates + status ---------- */}
-        <Section title="📅 Date & status">
+        {/* ---------- Date ---------- */}
+        <Section title="📅 Date">
           <Field label="Booking date" required>
             <input
               type="date"
@@ -325,19 +314,6 @@ export function NewBookingPage() {
               onChange={(e) => setBookingDate(e.target.value)}
               className={inputClass}
             />
-          </Field>
-          <Field label="Status">
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value as BookingStatus)}
-              className={inputClass}
-            >
-              {STATUSES.map((s) => (
-                <option key={s.value} value={s.value}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
           </Field>
         </Section>
 

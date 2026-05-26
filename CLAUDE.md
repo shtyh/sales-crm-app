@@ -79,7 +79,8 @@ These are enforced by `public.guard_booking_field_writes` BEFORE INSERT/UPDATE.
 
 | Column | Who can write |
 |---|---|
-| `customer_*`, `vehicle_*`, `otr_price`, `booking_fee`, `booking_date`, `status` (non-cancel), `notes` | booking owner (SA) + any privileged role (general_admin / sales_manager / finance_admin) |
+| `customer_*`, `vehicle_*`, `otr_price`, `booking_fee`, `booking_date`, `notes` | booking owner (SA) + any privileged role (general_admin / sales_manager / finance_admin) |
+| `status` (non-cancel transitions) | DB-only — no UI form field as of 2026-05-26. Cancel is sales_manager via the cancel button; `delivered` requires car `paid_off`. The Status dropdown was removed from NewBookingPage + BookingDetailPage because the workflow is now driven by finance_admin actions on `deposit_status` / `payment_status`. |
 | `discount_amount` | same set; no approval flow as of 2026-05-23 |
 | `special_support` | sales_manager only — RM bonus that adds to commission |
 | `approval_status` | legacy, sales_manager only when explicit. No longer auto-flipped. |

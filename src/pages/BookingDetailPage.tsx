@@ -37,13 +37,6 @@ import type {
 import { COMMISSION_LABEL, FLOOR_STOCK_LABEL } from '../lib/types'
 import { formatMYR } from '../lib/format'
 
-const STATUSES: { value: BookingStatus; label: string }[] = [
-  { value: 'pending', label: 'Pending' },
-  { value: 'confirmed', label: 'Confirmed' },
-  { value: 'delivered', label: 'Delivered' },
-  { value: 'cancelled', label: 'Cancelled' },
-]
-
 const LOAN_STATUSES: { value: LoanStatus; label: string }[] = [
   { value: 'not_applicable', label: 'Not applicable (cash deal)' },
   { value: 'pending', label: 'Pending' },
@@ -159,7 +152,6 @@ export function BookingDetailPage() {
   const [discountAmount, setDiscountAmount] = useState('')
   const [specialSupport, setSpecialSupport] = useState('')
   const [bookingDate, setBookingDate] = useState('')
-  const [status, setStatus] = useState<BookingStatus>('pending')
   const [notes, setNotes] = useState('')
   const [loanBank, setLoanBank] = useState('')
   const [insuranceCompany, setInsuranceCompany] = useState('')
@@ -227,7 +219,6 @@ export function BookingDetailPage() {
     setDiscountAmount(String(booking.discount_amount ?? 0))
     setSpecialSupport(String(booking.special_support ?? 0))
     setBookingDate(booking.booking_date)
-    setStatus(booking.status)
     setNotes(booking.notes ?? '')
     setLoanBank(booking.loan_bank ?? '')
     setInsuranceCompany(booking.insurance_company ?? '')
@@ -288,7 +279,6 @@ export function BookingDetailPage() {
           booking_fee: Number(bookingFee) || 0,
           discount_amount: Number(discountAmount) || 0,
           booking_date: bookingDate,
-          status,
           notes: notes.trim() || null,
           // special_support is SM-only; non-SM callers must omit it from the
           // patch entirely or the DB guard will reject the whole PATCH.
@@ -380,7 +370,6 @@ export function BookingDetailPage() {
     setError(null)
     try {
       await updateMut.mutateAsync({ id, patch: { status: 'cancelled' } })
-      setStatus('cancelled')
       setSavedAt(Date.now())
     } catch (e) {
       setError(formatError(e))
@@ -725,8 +714,8 @@ export function BookingDetailPage() {
           </Field>
         </Section>
 
-        {/* ---------- Dates + status ---------- */}
-        <Section title="📅 Date & status">
+        {/* ---------- Date ---------- */}
+        <Section title="📅 Date">
           <Field label="Booking date" required>
             <input
               type="date"
@@ -735,19 +724,6 @@ export function BookingDetailPage() {
               onChange={(e) => setBookingDate(e.target.value)}
               className={inputClass}
             />
-          </Field>
-          <Field label="Status">
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value as BookingStatus)}
-              className={inputClass}
-            >
-              {STATUSES.map((s) => (
-                <option key={s.value} value={s.value}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
           </Field>
         </Section>
 
