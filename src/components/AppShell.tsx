@@ -24,6 +24,7 @@ const navLinkClass = ({ isActive }: { isActive: boolean }) =>
 export function AppShell({ children }: { children: ReactNode }) {
   const {
     user,
+    role,
     isAdmin,
     isSuperAdmin,
     isFinanceAdmin,
@@ -41,8 +42,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   //   * super_admin: the workspace toggle picks one side at a time.
   //   * workshop-only roles (service_*, store_keeper, mechanic): always
   //     service-only; they have no business on the sales nav.
-  //   * everyone else: sales nav by default; service links still appear
-  //     where their existing per-flag gates allow.
+  //   * sales-side & admin roles (sales_advisor, sales_manager,
+  //     general_admin, finance_admin): sales nav only; the Vehicles / Job
+  //     order links are service-team turf.
   let showSales: boolean
   let showService: boolean
   if (isSuperAdmin) {
@@ -53,8 +55,15 @@ export function AppShell({ children }: { children: ReactNode }) {
     showService = true
   } else {
     showSales = true
-    showService = true
+    showService = false
   }
+
+  // Booking creation is for the sales floor + super_admin only.
+  // general_admin and finance_admin can view bookings but not open new ones.
+  const canCreateBooking =
+    role === 'sales_advisor' ||
+    role === 'sales_manager' ||
+    role === 'super_admin'
 
   async function handleSignOut() {
     await signOut()
@@ -120,7 +129,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   Rates
                 </NavLink>
               )}
-              {showSales && (
+              {showSales && canCreateBooking && (
                 <NavLink to="/bookings/new" className={navLinkClass}>
                   + New
                 </NavLink>
