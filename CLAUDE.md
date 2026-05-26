@@ -54,6 +54,7 @@ Current real users (`select id, full_name, role from public.profiles`):
 | `profiles` | self / super_admin (role changes by super only) | `role app_role`, `is_admin` (generated = role <> 'sales_advisor'), `full_name`, `email` |
 | `customers` | any authenticated; delete super only | `nric unique`, `name`, `phone`, `email?`, `address?`. Bookings reference via `bookings.customer_id`. |
 | `payments` | finance_admin + super write; visibility mirrors bookings; super-only delete | `booking_id` FK, `amount > 0`, `payment_type` enum (deposit/full/partial), `payment_method` enum (cash/bank_transfer/card), `received_by` FK→profiles, `received_at`, `notes?`. |
+| `invoices` | finance_admin + super write; visibility mirrors bookings; super-only delete | `booking_id` FK, `customer_id` FK, `invoice_number` unique-when-set, `invoice_date`, `subtotal`/`tax_amount`/`total_amount` numeric, `status` enum (draft/issued/paid). |
 | `bookings` | per-column gated by trigger | see below |
 | `booking_attachments` | booking owner + any admin | `kind` enum (bank_transaction / bank_statement / lou / cancellation_form / other) |
 | `cars` | per-column gated by trigger | `chassis_no unique`, `floor_stock_*`, `status enum(in_stock/reserved/delivered/returned)` |
@@ -166,6 +167,7 @@ Files in `supabase/migrations/` (chronological):
 20260526_nric_phone_format.sql                    CHECK: NRIC = 12 digits, phone = 10-11 digits
 20260526_loan_amount.sql                          bookings.loan_amount + finance-admin gate (for HP letter)
 20260526_payments_table.sql                       first-class payments ledger linked to bookings + profiles
+20260526_invoices_table.sql                       invoices table linked to bookings + customers
 ```
 
 Some early ones were **applied by hand** in Supabase SQL editor and so don't show up in `supabase_migrations.schema_migrations`. The files are still source of truth for what should exist.
