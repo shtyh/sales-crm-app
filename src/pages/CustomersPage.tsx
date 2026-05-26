@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, Navigate } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
+import { useAuth } from '../lib/auth'
 import { useBookings, useCustomers } from '../lib/queries'
 import { formatError } from '../lib/errors'
 
@@ -14,9 +15,14 @@ import { formatError } from '../lib/errors'
  * (most useful info for the SA is the booking, not customer metadata).
  */
 export function CustomersPage() {
-  const { data: customers, error: customersErr } = useCustomers()
+  const { role, canViewCustomers } = useAuth()
+  const { data: customers, error: customersErr } = useCustomers(canViewCustomers)
   const { data: bookings } = useBookings()
   const [q, setQ] = useState('')
+
+  // Wait for role to load before deciding — otherwise an authorised user
+  // can briefly see a redirect during the auth-init window.
+  if (role && !canViewCustomers) return <Navigate to="/" replace />
 
   // Booking-count index, plus the latest booking id per customer for
   // click-through. Booking list is already sorted by booking_date desc by

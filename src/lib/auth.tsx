@@ -36,6 +36,12 @@ type AuthState = {
   canEditCarFloorStock: boolean
   /** general_admin or sales_manager (or super_admin) — assign bookings.car_id. */
   canAssignCar: boolean
+  /**
+   * super_admin / sales_manager / general_admin — only these can browse the
+   * shared customers directory. SA + finance stay scoped to their own
+   * booking flow.
+   */
+  canViewCustomers: boolean
   loading: boolean
   refreshProfile: () => Promise<void>
 }
@@ -55,6 +61,7 @@ const AuthContext = createContext<AuthState>({
   canEditCarAttributes: false,
   canEditCarFloorStock: false,
   canAssignCar: false,
+  canViewCustomers: false,
   loading: true,
   refreshProfile: async () => {},
 })
@@ -206,6 +213,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         role === 'general_admin' ||
         role === 'sales_manager' ||
         role === 'super_admin',
+      canViewCustomers:
+        role === 'super_admin' ||
+        role === 'sales_manager' ||
+        role === 'general_admin',
       loading,
       refreshProfile,
     }
