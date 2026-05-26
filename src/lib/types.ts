@@ -226,6 +226,55 @@ export const SERVICE_ORDER_STATUS_LABEL: Record<ServiceOrderStatus, string> = {
   cancelled: 'Cancelled',
 }
 
+export type QuoteStatus = 'none' | 'sent' | 'approved' | 'rejected'
+
+export const QUOTE_STATUS_LABEL: Record<QuoteStatus, string> = {
+  none: 'No quote',
+  sent: 'Awaiting approval',
+  approved: 'Approved',
+  rejected: 'Rejected',
+}
+
+export type ServiceItemKind = 'part' | 'labour'
+
+export type ServiceOrderItem = {
+  id: string
+  service_order_id: string
+  kind: ServiceItemKind
+  part_id: string | null
+  description: string
+  quantity: number
+  unit_price: number
+  line_total: number
+  created_at: string
+}
+
+export type ServiceOrderItemInsert = {
+  service_order_id: string
+  kind: ServiceItemKind
+  part_id?: string | null
+  description: string
+  quantity: number
+  unit_price: number
+  line_total: number
+}
+
+export type ServiceOrderInsert = {
+  customer_id: string
+  vehicle_id: string
+  technician_id?: string | null
+  service_advisor_id?: string | null
+  status?: ServiceOrderStatus
+  quote_status?: QuoteStatus
+  complaint?: string | null
+  diagnosis?: string | null
+  mileage_in?: number | null
+  notes?: string | null
+  subtotal?: number
+  tax_amount?: number
+  total_amount?: number
+}
+
 export type Part = {
   id: string
   part_no: string
@@ -261,6 +310,7 @@ export type ServiceOrder = {
   tax_amount: number
   total_amount: number
   notes: string | null
+  quote_status: QuoteStatus
   created_at: string
   updated_at: string
 }

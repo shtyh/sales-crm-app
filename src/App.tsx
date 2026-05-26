@@ -95,6 +95,21 @@ const ServiceDashboardPage = lazy(() =>
     default: m.ServiceDashboardPage,
   })),
 )
+const ServiceAdvisorDashboardPage = lazy(() =>
+  import('./pages/ServiceAdvisorDashboardPage').then((m) => ({
+    default: m.ServiceAdvisorDashboardPage,
+  })),
+)
+const NewServiceOrderPage = lazy(() =>
+  import('./pages/NewServiceOrderPage').then((m) => ({
+    default: m.NewServiceOrderPage,
+  })),
+)
+const ServiceOrderDetailPage = lazy(() =>
+  import('./pages/ServiceOrderDetailPage').then((m) => ({
+    default: m.ServiceOrderDetailPage,
+  })),
+)
 
 function RouteFallback() {
   return (
@@ -116,6 +131,10 @@ function RoleHome() {
   const { role, isAdmin } = useAuth()
   const { workspace } = useWorkspace()
 
+  // service_advisor gets their own queue-focused dashboard. Other workshop
+  // roles (manager / store_keeper / mechanic) share the broader manager
+  // view for now.
+  if (role === 'service_advisor') return <ServiceAdvisorDashboardPage />
   if (
     role &&
     (WORKSHOP_ROLES as readonly string[]).includes(role)
@@ -270,6 +289,22 @@ function App() {
           element={
             <ProtectedRoute>
               <ServiceDashboardPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/service-orders/new"
+          element={
+            <ProtectedRoute>
+              <NewServiceOrderPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/service-orders/:id"
+          element={
+            <ProtectedRoute>
+              <ServiceOrderDetailPage />
             </ProtectedRoute>
           }
         />

@@ -27,7 +27,18 @@ import {
   listVehicles,
   updateVehicle,
 } from './vehicles'
-import { listServiceOrders } from './serviceOrders'
+import {
+  createServiceOrder,
+  getServiceOrder,
+  listServiceOrders,
+  updateServiceOrder,
+} from './serviceOrders'
+import {
+  createServiceOrderItem,
+  deleteServiceOrderItem,
+  listServiceOrderItems,
+  updateServiceOrderItem,
+} from './serviceOrderItems'
 import { listParts } from './parts'
 import { listAuditForRow } from './audit'
 import {
@@ -54,6 +65,9 @@ import type {
   Part,
   Profile,
   ServiceOrder,
+  ServiceOrderInsert,
+  ServiceOrderItem,
+  ServiceOrderItemInsert,
   ServiceOrderWithJoins,
   Vehicle,
   VehicleInsert,
@@ -82,6 +96,9 @@ export const qk = {
   serviceOrdersByVehicle: (vehicleId: string) =>
     ['service-orders', 'by-vehicle', vehicleId] as const,
   serviceOrders: ['service-orders'] as const,
+  serviceOrder: (id: string) => ['service-orders', id] as const,
+  serviceOrderItems: (orderId: string) =>
+    ['service-orders', orderId, 'items'] as const,
   parts: ['parts'] as const,
 }
 
@@ -439,6 +456,93 @@ export function useParts(enabled = true) {
     enabled,
     refetchInterval: 30_000,
     refetchOnWindowFocus: true,
+  })
+}
+
+/** Single service order with joined vehicle / customer / technician. */
+export function useServiceOrder(id: string | null | undefined) {
+  return useQuery<ServiceOrderWithJoins | null>({
+    queryKey: qk.serviceOrder(id ?? ''),
+    queryFn: () => getServiceOrder(id as string),
+    enabled: !!id,
+  })
+}
+
+export function useCreateServiceOrder() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: ServiceOrderInsert) => createServiceOrder(input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.serviceOrders })
+    },
+  })
+}
+
+export function useUpdateServiceOrder() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      id,
+      patch,
+    }: {
+      id: string
+      patch: Partial<ServiceOrderInsert>
+    }) => updateServiceOrder(id, patch),
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: qk.serviceOrders })
+      qc.invalidateQueries({ queryKey: qk.serviceOrder(vars.id) })
+    },
+  })
+}
+
+/** Items on a single service order. */
+export function useServiceOrderItems(orderId: string | null | undefined) {
+  return useQuery<ServiceOrderItem[]>({
+    queryKey: qk.serviceOrderItems(orderId ?? ''),
+    queryFn: () => listServiceOrderItems(orderId as string),
+    enabled: !!orderId,
+  })
+}
+
+export function useCreateServiceOrderItem() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: ServiceOrderItemInsert) =>
+      createServiceOrderItem(input),
+    onSuccess: (saved) => {
+      qc.invalidateQueries({
+        queryKey: qk.serviceOrderItems(saved.service_order_id),
+      })
+    },
+  })
+}
+
+export function useUpdateServiceOrderItem() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      id,
+      patch,
+    }: {
+      id: string
+      patch: Partial<ServiceOrderItemInsert>
+    }) => updateServiceOrderItem(id, patch),
+    onSuccess: (saved) => {
+      qc.invalidateQueries({
+        queryKey: qk.serviceOrderItems(saved.service_order_id),
+      })
+    },
+  })
+}
+
+export function useDeleteServiceOrderItem() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, orderId }: { id: string; orderId: string }) =>
+      deleteServiceOrderItem(id).then(() => ({ orderId })),
+    onSuccess: ({ orderId }) => {
+      qc.invalidateQueries({ queryKey: qk.serviceOrderItems(orderId) })
+    },
   })
 }
 
