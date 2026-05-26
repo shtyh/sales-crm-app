@@ -248,6 +248,13 @@ export function ServiceOpsPage() {
                     >
                       {o.order_no ?? '—'}
                     </Link>
+                    <Link
+                      to={`/service-orders/${o.id}/billing`}
+                      title="Open billing screen"
+                      className="ml-2 text-[10px] font-semibold uppercase text-blue-700 hover:underline"
+                    >
+                      Bill
+                    </Link>
                   </td>
                   <td className="whitespace-nowrap px-3 py-2">
                     <div className="font-mono text-gray-900">

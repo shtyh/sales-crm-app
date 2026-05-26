@@ -220,6 +220,21 @@ Primary nav links by role:
   patches that customer via upsert-by-NRIC). New NRIC → fields stay
   empty for a fresh customer entry.
 
+- **BillingPage** (`/service-orders/:id/billing`) — port of the legacy
+  WMS Billing Screen. Top header strip with Account / Job No / Bill No
+  / Department / Vehicle-Chassis / Mechanic / Mileage / Invoice Date /
+  Job Sheet Date. Category quick-pick buttons (Plt / Oil / Tyr / Rim /
+  Srv / Nsk / Wtk / Pck / Grp / Dcl, plus F2-F7 keyboard shortcuts).
+  Entry form (Service Code / Extra Desc / Remarks / Quantity / Unit /
+  Unit Price / Discount %|$) with a live "Gross / Nett / Tax / Bonus"
+  calc strip. Latest Selling Price side panel (cosmetic — stock isn't
+  wired to parts_inventory). Billing Item Listing table backed by
+  `service_order_items` (click a row to load into the entry form;
+  Modify saves back). Totals (Gross / Tax / Discount / Invoice / Trade
+  In / Sales). Action bar (New / Save / Modify / Delete / Clear /
+  Memo / Greeting / Close). Reachable from `/service/ops` via the
+  "Bill" link next to each Job No.
+
 - **ServiceOpsPage** (`/service/ops`) — Job Sheet / Billing screen
   modelled on the legacy WMS table. Columns: Job No · Car/Account ·
   Chassis · Job Date · Inv Date · Status (OPEN/CLOSED/VOID bucket) · Amt

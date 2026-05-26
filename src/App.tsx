@@ -105,6 +105,11 @@ const ServiceOpsPage = lazy(() =>
     default: m.ServiceOpsPage,
   })),
 )
+const BillingPage = lazy(() =>
+  import('./pages/BillingPage').then((m) => ({
+    default: m.BillingPage,
+  })),
+)
 const NewServiceOrderPage = lazy(() =>
   import('./pages/NewServiceOrderPage').then((m) => ({
     default: m.NewServiceOrderPage,
@@ -319,6 +324,14 @@ function App() {
           element={
             <ProtectedRoute>
               <ServiceOrderDetailPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/service-orders/:id/billing"
+          element={
+            <ProtectedRoute>
+              <BillingPage />
             </ProtectedRoute>
           }
         />
