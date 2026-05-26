@@ -163,8 +163,8 @@ Primary nav links by role:
 | general_admin | Home · Bookings · Customers · Inventory |
 | finance_admin | Bookings · Inventory · Finance (Home link hidden — Finance is the landing) |
 | super_admin (Sales workspace) | Home · Bookings · Customers · Inventory · Commissions (no + New — super admin doesn't author bookings) |
-| super_admin (Service workspace) | Home · Vehicles · + Job order |
-| workshop roles | Home · Vehicles · + Job order |
+| super_admin (Service workspace) | Home · + Job order (Vehicles reached via Housekeeping tile) |
+| workshop roles | Home · + Job order (Vehicles reached via Housekeeping tile) |
 
 (super_admin's `Rates` link moved into the avatar dropdown; the old "★ Super Admin" pill is gone — its destination lives in the dropdown's Manage users entry.)
 
