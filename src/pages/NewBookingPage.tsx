@@ -381,8 +381,12 @@ export function NewBookingPage() {
 
 // ----- small layout helpers -------------------------------------------------
 
+// `user-invalid:` only triggers after the user has interacted with the
+// field (Tailwind v4 modifier wrapping :user-invalid), so empty inputs on
+// first load don't all glow red — only fields the SA actually typed into
+// or tried to submit get the red border + ring.
 const inputClass =
-  'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10'
+  'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10 user-invalid:border-red-500 user-invalid:focus:border-red-500 user-invalid:focus:ring-red-500/20'
 
 function Section({
   title,

@@ -1223,7 +1223,7 @@ export function BookingDetailPage() {
 // ----- small layout helpers -------------------------------------------------
 
 const inputClass =
-  'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10'
+  'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10 user-invalid:border-red-500 user-invalid:focus:border-red-500 user-invalid:focus:ring-red-500/20'
 
 /** Like inputClass but visually muted + disabled when the caller can't edit. */
 function readonlyInputClass(editable: boolean) {
