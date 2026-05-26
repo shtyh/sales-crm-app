@@ -282,6 +282,23 @@ export type ServiceOrderInsert = {
   subtotal?: number
   tax_amount?: number
   total_amount?: number
+  // WMS-style intake fields
+  department?: string | null
+  service_types?: ServiceType[]
+  appointment_type?: AppointmentType
+  days_to_complete?: number | null
+}
+
+export type Technician = {
+  id: string
+  profile_id: string | null
+  name: string
+  employee_no: string | null
+  phone: string | null
+  specialty: string | null
+  is_active: boolean
+  created_at: string
+  updated_at: string
 }
 
 export type Part = {
@@ -300,6 +317,28 @@ export type Part = {
   created_at: string
   updated_at: string
 }
+
+/** Intake checkboxes on the WMS-style Job Sheet dialog. */
+export type ServiceType =
+  | 'maintenance'
+  | 'int_g_repair'
+  | 'warranty_service'
+  | 'service_coupon'
+  | 'come_back_job'
+  | 'body_repair'
+  | 'inspection'
+
+export const SERVICE_TYPE_LABEL: Record<ServiceType, string> = {
+  maintenance: 'Maintenance',
+  int_g_repair: 'Int./G. Repair',
+  warranty_service: 'Warranty / Service',
+  service_coupon: 'Service Coupon / Others',
+  come_back_job: 'Come Back Job',
+  body_repair: 'Body Repair',
+  inspection: 'Inspection',
+}
+
+export type AppointmentType = 'walk_in' | 'by_appointment'
 
 export type ServiceOrder = {
   id: string
@@ -320,6 +359,11 @@ export type ServiceOrder = {
   total_amount: number
   notes: string | null
   quote_status: QuoteStatus
+  // WMS-style intake fields (2026-05-26)
+  department: string | null
+  service_types: ServiceType[]
+  appointment_type: AppointmentType
+  days_to_complete: number | null
   created_at: string
   updated_at: string
 }

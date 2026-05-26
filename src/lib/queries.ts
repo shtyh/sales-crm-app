@@ -41,6 +41,7 @@ import {
   updateServiceOrderItem,
 } from './serviceOrderItems'
 import { listParts } from './parts'
+import { listTechnicians } from './technicians'
 import { listPayments } from './payments'
 import { listInvoices } from './invoices'
 import { listAuditForRow } from './audit'
@@ -74,6 +75,7 @@ import type {
   ServiceOrderItem,
   ServiceOrderItemInsert,
   ServiceOrderWithJoins,
+  Technician,
   Vehicle,
   VehicleInsert,
   VehicleWithCustomer,
@@ -106,6 +108,7 @@ export const qk = {
   serviceOrderItems: (orderId: string) =>
     ['service-orders', orderId, 'items'] as const,
   parts: ['parts'] as const,
+  technicians: ['technicians'] as const,
   payments: ['payments'] as const,
   invoices: ['invoices'] as const,
 }
@@ -487,6 +490,15 @@ export function useServiceOrders(enabled = true) {
     enabled,
     refetchInterval: 30_000,
     refetchOnWindowFocus: true,
+  })
+}
+
+/** Active technicians (workshop mechanic roster). */
+export function useTechnicians(enabled = true) {
+  return useQuery<Technician[]>({
+    queryKey: qk.technicians,
+    queryFn: listTechnicians,
+    enabled,
   })
 }
 
