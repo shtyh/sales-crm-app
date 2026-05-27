@@ -387,7 +387,21 @@ export function ServiceOpsPage() {
             Payment
           </ActionButton>
           <ActionButton disabled>Print Job Sheet</ActionButton>
-          <ActionButton disabled>Print quotation</ActionButton>
+          <ActionButton
+            disabled={!selectedOrder}
+            to={
+              selectedOrder
+                ? `/service-orders/${selectedOrder}/quotation`
+                : undefined
+            }
+            title={
+              selectedOrder
+                ? 'Open the printable quotation for the selected job'
+                : 'Select a job row first'
+            }
+          >
+            Print quotation
+          </ActionButton>
           <ActionButton disabled>Submit e-Invoice</ActionButton>
           <ActionButton disabled>Credit note</ActionButton>
           <ActionButton disabled>Debit note</ActionButton>

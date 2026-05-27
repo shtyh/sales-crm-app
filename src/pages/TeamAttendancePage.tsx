@@ -10,6 +10,37 @@ import type { Attendance, Profile } from '../lib/types'
 type TabKey = 'today' | 'month'
 
 /**
+ * Org-chart scope: which roles a given viewer is responsible for on the
+ * Team Attendance dashboard. Mirrors who lines up under whom in real
+ * life:
+ *   super_admin     → everyone (except sales_advisor / accountant)
+ *   sales_manager   → finance_admin + general_admin
+ *   service_manager → service_advisor + store_keeper + mechanic
+ *   anyone else     → empty (page shows "no team" — they still have
+ *                     their own /attendance page)
+ */
+function teamRolesFor(viewerRole: string | null): Set<string> {
+  if (viewerRole === 'super_admin') {
+    return new Set([
+      'general_admin',
+      'sales_manager',
+      'finance_admin',
+      'service_manager',
+      'service_advisor',
+      'store_keeper',
+      'mechanic',
+    ])
+  }
+  if (viewerRole === 'sales_manager') {
+    return new Set(['finance_admin', 'general_admin'])
+  }
+  if (viewerRole === 'service_manager') {
+    return new Set(['service_advisor', 'store_keeper', 'mechanic'])
+  }
+  return new Set()
+}
+
+/**
  * Manager view of attendance. Two tabs:
  *   Today — every employee with status (Not yet / Checked in / Late /
  *           Done), useful first thing in the morning.
@@ -29,6 +60,20 @@ export function TeamAttendancePage() {
   // CSV export is gated to roles that actually need it for payroll.
   const canExport = role === 'super_admin' || role === 'service_manager'
 
+  // Org-chart filter: only show profiles this viewer is responsible for.
+  // Built outside the sub-components so the CSV export uses the same
+  // scope as what's rendered on screen.
+  const visibleRoles = useMemo(() => teamRolesFor(role), [role])
+  const teamProfiles = useMemo(
+    () =>
+      (profiles ?? []).filter((p) => p.role != null && visibleRoles.has(p.role)),
+    [profiles, visibleRoles],
+  )
+  const visibleProfileIds = useMemo(
+    () => new Set(teamProfiles.map((p) => p.id)),
+    [teamProfiles],
+  )
+
   if (loading) {
     return (
       <AppShell>
@@ -38,7 +83,15 @@ export function TeamAttendancePage() {
       </AppShell>
     )
   }
-  if (!isAdmin) return <Navigate to="/" replace />
+  // Only managers (super / sales / service) line-manage someone in the
+  // org chart, so the team page is gated to those three roles. Other
+  // is_admin users (FA / GA / workshop staff) still have /attendance
+  // for their own records.
+  const hasTeamView =
+    role === 'super_admin' ||
+    role === 'sales_manager' ||
+    role === 'service_manager'
+  if (!isAdmin || !hasTeamView) return <Navigate to="/attendance" replace />
 
   const today = malaysiaToday()
   const todayByProfile = useMemoIndex(rows, today)
@@ -56,12 +109,14 @@ export function TeamAttendancePage() {
   }, [profiles])
 
   function handleExport() {
-    // Export the current tab's scope: Today tab → just today's rows;
-    // Month tab → every row in the selected month.
-    const scope =
+    // Export the current tab's scope. Filter to the viewer's team so the
+    // CSV matches what's on screen — SM exporting only sees FA + GA, not
+    // workshop rows.
+    const base =
       tab === 'today'
         ? (rows ?? []).filter((r) => r.work_date === today)
         : monthRows
+    const scope = base.filter((r) => visibleProfileIds.has(r.profile_id))
     const csv = toAttendanceCsv(scope, profileById)
     const fileScope =
       tab === 'today'
@@ -112,12 +167,12 @@ export function TeamAttendancePage() {
       )}
 
       {tab === 'today' && (
-        <TodaySection profiles={profiles ?? []} byProfile={todayByProfile} />
+        <TodaySection profiles={teamProfiles} byProfile={todayByProfile} />
       )}
 
       {tab === 'month' && (
         <MonthSection
-          profiles={profiles ?? []}
+          profiles={teamProfiles}
           rows={monthRows}
           cursor={cursor}
           onPrev={() => setCursor((c) => addMonths(c, -1))}
