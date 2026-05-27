@@ -471,6 +471,88 @@ export const SERVICE_TYPE_LABEL: Record<ServiceType, string> = {
 
 export type AppointmentType = 'walk_in' | 'by_appointment'
 
+// ─── Customer-facing service appointments ──────────────────────────────
+// `/book` (public) and `/service/book` (staff) write here via the
+// `submit_appointment` RPC; workshop staff confirm or reject at
+// `/service/appointments`. Confirmed rows are read-only on the public
+// `/book/:token` page — that's the "slot lock" the customer sees.
+export type AppointmentStatus =
+  | 'pending'
+  | 'confirmed'
+  | 'rejected'
+  | 'cancelled'
+
+export type AppointmentPeriod = 'am' | 'pm'
+
+export const APPOINTMENT_STATUS_LABEL: Record<AppointmentStatus, string> = {
+  pending: 'Pending',
+  confirmed: 'Confirmed',
+  rejected: 'Rejected',
+  cancelled: 'Cancelled',
+}
+
+export const APPOINTMENT_PERIOD_LABEL: Record<AppointmentPeriod, string> = {
+  am: 'Morning (AM)',
+  pm: 'Afternoon (PM)',
+}
+
+export type ServiceAppointment = {
+  id: string
+  token: string
+  customer_name: string
+  customer_phone: string
+  customer_nric: string | null
+  customer_email: string | null
+  vehicle_reg: string
+  vehicle_chassis: string | null
+  vehicle_model: string | null
+  preferred_date: string // YYYY-MM-DD
+  preferred_period: AppointmentPeriod
+  complaint: string | null
+  status: AppointmentStatus
+  service_order_id: string | null
+  confirmed_by: string | null
+  confirmed_at: string | null
+  rejected_reason: string | null
+  submitted_by: string | null
+  source: 'public' | 'staff'
+  created_at: string
+  updated_at: string
+}
+
+/** Public read-back via `get_appointment_by_token` — staff-only fields
+ *  (confirmed_by, submitted_by, internal ids) are intentionally omitted. */
+export type PublicServiceAppointment = {
+  id: string
+  token: string
+  customer_name: string
+  customer_phone: string
+  customer_email: string | null
+  vehicle_reg: string
+  vehicle_chassis: string | null
+  vehicle_model: string | null
+  preferred_date: string
+  preferred_period: AppointmentPeriod
+  complaint: string | null
+  status: AppointmentStatus
+  confirmed_at: string | null
+  rejected_reason: string | null
+  created_at: string
+}
+
+export type ServiceAppointmentInput = {
+  customer_name: string
+  customer_phone: string
+  customer_nric?: string | null
+  customer_email?: string | null
+  vehicle_reg: string
+  vehicle_chassis?: string | null
+  vehicle_model?: string | null
+  preferred_date: string
+  preferred_period: AppointmentPeriod
+  complaint?: string | null
+}
+
 export type ServiceOrder = {
   id: string
   order_no: string | null

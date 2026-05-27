@@ -50,6 +50,14 @@ import {
   listServiceOrderItems,
   updateServiceOrderItem,
 } from './serviceOrderItems'
+import {
+  cancelAppointment,
+  confirmAppointment,
+  getAppointmentByToken,
+  listAppointments,
+  rejectAppointment,
+  submitAppointment,
+} from './serviceAppointments'
 import { listParts } from './parts'
 import { listTechnicians } from './technicians'
 import { listPayments } from './payments'
@@ -85,6 +93,9 @@ import type {
   Part,
   Payment,
   Profile,
+  PublicServiceAppointment,
+  ServiceAppointment,
+  ServiceAppointmentInput,
   ServiceOrder,
   ServiceOrderInsert,
   ServiceOrderItem,
@@ -131,6 +142,9 @@ export const qk = {
     ['attendance', 'mine', profileId] as const,
   attendanceToday: (profileId: string, workDate: string) =>
     ['attendance', 'today', profileId, workDate] as const,
+  serviceAppointments: ['service-appointments'] as const,
+  serviceAppointmentByToken: (token: string) =>
+    ['service-appointments', 'by-token', token] as const,
 }
 
 // ---------- Bookings -------------------------------------------------------
@@ -760,6 +774,72 @@ export function useLunchIn() {
         row,
       )
       qc.invalidateQueries({ queryKey: ['attendance'] })
+    },
+  })
+}
+
+// ---------- Service appointments (customer-facing booking) ----------------
+
+/** Submit a new appointment. Works from anon (public /book) and from
+ *  signed-in staff (the staff form fills the same fields). */
+export function useSubmitAppointment() {
+  return useMutation({
+    mutationFn: (input: ServiceAppointmentInput) => submitAppointment(input),
+  })
+}
+
+/** Public read-back for /book/:token. No auth required. */
+export function useAppointmentByToken(token: string | null | undefined) {
+  return useQuery<PublicServiceAppointment | null>({
+    queryKey: qk.serviceAppointmentByToken(token ?? ''),
+    queryFn: () => getAppointmentByToken(token as string),
+    enabled: !!token,
+    refetchOnWindowFocus: true,
+  })
+}
+
+/** Staff queue at /service/appointments. Workshop SM / SA / super_admin
+ *  see all rows; store_keeper + mechanic also read (no write). */
+export function useAppointments(enabled = true) {
+  return useQuery<ServiceAppointment[]>({
+    queryKey: qk.serviceAppointments,
+    queryFn: listAppointments,
+    enabled,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
+  })
+}
+
+export function useConfirmAppointment() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => confirmAppointment(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.serviceAppointments })
+      qc.invalidateQueries({ queryKey: ['service-appointments'] })
+    },
+  })
+}
+
+export function useRejectAppointment() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) =>
+      rejectAppointment(id, reason),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.serviceAppointments })
+      qc.invalidateQueries({ queryKey: ['service-appointments'] })
+    },
+  })
+}
+
+export function useCancelAppointment() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => cancelAppointment(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.serviceAppointments })
+      qc.invalidateQueries({ queryKey: ['service-appointments'] })
     },
   })
 }
