@@ -135,9 +135,13 @@ export function AppShell({ children }: { children: ReactNode }) {
               displayName={displayName}
               email={isSuperAdmin ? '' : email}
               online={online}
-              isAdmin={isAdmin}
               isSuperAdmin={isSuperAdmin}
               showAttendance={role !== 'sales_advisor'}
+              hasTeamView={
+                role === 'super_admin' ||
+                role === 'sales_manager' ||
+                role === 'service_manager'
+              }
               onSignOut={handleSignOut}
             />
           </div>
@@ -159,17 +163,17 @@ function UserMenu({
   displayName,
   email,
   online,
-  isAdmin,
   isSuperAdmin,
   showAttendance,
+  hasTeamView,
   onSignOut,
 }: {
   displayName: string
   email: string
   online: boolean
-  isAdmin: boolean
   isSuperAdmin: boolean
   showAttendance: boolean
+  hasTeamView: boolean
   onSignOut: () => void
 }) {
   const [open, setOpen] = useState(false)
@@ -251,7 +255,7 @@ function UserMenu({
               <MenuLink to="/attendance" onClick={() => setOpen(false)}>
                 My attendance
               </MenuLink>
-              {isAdmin && (
+              {hasTeamView && (
                 <MenuLink
                   to="/admin/attendance"
                   onClick={() => setOpen(false)}

@@ -20,9 +20,10 @@ const TILES: Tile[] = [
     to: '/service/ops',
   },
   {
-    title: 'Payment / Receipt',
-    subtitle: 'Collect customer payments and print receipts',
-    icon: '🧾',
+    title: 'Appointments',
+    subtitle: 'Customer-submitted booking requests, confirm or reject',
+    icon: '📅',
+    to: '/service/appointments',
   },
   {
     title: 'Housekeeping',

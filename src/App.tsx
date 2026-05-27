@@ -133,6 +133,22 @@ const ServiceOrderDetailPage = lazy(() =>
     default: m.ServiceOrderDetailPage,
   })),
 )
+const BookPage = lazy(() =>
+  import('./pages/BookPage').then((m) => ({ default: m.BookPage })),
+)
+const StaffBookPage = lazy(() =>
+  import('./pages/BookPage').then((m) => ({ default: m.StaffBookPage })),
+)
+const BookStatusPage = lazy(() =>
+  import('./pages/BookStatusPage').then((m) => ({
+    default: m.BookStatusPage,
+  })),
+)
+const ServiceAppointmentsPage = lazy(() =>
+  import('./pages/ServiceAppointmentsPage').then((m) => ({
+    default: m.ServiceAppointmentsPage,
+  })),
+)
 
 function RouteFallback() {
   return (
@@ -179,6 +195,10 @@ function App() {
         <Route path="/login" element={<LoginPage />} />
         {/* Public sign-up is disabled — accounts are created by invitation. */}
         <Route path="/signup" element={<Navigate to="/login" replace />} />
+
+        {/* Customer-facing service booking — no auth required. */}
+        <Route path="/book" element={<BookPage />} />
+        <Route path="/book/:token" element={<BookStatusPage />} />
 
         <Route
           path="/"
@@ -321,6 +341,22 @@ function App() {
           element={
             <ProtectedRoute>
               <ServiceOpsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/service/appointments"
+          element={
+            <ProtectedRoute>
+              <ServiceAppointmentsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/service/book"
+          element={
+            <ProtectedRoute>
+              <StaffBookPage />
             </ProtectedRoute>
           }
         />

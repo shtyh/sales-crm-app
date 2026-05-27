@@ -146,7 +146,7 @@ Trigger `sync_car_status_from_booking` fires AFTER INSERT/UPDATE/DELETE on booki
 | `/account` | AccountPage (personal display name) | any auth |
 | `/clock-in` | ClockInPage (GPS-gated check in / out) | any auth |
 | `/attendance` | MyAttendancePage (own calendar + monthly summary) | any auth |
-| `/admin/attendance` | TeamAttendancePage (today + month-by-employee) | is_admin only |
+| `/admin/attendance` | TeamAttendancePage (today + month-by-employee, **org-chart scoped**) | super_admin / sales_manager / service_manager only (others redirected to `/attendance`) |
 
 Top nav layout (2026-05-26 cleanup):
 
@@ -304,7 +304,14 @@ Primary nav links by role:
   (BOM-prefixed for Excel-on-Windows); gated to super_admin and
   service_manager. Sales advisors are filtered out of the team list
   entirely (they don't clock in) and the three avatar-dropdown entries
-  are hidden from them.
+  are hidden from them. **Org-chart scoping (2026-05-27)** — the team
+  list is filtered by viewer role via `teamRolesFor` in
+  `TeamAttendancePage.tsx`: super_admin sees everyone, sales_manager
+  sees finance_admin + general_admin, service_manager sees
+  service_advisor + store_keeper + mechanic. Only those three manager
+  roles can reach `/admin/attendance` at all — every other is_admin
+  user (FA / GA / workshop staff) is redirected to `/attendance` and
+  the Team-attendance link is hidden from their avatar menu.
 
 - **Cross-side URL gates** (2026-05-27) — auth context exports two
   mirrored flags. `canAccessSales` is true for everyone except the four
