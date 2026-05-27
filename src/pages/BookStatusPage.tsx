@@ -167,11 +167,6 @@ function Status({ row }: { row: PublicServiceAppointment }) {
           />
           <Item label="Vehicle" value={row.vehicle_reg} mono />
           <Item
-            label="Chassis"
-            value={row.vehicle_chassis ?? <Muted>—</Muted>}
-            mono
-          />
-          <Item
             label="Model"
             value={row.vehicle_model ?? <Muted>—</Muted>}
           />

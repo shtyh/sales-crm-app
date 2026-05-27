@@ -627,8 +627,9 @@ export type ServiceAppointmentInput = {
   /** Email is now required by the form + RPC. */
   customer_email: string
   vehicle_reg: string
-  /** Chassis + model are now required by the form + RPC. */
-  vehicle_chassis: string
+  /** Model is required by the form + RPC. Chassis is no longer
+   *  collected on the booking flow — workshop fills it in later when
+   *  the service order is created. */
   vehicle_model: string
   preferred_date: string
   slot_time: string // HH:MM:SS

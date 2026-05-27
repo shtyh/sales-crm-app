@@ -21,7 +21,6 @@ export async function submitAppointment(
     p_customer_phone: input.customer_phone,
     p_customer_email: input.customer_email,
     p_vehicle_reg: input.vehicle_reg,
-    p_vehicle_chassis: input.vehicle_chassis,
     p_vehicle_model: input.vehicle_model,
     p_preferred_date: input.preferred_date,
     p_slot_time: input.slot_time,

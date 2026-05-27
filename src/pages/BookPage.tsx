@@ -48,7 +48,6 @@ export function BookPage({
   const [customerPhone, setCustomerPhone] = useState('')
   const [customerEmail, setCustomerEmail] = useState('')
   const [vehicleReg, setVehicleReg] = useState('')
-  const [vehicleChassis, setVehicleChassis] = useState('')
   const [vehicleModel, setVehicleModel] = useState('')
 
   const today = new Date().toISOString().slice(0, 10)
@@ -77,11 +76,10 @@ export function BookPage({
     const phone = customerPhone.trim()
     const email = customerEmail.trim()
     const reg = vehicleReg.trim().toUpperCase()
-    const chassis = vehicleChassis.trim().toUpperCase()
     const model = vehicleModel.trim()
-    if (!name || !phone || !email || !reg || !chassis || !model) {
+    if (!name || !phone || !email || !reg || !model) {
       setFormError(
-        'Please fill in name, phone, email, vehicle reg, chassis, and model.',
+        'Please fill in name, phone, email, vehicle reg, and model.',
       )
       return
     }
@@ -99,7 +97,6 @@ export function BookPage({
         customer_phone: phone,
         customer_email: email,
         vehicle_reg: reg,
-        vehicle_chassis: chassis,
         vehicle_model: model,
         preferred_date: preferredDate,
         slot_time: slotTime,
@@ -170,14 +167,6 @@ export function BookPage({
           <input
             value={vehicleReg}
             onChange={(e) => setVehicleReg(e.target.value)}
-            required
-            className={`${inputCls} font-mono uppercase`}
-          />
-        </Field>
-        <Field label="Chassis no" required>
-          <input
-            value={vehicleChassis}
-            onChange={(e) => setVehicleChassis(e.target.value)}
             required
             className={`${inputCls} font-mono uppercase`}
           />
