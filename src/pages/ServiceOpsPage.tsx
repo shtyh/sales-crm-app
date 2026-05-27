@@ -6,7 +6,6 @@ import { useProfiles, useServiceOrders } from '../lib/queries'
 import { formatError } from '../lib/errors'
 import { formatMYR } from '../lib/format'
 import {
-  SERVICE_ORDER_STATUS_LABEL,
   type Profile,
   type ServiceOrderStatus,
   type ServiceOrderWithJoins,
@@ -286,13 +285,8 @@ export function ServiceOpsPage() {
                       Bill
                     </Link>
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2">
-                    <div className="font-mono text-gray-900">
-                      {o.vehicle?.registration_no ?? '—'}
-                    </div>
-                    <div className="text-[10px] text-gray-500">
-                      {o.customer?.name ?? '—'}
-                    </div>
+                  <td className="whitespace-nowrap px-3 py-2 font-mono text-gray-900">
+                    {o.vehicle?.registration_no ?? '—'}
                   </td>
                   <td className="whitespace-nowrap px-3 py-2 font-mono text-gray-600">
                     {o.vehicle?.chassis_no ?? '—'}
@@ -305,9 +299,6 @@ export function ServiceOpsPage() {
                   </td>
                   <td className="whitespace-nowrap px-3 py-2">
                     <StatusPill bucket={bucketOf(o.status)} />
-                    <div className="mt-0.5 text-[10px] text-gray-500">
-                      {SERVICE_ORDER_STATUS_LABEL[o.status]}
-                    </div>
                   </td>
                   <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-gray-900">
                     {amt > 0 ? formatMYR(amt) : '—'}
