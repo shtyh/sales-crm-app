@@ -115,6 +115,11 @@ const QuotationPage = lazy(() =>
     default: m.QuotationPage,
   })),
 )
+const BillPrintPage = lazy(() =>
+  import('./pages/BillPrintPage').then((m) => ({
+    default: m.BillPrintPage,
+  })),
+)
 const ClockInPage = lazy(() =>
   import('./pages/ClockInPage').then((m) => ({ default: m.ClockInPage })),
 )
@@ -394,6 +399,14 @@ function App() {
           element={
             <ProtectedRoute>
               <QuotationPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/service-orders/:id/bill"
+          element={
+            <ProtectedRoute>
+              <BillPrintPage />
             </ProtectedRoute>
           }
         />

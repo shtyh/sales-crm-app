@@ -269,6 +269,35 @@ Primary nav links by role:
   modal filters the already-loaded `useServiceOrders()` client-side, so
   no extra DB round trip.
 
+- **Print Billing dialog** (in `ServiceOpsPage.tsx`) — 1:1 port of the
+  legacy WMS "Print Billing" popup. Opens from the **Print** action
+  button with a job selected. Fields mirror the legacy: Billing
+  Number (read-only, taken from `order_no`), Billing Type dropdown
+  (Cash / Invoice / Cash-Distribution / Invoice-Distribution /
+  Delivery Order / Service Coupon Bill), Standard vs Pre-printed
+  format radio, Quotation No / Delivery Order No / Days Completed /
+  Time Completed / Remark, plus the Next Service block (Service
+  Day / Service KM / Next Service Date / Next Service KM, with the
+  next-KM seeded from `mileage_in + 5000`). Preview / Print opens a
+  new tab at `/service-orders/:id/bill?type=...&remark=...&nextDate=…
+  &nextKm=…` which renders `BillPrintPage` and auto-fires
+  `window.print()` once layout settles.
+
+- **BillPrintPage** (`/service-orders/:id/bill`) — printable cash bill
+  / invoice / delivery order, 1:1 layout port of the legacy
+  `cashbill.xls` template. Same letterhead as the quotation
+  (`src/lib/company.ts`), legacy column set (Item / Description / Qty
+  / Unit / U/Price / Dis (%) / Amount / Tax / Total RM), Next Service
+  Date + KM in the bottom-left, SubTotal / Service Tax / Total
+  Payable on the bottom-right, then the acknowledgement block with
+  signature + date line. The `?type=` query param flips the title
+  strip (Cash Bill / Invoice / Delivery Order / Service Coupon Bill).
+  Print CSS hides the toolbar so the paper output is just the form.
+  Driven by the existing `useServiceOrder` / `useServiceOrderItems` /
+  `useCustomers` / `useVehicles` hooks — no separate billing ledger
+  yet, so totals come straight from `service_order_items` and SST is
+  applied to labour lines via `src/lib/tax.ts`.
+
 - **Direct Payment dialog** (in `ServiceOpsPage.tsx`) — 1:1 port of the
   legacy WMS "Direct Payment Section" popup. Opens from the action bar
   ("Payment") against the selected job. Pre-fills Account No from

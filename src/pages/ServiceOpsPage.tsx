@@ -52,6 +52,7 @@ export function ServiceOpsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [paymentOpen, setPaymentOpen] = useState(false)
+  const [printOpen, setPrintOpen] = useState(false)
 
   const profileById = useMemo(() => {
     const m = new Map<string, Profile>()
@@ -386,7 +387,17 @@ export function ServiceOpsPage() {
           >
             Payment
           </ActionButton>
-          <ActionButton disabled>Print Job Sheet</ActionButton>
+          <ActionButton
+            disabled={!selectedOrder}
+            onClick={() => setPrintOpen(true)}
+            title={
+              selectedOrder
+                ? 'Open the Print Billing dialog for the selected job'
+                : 'Select a job row first'
+            }
+          >
+            Print
+          </ActionButton>
           <ActionButton
             disabled={!selectedOrder}
             to={
@@ -442,6 +453,13 @@ export function ServiceOpsPage() {
         <DirectPaymentDialog
           order={selectedOrder}
           onClose={() => setPaymentOpen(false)}
+        />
+      )}
+
+      {printOpen && selectedOrder && (
+        <PrintBillingDialog
+          order={selectedOrder}
+          onClose={() => setPrintOpen(false)}
         />
       )}
     </AppShell>
@@ -1209,5 +1227,317 @@ function Fieldset({
       </legend>
       {children}
     </fieldset>
+  )
+}
+
+// ---------- Print Billing dialog (port of legacy WMS popup) ----------
+
+type BillingTypeOption = {
+  value: string
+  label: string
+}
+
+const BILLING_TYPES: BillingTypeOption[] = [
+  { value: 'cash', label: 'Cash' },
+  { value: 'invoice', label: 'Invoice' },
+  { value: 'cash-distribution', label: 'Cash-Distribution' },
+  { value: 'invoice-distribution', label: 'Invoice-Distribution' },
+  { value: 'delivery-order', label: 'Delivery Order' },
+  { value: 'service-coupon', label: 'Service Coupon Bill/Closed Bill' },
+]
+
+/**
+ * 1:1 port of the legacy WMS "Print Billing" dialog. Opens from the
+ * Print action button with a job selected. Fields mirror the legacy
+ * exactly (Billing Number, Billing Type, Standard/Pre-printed format,
+ * Quotation No / Delivery Order No / Days Completed / Time Completed /
+ * Remark, plus the Next Service block). The actual print output lives
+ * at `/service-orders/:id/bill?type=...` — clicking Print or Preview
+ * opens it in a new tab, which auto-fires window.print() on load.
+ */
+function PrintBillingDialog({
+  order,
+  onClose,
+}: {
+  order: ServiceOrderWithJoins
+  onClose: () => void
+}) {
+  const billNo = order.order_no ?? ''
+  const [billingType, setBillingType] = useState<string>('cash-distribution')
+  const [format, setFormat] = useState<'standard' | 'pre-printed'>('standard')
+  const [quotationNo, setQuotationNo] = useState('')
+  const [deliveryOrderNo, setDeliveryOrderNo] = useState('')
+  const [daysCompleted, setDaysCompleted] = useState('0')
+  const [timeCompleted, setTimeCompleted] = useState(
+    new Date().toLocaleTimeString('en-MY', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }),
+  )
+  const [remark, setRemark] = useState('')
+  const [serviceDay, setServiceDay] = useState('90')
+  const [serviceKm, setServiceKm] = useState('5000')
+  const [nextServiceDate, setNextServiceDate] = useState(() => {
+    const d = new Date()
+    d.setDate(d.getDate() + 90)
+    return d.toISOString().slice(0, 10)
+  })
+  const [nextServiceKm, setNextServiceKm] = useState(() => {
+    const m = Number(order.mileage_in ?? 0)
+    return String(m > 0 ? m + 5000 : 5000)
+  })
+
+  function buildUrl(): string {
+    const params = new URLSearchParams()
+    params.set('type', billingType)
+    if (format) params.set('format', format)
+    if (remark.trim()) params.set('remark', remark.trim())
+    if (daysCompleted) params.set('days', daysCompleted)
+    if (timeCompleted) params.set('time', timeCompleted)
+    if (nextServiceDate) params.set('nextDate', nextServiceDate)
+    if (nextServiceKm) params.set('nextKm', nextServiceKm)
+    return `/service-orders/${order.id}/bill?${params.toString()}`
+  }
+
+  function openInNewTab() {
+    window.open(buildUrl(), '_blank', 'noopener,noreferrer')
+  }
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Print Billing"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="flex max-h-[95vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg border border-gray-300 bg-white shadow-xl"
+      >
+        {/* Title bar */}
+        <div className="flex items-center justify-between border-b border-gray-200 bg-gray-100 px-3 py-1.5">
+          <div className="text-sm font-semibold text-gray-800">
+            Print Billing
+          </div>
+          <button
+            type="button"
+            aria-label="Close"
+            onClick={onClose}
+            className="rounded px-2 text-gray-500 hover:bg-gray-200 hover:text-gray-700"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-auto px-4 py-3">
+          {/* Top strip — Present Bill + Billing Number + format */}
+          <div className="mb-3 grid grid-cols-[140px_1fr_auto] items-center gap-x-3 gap-y-2 text-xs">
+            <label className="text-gray-700">Present Bill number :</label>
+            <input
+              readOnly
+              value={billNo}
+              className="rounded-md border border-gray-300 bg-gray-50 px-2 py-1 font-mono text-xs"
+            />
+            <div className="row-span-2 flex flex-col gap-1 pl-3 text-xs">
+              <label className="inline-flex items-center gap-1.5">
+                <input
+                  type="radio"
+                  name="bill-format"
+                  checked={format === 'standard'}
+                  onChange={() => setFormat('standard')}
+                />
+                Standard Format
+              </label>
+              <label className="inline-flex items-center gap-1.5">
+                <input
+                  type="radio"
+                  name="bill-format"
+                  checked={format === 'pre-printed'}
+                  onChange={() => setFormat('pre-printed')}
+                />
+                Pre-printed Format
+              </label>
+            </div>
+            <label className="text-gray-700">Billing Number :</label>
+            <input
+              readOnly
+              value={billNo}
+              className="rounded-md border border-amber-300 bg-amber-50 px-2 py-1 font-mono text-xs"
+            />
+            <label className="text-gray-700">Billing Type :</label>
+            <select
+              value={billingType}
+              onChange={(e) => setBillingType(e.target.value)}
+              className={dialogInputCls}
+            >
+              {BILLING_TYPES.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Printing Bill block */}
+          <fieldset className="rounded-lg border border-gray-200 px-3 pb-3 pt-1">
+            <legend className="px-1 text-xs font-semibold text-gray-700">
+              Printing Bill
+            </legend>
+            <PrintRow label="Quotation Number">
+              <input
+                value={quotationNo}
+                onChange={(e) => setQuotationNo(e.target.value)}
+                className={`${dialogInputCls} font-mono`}
+                placeholder="QN…"
+              />
+            </PrintRow>
+            <PrintRow label="Delivery Order Number">
+              <input
+                value={deliveryOrderNo}
+                onChange={(e) => setDeliveryOrderNo(e.target.value)}
+                className={`${dialogInputCls} font-mono`}
+              />
+            </PrintRow>
+            <PrintRow label="Days Completed">
+              <input
+                type="number"
+                min={0}
+                value={daysCompleted}
+                onChange={(e) => setDaysCompleted(e.target.value)}
+                className={`${dialogInputCls} text-right tabular-nums`}
+              />
+            </PrintRow>
+            <PrintRow label="Time Completed">
+              <input
+                value={timeCompleted}
+                onChange={(e) => setTimeCompleted(e.target.value)}
+                className={`${dialogInputCls} tabular-nums`}
+                placeholder="HH:MM"
+              />
+            </PrintRow>
+            <PrintRow label="Remark">
+              <input
+                value={remark}
+                onChange={(e) => setRemark(e.target.value)}
+                className={dialogInputCls}
+              />
+            </PrintRow>
+          </fieldset>
+
+          {/* Next Service Remark block */}
+          <fieldset className="mt-3 rounded-lg border border-gray-200 px-3 pb-3 pt-1">
+            <legend className="px-1 text-xs font-semibold text-gray-700">
+              Next Service Remark
+            </legend>
+            <div className="grid grid-cols-2 gap-x-4">
+              <div>
+                <div className="mb-1 text-[11px] font-medium text-gray-700">
+                  How Many Service Day and KM
+                </div>
+                <PrintRow label="Service Day">
+                  <input
+                    type="number"
+                    min={0}
+                    value={serviceDay}
+                    onChange={(e) => setServiceDay(e.target.value)}
+                    className={`${dialogInputCls} text-right tabular-nums`}
+                  />
+                </PrintRow>
+                <PrintRow label="Service KM">
+                  <input
+                    type="number"
+                    min={0}
+                    value={serviceKm}
+                    onChange={(e) => setServiceKm(e.target.value)}
+                    className={`${dialogInputCls} text-right tabular-nums`}
+                  />
+                </PrintRow>
+              </div>
+              <div>
+                <div className="mb-1 text-[11px] font-medium text-gray-700">
+                  Next Service Date and Mileage
+                </div>
+                <PrintRow label="Next Service Date">
+                  <input
+                    type="date"
+                    value={nextServiceDate}
+                    onChange={(e) => setNextServiceDate(e.target.value)}
+                    className={dialogInputCls}
+                  />
+                </PrintRow>
+                <PrintRow label="Next Service KM">
+                  <input
+                    type="number"
+                    min={0}
+                    value={nextServiceKm}
+                    onChange={(e) => setNextServiceKm(e.target.value)}
+                    className={`${dialogInputCls} text-right tabular-nums`}
+                  />
+                </PrintRow>
+              </div>
+            </div>
+          </fieldset>
+
+          <div className="mt-3 rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-[11px] text-blue-900">
+            Print opens the bill in a new tab and auto-launches your
+            browser's print dialog — choose "Save as PDF" or send to the
+            printer there.
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between gap-2 border-t border-gray-200 bg-gray-50 px-4 py-3">
+          <div className="text-[10px] text-gray-500">
+            Pre-printed format support coming soon — Standard is wired today.
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={openInNewTab}
+              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Preview
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                openInNewTab()
+                onClose()
+              }}
+              className="rounded-md bg-gray-900 px-4 py-1.5 text-xs font-medium text-white hover:bg-gray-800"
+            >
+              Print
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const dialogInputCls =
+  'w-full rounded-md border border-gray-300 bg-white px-2 py-1 text-xs outline-none focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10'
+
+function PrintRow({
+  label,
+  children,
+}: {
+  label: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className="mb-1.5 grid grid-cols-[140px_1fr] items-center gap-2">
+      <label className="text-xs font-medium text-gray-700">{label}</label>
+      <div>{children}</div>
+    </div>
   )
 }
