@@ -1,23 +1,28 @@
 import { COMPANY } from '../lib/company'
 
 /**
- * Shared letterhead block for all printable workshop / sales docs
- * (quotation, cash bill, invoice, …).
+ * Shared letterhead block for all printable workshop / sales docs.
  *
- * Left column: Proton logo + company name + tagline + address +
- * registration / tel / SST / H/P / eMail.
- * Right column: document title (e.g. "Quotation", "Cash Bill") plus
- * a 2-col grid of meta fields the caller passes through `meta`.
+ * Layout:
+ *   [logo] [company name]                              [doc title]
+ *          [tagline]                                   [meta grid]
+ *          [address — joined into one line]
+ *          [reg · sst]
+ *          [tel · h/p · email]
  *
- * The Proton logo is served from `/proton-logo.png` (public dir).
- * If the file isn't there yet the `onError` handler hides the <img>
- * so the doc still prints cleanly with just the text letterhead.
+ * Compact by design — every field is one line so a long doc title
+ * ("Material Requisition Form") doesn't force the right column to
+ * wrap into a tall awkward block.
+ *
+ * The Proton logo is served from `/proton-logo.png` (public dir);
+ * the `onError` handler hides the <img> so the doc still prints
+ * cleanly if the asset is missing.
  */
 export function Letterhead({
   title,
   meta,
 }: {
-  /** Big right-side document title — "Quotation", "Cash Bill", … */
+  /** Right-side document title — "Quotation", "Cash Bill", … */
   title: string
   /** Right-side meta rows, [label, value] pairs. */
   meta: ReadonlyArray<readonly [string, React.ReactNode]>
@@ -28,44 +33,43 @@ export function Letterhead({
         <img
           src="/proton-logo.png"
           alt="Proton"
-          // The Proton logo PNG is the user's branded letterhead asset.
-          // If it's missing in /public the onError keeps the layout
-          // intact instead of leaving a broken-image icon on print.
           onError={(e) => {
             ;(e.currentTarget as HTMLImageElement).style.display = 'none'
           }}
-          className="h-16 w-auto print:h-14"
+          className="h-12 w-auto shrink-0 print:h-11"
         />
-        <div>
-          <div className="text-xl font-bold tracking-tight uppercase text-gray-900">
+        <div className="leading-snug">
+          <div className="text-lg font-bold tracking-tight uppercase text-gray-900">
             {COMPANY.name}
           </div>
-          <div className="mt-0.5 text-[11px] text-gray-700">
-            {COMPANY.tagline}
+          <div className="text-[10px] text-gray-500">{COMPANY.tagline}</div>
+          <div className="mt-1 text-[10px] text-gray-700">
+            {COMPANY.address.join(', ').replace(/,$/, '')}
           </div>
-          <div className="mt-1 text-[11px] leading-snug text-gray-700">
-            {COMPANY.address.map((line, i) => (
-              <div key={i}>{line}</div>
-            ))}
+          <div className="text-[10px] text-gray-700">
+            Reg: {COMPANY.regNo}
+            <Sep />
+            SST: {COMPANY.sstNo}
           </div>
-          <div className="mt-1 grid grid-cols-2 gap-x-4 text-[11px] text-gray-700">
-            <div>Company Reg No: {COMPANY.regNo}</div>
-            <div>Tel No: {COMPANY.tel}</div>
-            <div>SST No: {COMPANY.sstNo}</div>
-            <div>H/P No: {COMPANY.hp}</div>
-            <div className="col-span-2">eMail: {COMPANY.email}</div>
+          <div className="text-[10px] text-gray-700">
+            Tel: {COMPANY.tel}
+            <Sep />
+            H/P: {COMPANY.hp}
+            <Sep />
+            {COMPANY.email}
           </div>
         </div>
       </div>
-      <div className="text-right">
-        <div className="text-2xl font-bold tracking-wide uppercase text-gray-900">
+
+      <div className="shrink-0 text-right">
+        <div className="whitespace-nowrap text-xl font-bold uppercase tracking-tight text-gray-900">
           {title}
         </div>
         {meta.length > 0 && (
-          <div className="mt-1 grid grid-cols-[auto_1fr] gap-x-2 text-[11px] text-gray-700">
+          <div className="mt-1.5 grid grid-cols-[auto_auto] justify-end gap-x-2 gap-y-0.5 text-[10.5px] text-gray-700">
             {meta.map(([label, value], i) => (
               <span key={i} className="contents">
-                <span className="text-right">{label}</span>
+                <span className="text-right text-gray-500">{label}</span>
                 <span className="text-left">{value}</span>
               </span>
             ))}
@@ -74,4 +78,8 @@ export function Letterhead({
       </div>
     </div>
   )
+}
+
+function Sep() {
+  return <span className="mx-1.5 text-gray-300">·</span>
 }
