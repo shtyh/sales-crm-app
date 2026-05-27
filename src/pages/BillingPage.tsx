@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+// useEffect is kept for the PartsSearchModal's focus/escape handling.
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
 import { useAuth } from '../lib/auth'
@@ -6,6 +7,7 @@ import {
   useCreateServiceOrderItem,
   useCustomers,
   useDeleteServiceOrderItem,
+  useParts,
   useServiceOrder,
   useServiceOrderItems,
   useUpdateServiceOrderItem,
@@ -13,52 +15,20 @@ import {
 } from '../lib/queries'
 import { formatError } from '../lib/errors'
 import { formatMYR } from '../lib/format'
-import type { ServiceItemKind, ServiceOrderItem } from '../lib/types'
+import type { Part, ServiceOrderItem } from '../lib/types'
 
 /**
- * Billing Screen — laid out 1:1 with the legacy WMS dialog. Adds line
- * items to a service order; the items table maps to service_order_items,
- * the totals roll up the line_totals.
+ * Billing Screen — adds line items to a service order; rows persist via
+ * service_order_items, the totals roll up the line_totals.
  *
- * Columns we have today persist (kind / description / quantity /
- * unit_price / line_total). Categories, Bill No, Invoice Date, tax
- * codes, bonus points, trade-in, and the stock side panel are visible
- * to match the legacy screen but aren't backed by columns yet — tell
- * us which to wire first.
+ * Entry is keyed on Part Code: the SA either types it directly or opens
+ * the 🔍 picker, which searches parts_inventory by part_no / name /
+ * brand. Picking a part autofills the description + unit price.
+ *
+ * Bill No, Invoice Date, tax codes, bonus points, trade-in, and the
+ * stock side panel are still visible to match the legacy screen but
+ * aren't backed by columns yet.
  */
-
-// Legacy WMS quick-pick category buttons across the top. Each maps to
-// the F-key hint shown along the bottom strip.
-const CATEGORIES = [
-  { code: 'Plt', label: 'Plate' },
-  { code: 'Oil', label: 'Oil' },
-  { code: 'Tyr', label: 'Tyre' },
-  { code: 'Rim', label: 'Rim' },
-  { code: 'Srv', label: 'Service' },
-  { code: 'Nsk', label: 'Next Service' },
-  { code: 'Wtk', label: 'Wheel Tracking' },
-  { code: 'Pck', label: 'Pack' },
-  { code: 'Grp', label: 'Grouping' },
-  { code: 'Dcl', label: 'Decal' },
-] as const
-
-type CategoryCode = (typeof CATEGORIES)[number]['code']
-
-// Each category bucket maps to one of our two kinds (part vs labour).
-// Oil/Tyr/Rim/Pck/Plt/Dcl tend to be parts; Srv/Nsk/Wtk/Grp tend to be
-// labour. Best-effort — the SA can flip kind manually if needed.
-const CATEGORY_KIND: Record<CategoryCode, ServiceItemKind> = {
-  Plt: 'part',
-  Oil: 'part',
-  Tyr: 'part',
-  Rim: 'part',
-  Srv: 'labour',
-  Nsk: 'labour',
-  Wtk: 'labour',
-  Pck: 'part',
-  Grp: 'labour',
-  Dcl: 'part',
-}
 
 const inputClass =
   'w-full rounded border border-gray-300 bg-white px-2 py-1 text-sm outline-none focus:border-gray-900 focus:ring-1 focus:ring-gray-900/20'
@@ -82,10 +52,10 @@ export function BillingPage() {
   const updateItem = useUpdateServiceOrderItem()
   const deleteItem = useDeleteServiceOrderItem()
 
-  const [category, setCategory] = useState<CategoryCode | ''>('')
-  const [serviceCode, setServiceCode] = useState('')
-  const [extraDesc, setExtraDesc] = useState('')
+  const [partCode, setPartCode] = useState('')
+  const [partName, setPartName] = useState('')
   const [remarks, setRemarks] = useState('')
+  const [partsOpen, setPartsOpen] = useState(false)
   const [quantity, setQuantity] = useState('1')
   const [unit, setUnit] = useState('UNIT')
   const [unitPrice, setUnitPrice] = useState('0')
@@ -131,9 +101,8 @@ export function BillingPage() {
 
   function clearEntry() {
     setSelectedId(null)
-    setCategory('')
-    setServiceCode('')
-    setExtraDesc('')
+    setPartCode('')
+    setPartName('')
     setRemarks('')
     setQuantity('1')
     setUnit('UNIT')
@@ -145,12 +114,13 @@ export function BillingPage() {
 
   function loadIntoEntry(it: ServiceOrderItem) {
     setSelectedId(it.id)
-    setCategory('')
-    setServiceCode('')
-    // We pack the visible description from extra_desc + remarks back into
-    // a single string since the DB only stores one description column.
-    setExtraDesc(it.description)
-    setRemarks('')
+    // The DB stores one description string; split it back into a name
+    // (best-effort) — anything before the first " · " is treated as the
+    // part name, the rest as remarks.
+    const [first, ...rest] = it.description.split(' · ')
+    setPartCode('')
+    setPartName(first ?? '')
+    setRemarks(rest.join(' · '))
     setQuantity(String(it.quantity))
     setUnit('UNIT')
     setUnitPrice(String(it.unit_price))
@@ -158,14 +128,28 @@ export function BillingPage() {
     setDiscount('0')
   }
 
+  // When the SA picks a part from the search modal, autofill code + name
+  // + unit price. The free-text "Remarks" field is left untouched.
+  function applyPart(part: Part) {
+    setPartCode(part.part_no)
+    setPartName(part.name)
+    setUnit(part.unit || 'UNIT')
+    setUnitPrice(String(part.unit_price ?? 0))
+    setPartsOpen(false)
+  }
+
   async function handleSave(e: FormEvent) {
     e.preventDefault()
     setError(null)
+    // Description is what the line shows in the table: part code first
+    // (so SAs can scan by code), then the part name and any remarks.
     const description =
-      [serviceCode, extraDesc, remarks].filter(Boolean).join(' · ').trim() ||
-      (category ? CATEGORIES.find((c) => c.code === category)!.label : '')
+      [partCode, partName, remarks]
+        .filter((s) => s.trim().length > 0)
+        .join(' · ')
+        .trim()
     if (!description) {
-      setError('Add a Service Code, Extra Desc, or Remarks line first.')
+      setError('Enter a Part Code (or pick one from search) before saving.')
       return
     }
     if (qtyN <= 0) {
@@ -177,7 +161,7 @@ export function BillingPage() {
         await updateItem.mutateAsync({
           id: selectedId,
           patch: {
-            kind: category ? CATEGORY_KIND[category] : 'labour',
+            kind: 'part',
             description,
             quantity: qtyN,
             unit_price: unitPriceN,
@@ -187,7 +171,7 @@ export function BillingPage() {
       } else {
         await createItem.mutateAsync({
           service_order_id: id,
-          kind: category ? CATEGORY_KIND[category] : 'labour',
+          kind: 'part',
           description,
           quantity: qtyN,
           unit_price: unitPriceN,
@@ -211,38 +195,6 @@ export function BillingPage() {
     }
   }
 
-  // Apply category quick-pick — also seeds the description prefix so
-  // the SA doesn't have to retype "OIL" etc.
-  function pickCategory(code: CategoryCode) {
-    setCategory(code)
-    if (!serviceCode) {
-      setServiceCode(CATEGORIES.find((c) => c.code === code)!.label)
-    }
-  }
-
-  // F2–F7 = category shortcuts on the legacy keyboard layout.
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.target instanceof HTMLInputElement) return
-      if (e.target instanceof HTMLTextAreaElement) return
-      const map: Record<string, CategoryCode> = {
-        F2: 'Plt',
-        F3: 'Oil',
-        F4: 'Tyr',
-        F5: 'Rim',
-        F6: 'Srv',
-        F7: 'Pck',
-      }
-      const code = map[e.key]
-      if (code) {
-        e.preventDefault()
-        pickCategory(code)
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serviceCode])
 
   if (isLoading) {
     return (
@@ -382,49 +334,38 @@ export function BillingPage() {
           </HeaderRow>
         </div>
 
-        {/* ============ CATEGORY QUICK-PICK STRIP ============ */}
-        <div className="mt-4 border-t border-gray-200 pt-3">
-          <div className={`${labelClass} mb-1`}>Service Category</div>
-          <div className="flex flex-wrap gap-1">
-            {CATEGORIES.map((c) => (
-              <button
-                type="button"
-                key={c.code}
-                onClick={() => pickCategory(c.code)}
-                title={c.label}
-                className={`rounded px-2.5 py-1 text-xs font-medium transition ${
-                  category === c.code
-                    ? 'bg-blue-600 text-white'
-                    : 'border border-gray-300 bg-white text-gray-700 hover:bg-blue-50'
-                }`}
-              >
-                {c.code}
-              </button>
-            ))}
-          </div>
-        </div>
-
         {/* ============ ENTRY FORM ============ */}
         <form
           onSubmit={handleSave}
-          className="mt-3 grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-[1fr_18rem]"
+          className="mt-4 grid grid-cols-1 gap-x-6 gap-y-2 border-t border-gray-200 pt-3 sm:grid-cols-[1fr_18rem]"
         >
           <div className="space-y-2">
-            <Field label="Service Code">
-              <input
-                type="text"
-                value={serviceCode}
-                onChange={(e) => setServiceCode(e.target.value)}
-                className={inputClass}
-                placeholder="e.g. OIL-5W30-1L"
-              />
+            <Field label="Part Code">
+              <div className="flex w-full items-center gap-1.5">
+                <input
+                  type="text"
+                  value={partCode}
+                  onChange={(e) => setPartCode(e.target.value.toUpperCase())}
+                  className={`${inputClass} font-mono`}
+                  placeholder="Type or click 🔍 to search inventory"
+                />
+                <button
+                  type="button"
+                  onClick={() => setPartsOpen(true)}
+                  title="Search parts inventory"
+                  className="rounded border border-gray-300 bg-white px-2 py-1 text-sm hover:bg-gray-50"
+                >
+                  🔍
+                </button>
+              </div>
             </Field>
-            <Field label="Extra Desc / Code">
+            <Field label="Part Name">
               <input
                 type="text"
-                value={extraDesc}
-                onChange={(e) => setExtraDesc(e.target.value)}
+                value={partName}
+                onChange={(e) => setPartName(e.target.value)}
                 className={inputClass}
+                placeholder="Auto-fills when a part is picked"
               />
             </Field>
             <Field label="Remarks">
@@ -634,7 +575,7 @@ export function BillingPage() {
                       colSpan={9}
                       className="px-3 py-6 text-center text-gray-500"
                     >
-                      No line items yet. Pick a category, fill the entry
+                      No line items yet. Search for a part, fill the entry
                       form above, and click Save.
                     </td>
                   </tr>
@@ -693,18 +634,14 @@ export function BillingPage() {
           </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-gray-200 pt-3 text-[10px] text-gray-500">
-          <span className="font-mono">F2:PRT</span>
-          <span className="font-mono">F3:OIL</span>
-          <span className="font-mono">F4:TYR</span>
-          <span className="font-mono">F5:RIM</span>
-          <span className="font-mono">F6:SRV</span>
-          <span className="font-mono">F7:PCK</span>
-          <span className="ml-auto">
-            Function keys pick a category (when not focused in a field).
-          </span>
-        </div>
       </div>
+
+      {partsOpen && (
+        <PartsSearchModal
+          onPick={applyPart}
+          onClose={() => setPartsOpen(false)}
+        />
+      )}
     </AppShell>
   )
 }
@@ -866,5 +803,146 @@ function Btn({
     >
       {children}
     </button>
+  )
+}
+
+/**
+ * Parts inventory picker. Loads the active parts roster, filters
+ * client-side as the SA types (part_no, name, brand), and resolves to a
+ * Part on row-click. Cheap because parts_inventory is short — if it
+ * ever grows past a few thousand we can move the search server-side.
+ */
+function PartsSearchModal({
+  onPick,
+  onClose,
+}: {
+  onPick: (p: Part) => void
+  onClose: () => void
+}) {
+  const { data: parts, error } = useParts()
+  const [q, setQ] = useState('')
+  const overlayRef = useRef<HTMLDivElement | null>(null)
+  const inputRef = useRef<HTMLInputElement | null>(null)
+
+  useEffect(() => {
+    inputRef.current?.focus()
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const filtered = useMemo(() => {
+    const needle = q.trim().toLowerCase()
+    const active = (parts ?? []).filter((p) => p.is_active)
+    if (!needle) return active
+    return active.filter(
+      (p) =>
+        p.part_no.toLowerCase().includes(needle) ||
+        p.name.toLowerCase().includes(needle) ||
+        (p.brand ?? '').toLowerCase().includes(needle),
+    )
+  }, [parts, q])
+
+  return (
+    <div
+      ref={overlayRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Search parts"
+      className="fixed inset-0 z-30 flex items-start justify-center bg-black/40 px-4 py-10"
+      onClick={(e) => {
+        if (e.target === overlayRef.current) onClose()
+      }}
+    >
+      <div className="max-h-full w-full max-w-2xl overflow-hidden rounded-2xl border border-gray-300 bg-white shadow-xl">
+        <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
+          <div>
+            <div className="text-[10px] font-medium uppercase tracking-widest text-gray-500">
+              Inventory search
+            </div>
+            <h2 className="mt-0.5 text-base font-semibold text-gray-900">
+              Pick a part
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="border-b border-gray-200 px-4 py-3">
+          <input
+            ref={inputRef}
+            type="search"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search by part no, name, or brand…"
+            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10"
+          />
+        </div>
+
+        {error && (
+          <div className="px-4 py-2 text-sm text-red-700">
+            {formatError(error)}
+          </div>
+        )}
+
+        <div className="max-h-[60vh] overflow-y-auto">
+          {!parts && !error && (
+            <div className="px-4 py-8 text-center text-sm text-gray-500">
+              Loading parts…
+            </div>
+          )}
+          {parts && filtered.length === 0 && (
+            <div className="px-4 py-8 text-center text-sm text-gray-500">
+              {parts.length === 0
+                ? 'No parts in inventory yet. Add part numbers first.'
+                : `No parts match "${q}".`}
+            </div>
+          )}
+          <table className="min-w-full divide-y divide-gray-100 text-xs">
+            <thead className="sticky top-0 bg-gray-50 uppercase tracking-wider text-gray-500">
+              <tr>
+                <th className="px-3 py-2 text-left font-medium">Part No</th>
+                <th className="px-3 py-2 text-left font-medium">Name</th>
+                <th className="px-3 py-2 text-left font-medium">Brand</th>
+                <th className="px-3 py-2 text-right font-medium">Stock</th>
+                <th className="px-3 py-2 text-right font-medium">
+                  Unit price
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {filtered.map((p) => (
+                <tr
+                  key={p.id}
+                  onClick={() => onPick(p)}
+                  className="cursor-pointer hover:bg-blue-50"
+                >
+                  <td className="whitespace-nowrap px-3 py-2 font-mono text-gray-900">
+                    {p.part_no}
+                  </td>
+                  <td className="px-3 py-2 text-gray-900">{p.name}</td>
+                  <td className="px-3 py-2 text-gray-700">
+                    {p.brand ?? '—'}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-gray-700">
+                    {Number(p.stock_qty).toLocaleString()} {p.unit}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-gray-900">
+                    {formatMYR(Number(p.unit_price ?? 0))}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   )
 }
