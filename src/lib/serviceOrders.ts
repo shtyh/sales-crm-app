@@ -65,6 +65,19 @@ export async function createServiceOrder(
   return data as ServiceOrder
 }
 
+/**
+ * Hard-delete a service order. RLS lets super_admin do this (existing
+ * service_orders_delete policy). Linked service_order_items cascade
+ * via the FK on delete cascade.
+ */
+export async function deleteServiceOrder(id: string) {
+  const { error } = await supabase
+    .from('service_orders')
+    .delete()
+    .eq('id', id)
+  if (error) throw error
+}
+
 /** Patch named fields on a service order. */
 export async function updateServiceOrder(
   id: string,

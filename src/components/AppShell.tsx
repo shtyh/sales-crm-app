@@ -137,6 +137,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               online={online}
               isAdmin={isAdmin}
               isSuperAdmin={isSuperAdmin}
+              showAttendance={role !== 'sales_advisor'}
               onSignOut={handleSignOut}
             />
           </div>
@@ -160,6 +161,7 @@ function UserMenu({
   online,
   isAdmin,
   isSuperAdmin,
+  showAttendance,
   onSignOut,
 }: {
   displayName: string
@@ -167,6 +169,7 @@ function UserMenu({
   online: boolean
   isAdmin: boolean
   isSuperAdmin: boolean
+  showAttendance: boolean
   onSignOut: () => void
 }) {
   const [open, setOpen] = useState(false)
@@ -240,16 +243,23 @@ function UserMenu({
               {online ? 'Online' : 'Offline'}
             </div>
           </div>
-          <MenuLink to="/clock-in" onClick={() => setOpen(false)}>
-            🕒 Clock in / out
-          </MenuLink>
-          <MenuLink to="/attendance" onClick={() => setOpen(false)}>
-            My attendance
-          </MenuLink>
-          {isAdmin && (
-            <MenuLink to="/admin/attendance" onClick={() => setOpen(false)}>
-              Team attendance
-            </MenuLink>
+          {showAttendance && (
+            <>
+              <MenuLink to="/clock-in" onClick={() => setOpen(false)}>
+                🕒 Clock in / out
+              </MenuLink>
+              <MenuLink to="/attendance" onClick={() => setOpen(false)}>
+                My attendance
+              </MenuLink>
+              {isAdmin && (
+                <MenuLink
+                  to="/admin/attendance"
+                  onClick={() => setOpen(false)}
+                >
+                  Team attendance
+                </MenuLink>
+              )}
+            </>
           )}
           <MenuLink to="/account" onClick={() => setOpen(false)}>
             Account

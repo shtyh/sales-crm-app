@@ -62,7 +62,7 @@ Current real users (`select id, full_name, role from public.profiles`):
 | `vehicles` | any auth read; non-SA write; super delete | `customer_id` FK, `car_id?` (bridge to SWL inventory), `registration_no unique`, `chassis_no? unique`, model, variant, color, year, mileage, notes. **WMS account fields (2026-05-26)**: `account_no`, `membership_no`, `engine_no`, `capacity_cc`, `year_make`, `registration_date`, `warranty_date`. |
 | `technicians` | any auth read; non-SA write; super delete | `profile_id?` (one-to-one with profiles if they log in), name, employee_no? unique, phone, specialty, is_active. |
 | `parts_inventory` | any auth read; non-SA write; super delete | `part_no unique`, name, brand, unit, unit_cost/price, stock_qty (not auto-decremented yet), reorder_level, location, is_active. |
-| `service_orders` | any auth read; non-SA write; super delete | `order_no?` unique-when-set, `customer_id` + `vehicle_id` FK, `technician_id?`, `service_advisor_id?`, status enum (open/in_progress/awaiting_parts/completed/collected/cancelled), complaint/diagnosis, mileage_in **(NOT NULL on the FE; column itself is nullable)**, opened_at/completed_at/collected_at, subtotal/tax/total. **Intake (2026-05-26)**: `service_types text[]` (maintenance / int_g_repair / warranty_service / service_coupon / come_back_job / body_repair / inspection), `appointment_type` ('walk_in' default / 'by_appointment'), `days_to_complete`. The earlier `department` column was added and removed the same day (see migrations). |
+| `service_orders` | any auth read; non-SA write; super delete (UI exposed on `/service-orders/:id` "★ Delete order"; two-step confirm with typed `order_no`; service_order_items cascade) | `order_no?` unique-when-set, `customer_id` + `vehicle_id` FK, `technician_id?`, `service_advisor_id?`, status enum (open/in_progress/awaiting_parts/completed/collected/cancelled), complaint/diagnosis, mileage_in **(NOT NULL on the FE; column itself is nullable)**, opened_at/completed_at/collected_at, subtotal/tax/total. **Intake (2026-05-26)**: `service_types text[]` (maintenance / int_g_repair / warranty_service / service_coupon / come_back_job / body_repair / inspection), `appointment_type` ('walk_in' default / 'by_appointment'), `days_to_complete`. The earlier `department` column was added and removed the same day (see migrations). |
 | `service_order_items` | any auth read; non-SA write; super delete | `service_order_id` FK (cascade), `kind` enum (part/labour), `part_id?` (required when kind=part), description, quantity, unit_price, line_total. |
 | `bookings` | per-column gated by trigger | see below |
 | `booking_attachments` | booking owner + any admin | `kind` enum (bank_transaction / bank_statement / lou / cancellation_form / other) |
@@ -251,7 +251,7 @@ Primary nav links by role:
   payment-ledger, and warranty flows. The previous active-jobs dashboard
   is gone (replaced by this view).
 
-- **Clock-in system** (2026-05-26) — `/clock-in` runs the browser
+- **Clock-in system** (2026-05-26, sales-advisor exempt) — `/clock-in` runs the browser
   Geolocation API on mount, computes haversine distance to the office
   (5.3449, 100.4891 — Bukit Mertajam, 500 m radius from `src/lib/geo.ts`),
   and gates Check In behind being inside the geofence. Check Out is
@@ -260,7 +260,8 @@ Primary nav links by role:
   own calendar + monthly summary (late = check-in hour ≥ 9 local).
   `/admin/attendance` is the manager view (Today tab: who's in / late
   / not yet / done; Month tab: employees × days dot grid + per-row
-  late count). Both dashboards entered from the avatar dropdown.
+  late count). All three entries hidden from the avatar dropdown for
+  `sales_advisor` (the sales floor doesn't clock in here).
 
 - **AdminDashboardPage** still serves super_admin and sales_manager.
   `RoleHome` dispatches:

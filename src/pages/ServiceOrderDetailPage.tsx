@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import { Link, Navigate, useParams } from 'react-router-dom'
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
 import { useAuth } from '../lib/auth'
 import {
   useCreateServiceOrderItem,
+  useDeleteServiceOrder,
   useDeleteServiceOrderItem,
   useServiceOrder,
   useServiceOrderItems,
@@ -49,7 +50,8 @@ function formatMyr(n: number) {
 
 export function ServiceOrderDetailPage() {
   const { id = '' } = useParams<{ id: string }>()
-  const { role, isAdmin } = useAuth()
+  const navigate = useNavigate()
+  const { role, isAdmin, isSuperAdmin } = useAuth()
 
   // Workshop only — SAs (sales side) bounced.
   if (role && !isAdmin) return <Navigate to="/" replace />
@@ -61,6 +63,7 @@ export function ServiceOrderDetailPage() {
   const createItem = useCreateServiceOrderItem()
   const updateItem = useUpdateServiceOrderItem()
   const deleteItem = useDeleteServiceOrderItem()
+  const deleteOrder = useDeleteServiceOrder()
 
   // Header form state (mirrors order rows once loaded).
   const [status, setStatus] = useState<ServiceOrderStatus>('open')
@@ -280,7 +283,43 @@ export function ServiceOrderDetailPage() {
           </div>
         )}
 
-        <div className="flex justify-end gap-3 border-t border-gray-100 pt-4">
+        <div className="flex flex-wrap justify-end gap-3 border-t border-gray-100 pt-4">
+          {isSuperAdmin && order && (
+            <button
+              type="button"
+              onClick={async () => {
+                if (
+                  !window.confirm(
+                    `PERMANENTLY DELETE service order ${order.order_no ?? '(no number)'}?\n\n` +
+                      'This wipes the job sheet and every line item on it. ' +
+                      'There is no undo. Normally you should set the status ' +
+                      'to Cancelled instead.',
+                  )
+                ) {
+                  return
+                }
+                const typed = window.prompt(
+                  `To confirm, type the order number exactly: ${order.order_no ?? ''}`,
+                )
+                if ((typed ?? '') !== (order.order_no ?? '')) {
+                  setError('Order number did not match — delete aborted.')
+                  return
+                }
+                setError(null)
+                try {
+                  await deleteOrder.mutateAsync(order.id)
+                  navigate('/service/ops', { replace: true })
+                } catch (e) {
+                  setError(formatError(e))
+                }
+              }}
+              disabled={deleteOrder.isPending || updateOrder.isPending}
+              className="rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-60"
+              title="Hard-delete this service order (super_admin only)"
+            >
+              {deleteOrder.isPending ? 'Deleting…' : '★ Delete order'}
+            </button>
+          )}
           <button
             type="submit"
             disabled={updateOrder.isPending}

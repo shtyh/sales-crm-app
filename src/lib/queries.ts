@@ -37,6 +37,7 @@ import {
 } from './vehicles'
 import {
   createServiceOrder,
+  deleteServiceOrder,
   getServiceOrder,
   listServiceOrders,
   updateServiceOrder,
@@ -578,6 +579,18 @@ export function useUpdateServiceOrder() {
     onSuccess: (_, vars) => {
       qc.invalidateQueries({ queryKey: qk.serviceOrders })
       qc.invalidateQueries({ queryKey: qk.serviceOrder(vars.id) })
+    },
+  })
+}
+
+/** Hard-delete a service order (super_admin only — DB RLS enforces). */
+export function useDeleteServiceOrder() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => deleteServiceOrder(id),
+    onSuccess: (_, id) => {
+      qc.removeQueries({ queryKey: qk.serviceOrder(id) })
+      qc.invalidateQueries({ queryKey: qk.serviceOrders })
     },
   })
 }
