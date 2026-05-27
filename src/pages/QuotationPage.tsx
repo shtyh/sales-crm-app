@@ -6,6 +6,7 @@ import {
   useServiceOrderItems,
   useVehicles,
 } from '../lib/queries'
+import { COMPANY } from '../lib/company'
 import { formatError } from '../lib/errors'
 import { formatMYR } from '../lib/format'
 import { SST_LABOUR_LABEL, labourSST } from '../lib/tax'
@@ -123,17 +124,23 @@ export function QuotationPage() {
         {/* Header strip */}
         <div className="flex items-start justify-between border-b-2 border-gray-900 pb-3">
           <div>
-            <div className="text-xl font-bold tracking-tight text-gray-900">
-              SWL MOTORS SDN BHD
+            <div className="text-xl font-bold tracking-tight uppercase text-gray-900">
+              {COMPANY.name}
             </div>
             <div className="mt-0.5 text-[11px] text-gray-700">
-              Proton Authorised Dealer · Bukit Mertajam, Penang
+              {COMPANY.tagline}
+            </div>
+            <div className="mt-1 text-[11px] leading-snug text-gray-700">
+              {COMPANY.address.map((line, i) => (
+                <div key={i}>{line}</div>
+              ))}
             </div>
             <div className="mt-1 grid grid-cols-2 gap-x-4 text-[11px] text-gray-700">
-              <div>Company Reg No: —</div>
-              <div>Tel No: —</div>
-              <div>&nbsp;</div>
-              <div>H/P No: —</div>
+              <div>Company Reg No: {COMPANY.regNo}</div>
+              <div>Tel No: {COMPANY.tel}</div>
+              <div>SST No: {COMPANY.sstNo}</div>
+              <div>H/P No: {COMPANY.hp}</div>
+              <div className="col-span-2">eMail: {COMPANY.email}</div>
             </div>
           </div>
           <div className="text-right">
