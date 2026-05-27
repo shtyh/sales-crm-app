@@ -10,7 +10,7 @@ export const OFFICE = {
   lat: 5.3073479,
   lng: 100.4691911,
   /** Check-in is permitted only within this radius (metres). */
-  radiusM: 500,
+  radiusM: 100,
 } as const
 
 /** When a check-in is considered "late". Local hour in Asia/Kuala_Lumpur. */
