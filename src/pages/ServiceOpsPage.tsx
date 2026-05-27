@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
 import { useAuth } from '../lib/auth'
@@ -107,6 +107,20 @@ export function ServiceOpsPage() {
   const error = ordersErr ? formatError(ordersErr) : null
   const selectedOrder =
     (selectedId && rows.find((o) => o.id === selectedId)) || null
+
+  // Auto-select the first visible row whenever rows change and the
+  // current selection drops out of view (or no row is selected yet).
+  // Mirrors the legacy WMS, which always keeps a row highlighted so
+  // row-scoped actions like "Billing history" stay reachable.
+  useEffect(() => {
+    if (rows.length === 0) {
+      if (selectedId !== null) setSelectedId(null)
+      return
+    }
+    if (!selectedId || !rows.some((o) => o.id === selectedId)) {
+      setSelectedId(rows[0].id)
+    }
+  }, [rows, selectedId])
 
   return (
     <AppShell>
@@ -381,16 +395,16 @@ export function ServiceOpsPage() {
         <div className="mt-2 text-[10px] text-gray-500">
           {selectedOrder ? (
             <>
-              Selected:{' '}
+              Acting on{' '}
               <span className="font-mono text-gray-700">
                 {selectedOrder.order_no ?? '—'}
               </span>{' '}
-              · click another row to switch.
+              · click another row to switch. Greyed buttons are placeholders —
+              tell us which to wire first.
             </>
           ) : (
             <>
-              Click a job row to select it, then use the actions above. Greyed
-              buttons are placeholders — tell us which to wire first.
+              Greyed buttons are placeholders — tell us which to wire first.
             </>
           )}
         </div>
