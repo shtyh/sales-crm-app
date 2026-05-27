@@ -9,6 +9,7 @@ import {
   OFFICE,
   getCurrentPosition,
   haversineM,
+  isMobileDevice,
   malaysiaToday,
 } from '../lib/geo'
 
@@ -32,14 +33,20 @@ export function ClockInPage() {
   const checkInMut = useCheckIn()
   const checkOutMut = useCheckOut()
 
+  // Snapshot once on mount — if the result changed mid-session (e.g.
+  // DevTools toggled mobile emulation) we don't care, and we definitely
+  // don't want this re-evaluating after a Hot Reload.
+  const [isMobile] = useState(() => isMobileDevice())
+
   const [fix, setFix] = useState<FixState>({ kind: 'idle' })
   const [error, setError] = useState<string | null>(null)
   const [savedAt, setSavedAt] = useState<number | null>(null)
 
-  // Request GPS as soon as we have a profile to act for. Returning the
-  // raw distance lets the buttons disable themselves while outside the
-  // geofence without an extra round-trip.
+  // Request GPS as soon as we have a profile to act for. Skip when the
+  // caller is on desktop — we won't show the buttons anyway, and asking
+  // for location on a non-phone is wasted noise.
   const requestFix = useCallback(async () => {
+    if (!isMobile) return
     setFix({ kind: 'requesting' })
     setError(null)
     try {
@@ -66,7 +73,7 @@ export function ClockInPage() {
           : (e as Error).message
       setFix({ kind: 'denied', message })
     }
-  }, [])
+  }, [isMobile])
 
   useEffect(() => {
     if (!profile?.id) return
@@ -86,6 +93,47 @@ export function ClockInPage() {
   // Workshop / sales advisors / admins all clock in here. Nobody is gated
   // out — but we still bounce people without a profile (shouldn't happen).
   if (!role) return <Navigate to="/" replace />
+
+  // Phone-only — desktop browsers can't punch in. Combined with the GPS
+  // geofence this raises the bar against "clock in from the office PC".
+  if (!isMobile) {
+    return (
+      <AppShell>
+        <div className="mx-auto max-w-md">
+          <h1 className="text-xl font-semibold text-gray-900">Clock In</h1>
+          <p className="mt-0.5 text-sm text-gray-500">
+            Hi {profile.full_name || profile.email}
+          </p>
+
+          <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
+            <div className="text-2xl">📱</div>
+            <div className="mt-2 text-base font-semibold">
+              Open this on your phone.
+            </div>
+            <p className="mt-1 text-amber-800">
+              Clock-in only works from a mobile device — we need a real GPS
+              fix from the showroom to record your attendance. Scan the QR
+              code or type the URL on your phone&rsquo;s browser:
+            </p>
+            <div className="mt-3 rounded-lg border border-amber-200 bg-white p-2 font-mono text-xs text-gray-800">
+              {typeof window !== 'undefined'
+                ? `${window.location.origin}/clock-in`
+                : '/clock-in'}
+            </div>
+          </div>
+
+          <div className="mt-6 flex justify-between text-xs text-gray-600">
+            <Link to="/attendance" className="hover:underline">
+              My attendance →
+            </Link>
+            <Link to="/" className="hover:underline">
+              Back to home
+            </Link>
+          </div>
+        </div>
+      </AppShell>
+    )
+  }
 
   const todayRow = todayQ.data
   const isCheckedIn = !!todayRow && !todayRow.check_out_at
