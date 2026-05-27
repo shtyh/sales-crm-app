@@ -5,11 +5,14 @@ import { useAuth } from '../lib/auth'
 import { useAvailableSlots, useSubmitAppointment } from '../lib/queries'
 import { formatError } from '../lib/errors'
 import {
+  SERVICE_MILEAGE_OPTIONS,
   SLOT_CAPACITY,
   SLOT_LABEL,
   SLOT_TIMES,
+  formatServiceMileage,
   formatSlot,
   type AvailableSlot,
+  type ServiceMileage,
   type SlotTime,
 } from '../lib/types'
 
@@ -43,7 +46,6 @@ export function BookPage({
 
   const [customerName, setCustomerName] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
-  const [customerNric, setCustomerNric] = useState('')
   const [customerEmail, setCustomerEmail] = useState('')
   const [vehicleReg, setVehicleReg] = useState('')
   const [vehicleChassis, setVehicleChassis] = useState('')
@@ -52,6 +54,8 @@ export function BookPage({
   const today = new Date().toISOString().slice(0, 10)
   const [preferredDate, setPreferredDate] = useState(today)
   const [slotTime, setSlotTime] = useState<SlotTime | null>(null)
+  const [serviceMileage, setServiceMileage] =
+    useState<ServiceMileage | null>(null)
   const [complaint, setComplaint] = useState('')
   const [phoneBlock, setPhoneBlock] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
@@ -71,26 +75,35 @@ export function BookPage({
 
     const name = customerName.trim()
     const phone = customerPhone.trim()
+    const email = customerEmail.trim()
     const reg = vehicleReg.trim().toUpperCase()
-    if (!name || !phone || !reg) {
-      setFormError('Please fill in your name, phone, and vehicle reg.')
+    const chassis = vehicleChassis.trim().toUpperCase()
+    const model = vehicleModel.trim()
+    if (!name || !phone || !email || !reg || !chassis || !model) {
+      setFormError(
+        'Please fill in name, phone, email, vehicle reg, chassis, and model.',
+      )
       return
     }
     if (!slotTime) {
       setFormError('Please pick a time slot.')
       return
     }
+    if (!serviceMileage) {
+      setFormError('Please pick which service interval (km) you need.')
+      return
+    }
     try {
       const token = await submitMut.mutateAsync({
         customer_name: name,
         customer_phone: phone,
-        customer_nric: customerNric.trim() || null,
-        customer_email: customerEmail.trim() || null,
+        customer_email: email,
         vehicle_reg: reg,
-        vehicle_chassis: vehicleChassis.trim() || null,
-        vehicle_model: vehicleModel.trim() || null,
+        vehicle_chassis: chassis,
+        vehicle_model: model,
         preferred_date: preferredDate,
         slot_time: slotTime,
+        service_mileage: serviceMileage,
         complaint: complaint.trim() || null,
         phone_block: staffPhoneBlockEnabled ? phoneBlock : false,
       })
@@ -140,20 +153,12 @@ export function BookPage({
             className={inputCls}
           />
         </Field>
-        <Field label="NRIC (optional)">
-          <input
-            value={customerNric}
-            onChange={(e) => setCustomerNric(e.target.value)}
-            inputMode="numeric"
-            placeholder="12-digit IC, no dashes"
-            className={inputCls}
-          />
-        </Field>
-        <Field label="Email (optional)">
+        <Field label="Email" required>
           <input
             type="email"
             value={customerEmail}
             onChange={(e) => setCustomerEmail(e.target.value)}
+            required
             autoComplete="email"
             className={inputCls}
           />
@@ -169,17 +174,19 @@ export function BookPage({
             className={`${inputCls} font-mono uppercase`}
           />
         </Field>
-        <Field label="Chassis no (optional)">
+        <Field label="Chassis no" required>
           <input
             value={vehicleChassis}
             onChange={(e) => setVehicleChassis(e.target.value)}
+            required
             className={`${inputCls} font-mono uppercase`}
           />
         </Field>
-        <Field label="Model (optional)">
+        <Field label="Model" required>
           <input
             value={vehicleModel}
             onChange={(e) => setVehicleModel(e.target.value)}
+            required
             placeholder="e.g. Proton X50"
             className={inputCls}
           />
@@ -187,6 +194,29 @@ export function BookPage({
       </Section>
 
       <Section title="Pick a slot">
+        <Field label="Service interval (km)" required>
+          <select
+            value={serviceMileage ?? ''}
+            onChange={(e) =>
+              setServiceMileage(
+                e.target.value
+                  ? (Number(e.target.value) as ServiceMileage)
+                  : null,
+              )
+            }
+            required
+            className={inputCls}
+          >
+            <option value="" disabled>
+              Pick the service interval
+            </option>
+            {SERVICE_MILEAGE_OPTIONS.map((km) => (
+              <option key={km} value={km}>
+                {formatServiceMileage(km)}
+              </option>
+            ))}
+          </select>
+        </Field>
         <Field label="Date" required>
           <input
             type="date"
@@ -247,7 +277,7 @@ export function BookPage({
 
       <button
         type="submit"
-        disabled={submitMut.isPending || !slotTime}
+        disabled={submitMut.isPending || !slotTime || !serviceMileage}
         className="w-full rounded-md bg-gray-900 px-4 py-3 text-sm font-medium text-white shadow hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
       >
         {submitMut.isPending

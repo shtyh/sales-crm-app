@@ -11,6 +11,7 @@ import {
 import { formatError } from '../lib/errors'
 import {
   APPOINTMENT_STATUS_LABEL,
+  formatServiceMileage,
   formatSlot,
   type AppointmentStatus,
   type ServiceAppointment,
@@ -159,6 +160,7 @@ export function ServiceAppointmentsPage() {
               <Th>Customer</Th>
               <Th>Phone</Th>
               <Th>Vehicle</Th>
+              <Th>Service</Th>
               <Th>Complaint</Th>
               <Th>Source</Th>
               <Th>Status</Th>
@@ -170,7 +172,7 @@ export function ServiceAppointmentsPage() {
             {!appts && !error && (
               <tr>
                 <td
-                  colSpan={10}
+                  colSpan={11}
                   className="px-3 py-8 text-center text-sm text-gray-500"
                 >
                   Loading…
@@ -180,7 +182,7 @@ export function ServiceAppointmentsPage() {
             {appts && rows.length === 0 && (
               <tr>
                 <td
-                  colSpan={10}
+                  colSpan={11}
                   className="px-3 py-8 text-center text-sm text-gray-500"
                 >
                   No appointments match the current filter.
@@ -246,6 +248,13 @@ function Row({
           <div className="font-mono text-gray-900">{row.vehicle_reg}</div>
           {row.vehicle_model && (
             <div className="text-[10px] text-gray-500">{row.vehicle_model}</div>
+          )}
+        </td>
+        <td className="whitespace-nowrap px-3 py-2 text-gray-700">
+          {row.service_mileage ? (
+            formatServiceMileage(row.service_mileage)
+          ) : (
+            <span className="text-gray-400">—</span>
           )}
         </td>
         <td className="max-w-xs truncate px-3 py-2 text-gray-700" title={row.complaint ?? ''}>
@@ -319,7 +328,7 @@ function Row({
       </tr>
       {rejecting && isPending && (
         <tr className="bg-rose-50/60">
-          <td colSpan={10} className="px-3 py-3">
+          <td colSpan={11} className="px-3 py-3">
             <div className="flex flex-wrap items-center gap-2">
               <label className="text-xs font-medium text-rose-900">
                 Reject reason (shown to the customer):

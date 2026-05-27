@@ -4,6 +4,7 @@ import { formatError } from '../lib/errors'
 import {
   APPOINTMENT_PERIOD_LABEL,
   APPOINTMENT_STATUS_LABEL,
+  formatServiceMileage,
   formatSlot,
   type PublicServiceAppointment,
 } from '../lib/types'
@@ -156,6 +157,14 @@ function Status({ row }: { row: PublicServiceAppointment }) {
           />
           <Item label="Date" value={dateLabel} />
           <Item label="Time" value={timeLabel} />
+          <Item
+            label="Service interval"
+            value={
+              row.service_mileage
+                ? formatServiceMileage(row.service_mileage)
+                : <Muted>—</Muted>
+            }
+          />
           <Item label="Vehicle" value={row.vehicle_reg} mono />
           <Item
             label="Chassis"

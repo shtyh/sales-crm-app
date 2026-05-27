@@ -536,6 +536,30 @@ export function formatSlot(raw: string | null | undefined): string {
  *  the `v_capacity` value inside the RPCs. */
 export const SLOT_CAPACITY = 2
 
+/** Standard service intervals (km). Customer picks one of these on the
+ *  booking form so the workshop knows which interval it is. */
+export const SERVICE_MILEAGE_OPTIONS = [
+  1000,
+  5000,
+  10000,
+  15000,
+  20000,
+  30000,
+  40000,
+  50000,
+  60000,
+  80000,
+  100000,
+] as const
+
+export type ServiceMileage = (typeof SERVICE_MILEAGE_OPTIONS)[number]
+
+/** Pretty label like "10,000 km" for a service mileage tier. */
+export function formatServiceMileage(km: number | null | undefined): string {
+  if (km == null) return '—'
+  return `${km.toLocaleString('en-US')} km`
+}
+
 /** One row returned by `get_available_slots(date)`. */
 export type AvailableSlot = {
   slot_time: string // HH:MM:SS
@@ -548,6 +572,7 @@ export type ServiceAppointment = {
   token: string
   customer_name: string
   customer_phone: string
+  /** Legacy — no longer collected by the public form. Kept for old rows. */
   customer_nric: string | null
   customer_email: string | null
   vehicle_reg: string
@@ -558,6 +583,9 @@ export type ServiceAppointment = {
    *  refactor; new rows always have a value. */
   slot_time: string | null
   preferred_period: AppointmentPeriod
+  /** Service interval tier in km (1000, 10000, …). Nullable on legacy
+   *  rows; new rows always have a value. */
+  service_mileage: number | null
   complaint: string | null
   status: AppointmentStatus
   service_order_id: string | null
@@ -585,6 +613,7 @@ export type PublicServiceAppointment = {
   preferred_date: string
   slot_time: string | null
   preferred_period: AppointmentPeriod
+  service_mileage: number | null
   complaint: string | null
   status: AppointmentStatus
   confirmed_at: string | null
@@ -595,13 +624,16 @@ export type PublicServiceAppointment = {
 export type ServiceAppointmentInput = {
   customer_name: string
   customer_phone: string
-  customer_nric?: string | null
-  customer_email?: string | null
+  /** Email is now required by the form + RPC. */
+  customer_email: string
   vehicle_reg: string
-  vehicle_chassis?: string | null
-  vehicle_model?: string | null
+  /** Chassis + model are now required by the form + RPC. */
+  vehicle_chassis: string
+  vehicle_model: string
   preferred_date: string
   slot_time: string // HH:MM:SS
+  /** Service interval in km. Required. */
+  service_mileage: number
   complaint?: string | null
   /** Staff-only: marks the row as a phone-call booking, skips pending,
    *  occupies the slot immediately. The RPC rejects this from anon

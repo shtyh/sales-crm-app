@@ -287,8 +287,13 @@ Primary nav links by role:
 
 - **Service appointments** (2026-05-27) — customer-facing booking flow
   with hour-long time slots. Tables: `service_appointments` (token-keyed
-  for public read-back). RPCs (all SECURITY DEFINER, anon-callable
-  except where noted):
+  for public read-back). Required fields on the public form: name,
+  phone, **email**, vehicle reg, **chassis no**, **model**, slot, and
+  **service interval (km)** — NRIC is no longer collected (column kept
+  on the table for legacy rows). The 11 service-mileage tiers (1k / 5k /
+  10k / 15k / 20k / 30k / 40k / 50k / 60k / 80k / 100k) live in
+  `SERVICE_MILEAGE_OPTIONS` in `src/lib/types.ts`. RPCs (all SECURITY
+  DEFINER, anon-callable except where noted):
   - `submit_appointment(... p_slot_time time, p_phone_block boolean)` —
     anon path creates `source='public'` status='pending'; signed-in
     staff get `source='staff'`; staff + `p_phone_block=true` (gated to

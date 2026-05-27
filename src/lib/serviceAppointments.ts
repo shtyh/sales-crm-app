@@ -19,13 +19,13 @@ export async function submitAppointment(
   const { data, error } = await supabase.rpc('submit_appointment', {
     p_customer_name: input.customer_name,
     p_customer_phone: input.customer_phone,
-    p_customer_nric: input.customer_nric ?? null,
-    p_customer_email: input.customer_email ?? null,
+    p_customer_email: input.customer_email,
     p_vehicle_reg: input.vehicle_reg,
-    p_vehicle_chassis: input.vehicle_chassis ?? null,
-    p_vehicle_model: input.vehicle_model ?? null,
+    p_vehicle_chassis: input.vehicle_chassis,
+    p_vehicle_model: input.vehicle_model,
     p_preferred_date: input.preferred_date,
     p_slot_time: input.slot_time,
+    p_service_mileage: input.service_mileage,
     p_complaint: input.complaint ?? null,
     p_phone_block: input.phone_block ?? false,
   })
