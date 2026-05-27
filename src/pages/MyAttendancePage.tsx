@@ -150,6 +150,8 @@ export function MyAttendancePage() {
             <tr>
               <th className="px-3 py-2 text-left font-medium">Date</th>
               <th className="px-3 py-2 text-left font-medium">Check in</th>
+              <th className="px-3 py-2 text-left font-medium">Lunch out</th>
+              <th className="px-3 py-2 text-left font-medium">Lunch in</th>
               <th className="px-3 py-2 text-left font-medium">Check out</th>
               <th className="px-3 py-2 text-right font-medium">
                 Distance (m)
@@ -161,7 +163,7 @@ export function MyAttendancePage() {
             {monthRows.length === 0 && (
               <tr>
                 <td
-                  colSpan={5}
+                  colSpan={7}
                   className="px-3 py-6 text-center text-gray-500"
                 >
                   No records this month.
@@ -175,6 +177,20 @@ export function MyAttendancePage() {
                 </td>
                 <td className="whitespace-nowrap px-3 py-2 tabular-nums">
                   {fmtTime(r.check_in_at)}
+                </td>
+                <td className="whitespace-nowrap px-3 py-2 tabular-nums">
+                  {r.lunch_out_at ? (
+                    fmtTime(r.lunch_out_at)
+                  ) : (
+                    <span className="text-gray-400">—</span>
+                  )}
+                </td>
+                <td className="whitespace-nowrap px-3 py-2 tabular-nums">
+                  {r.lunch_in_at ? (
+                    fmtTime(r.lunch_in_at)
+                  ) : (
+                    <span className="text-gray-400">—</span>
+                  )}
                 </td>
                 <td className="whitespace-nowrap px-3 py-2 tabular-nums">
                   {r.check_out_at ? (

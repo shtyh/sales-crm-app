@@ -2,7 +2,13 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
 import { useAuth } from '../lib/auth'
-import { useCheckIn, useCheckOut, useMyToday } from '../lib/queries'
+import {
+  useCheckIn,
+  useCheckOut,
+  useLunchIn,
+  useLunchOut,
+  useMyToday,
+} from '../lib/queries'
 import { formatError } from '../lib/errors'
 import {
   LATE_AFTER_HOUR,
@@ -32,6 +38,8 @@ export function ClockInPage() {
   const todayQ = useMyToday(profile?.id, today)
   const checkInMut = useCheckIn()
   const checkOutMut = useCheckOut()
+  const lunchOutMut = useLunchOut()
+  const lunchInMut = useLunchIn()
 
   // Snapshot once on mount — if the result changed mid-session (e.g.
   // DevTools toggled mobile emulation) we don't care, and we definitely
@@ -138,6 +146,13 @@ export function ClockInPage() {
   const todayRow = todayQ.data
   const isCheckedIn = !!todayRow && !todayRow.check_out_at
   const isDoneForDay = !!todayRow && !!todayRow.check_out_at
+  // Lunch state derived from the same row. Only meaningful while
+  // checked in and before the final check-out.
+  const isOnLunch =
+    !!todayRow && !!todayRow.lunch_out_at && !todayRow.lunch_in_at
+  const canLunchOut =
+    !!todayRow && !todayRow.lunch_out_at && !todayRow.check_out_at
+  const canLunchIn = isOnLunch
 
   const ready = fix.kind === 'ready'
   const inside = ready && fix.distance <= OFFICE.radiusM
@@ -181,22 +196,43 @@ export function ClockInPage() {
     }
   }
 
-  const checkInLocalTime = todayRow
-    ? new Date(todayRow.check_in_at).toLocaleTimeString('en-MY', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-        timeZone: 'Asia/Kuala_Lumpur',
+  async function handleLunchOut() {
+    if (fix.kind !== 'ready' || !todayRow) return
+    setError(null)
+    try {
+      await lunchOutMut.mutateAsync({
+        id: todayRow.id,
+        patch: {
+          lunch_out_at: new Date().toISOString(),
+          lunch_out_lat: round6(fix.lat),
+          lunch_out_lng: round6(fix.lng),
+          lunch_out_distance_m: round2(fix.distance),
+        },
       })
-    : null
-  const checkOutLocalTime = todayRow?.check_out_at
-    ? new Date(todayRow.check_out_at).toLocaleTimeString('en-MY', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-        timeZone: 'Asia/Kuala_Lumpur',
+      setSavedAt(Date.now())
+    } catch (e) {
+      setError(formatError(e))
+    }
+  }
+
+  async function handleLunchIn() {
+    if (fix.kind !== 'ready' || !todayRow) return
+    setError(null)
+    try {
+      await lunchInMut.mutateAsync({
+        id: todayRow.id,
+        patch: {
+          lunch_in_at: new Date().toISOString(),
+          lunch_in_lat: round6(fix.lat),
+          lunch_in_lng: round6(fix.lng),
+          lunch_in_distance_m: round2(fix.distance),
+        },
       })
-    : null
+      setSavedAt(Date.now())
+    } catch (e) {
+      setError(formatError(e))
+    }
+  }
 
   const isLate =
     todayRow &&
@@ -239,7 +275,11 @@ export function ClockInPage() {
           >
             <div className="flex items-center justify-between">
               <span className="font-semibold">
-                {isDoneForDay ? '✓ Day complete' : '◐ Checked in'}
+                {isDoneForDay
+                  ? '✓ Day complete'
+                  : isOnLunch
+                    ? '🍱 On lunch'
+                    : '◐ Checked in'}
               </span>
               {isLate && !isDoneForDay && (
                 <span className="rounded-full bg-amber-200 px-2 py-0.5 text-[10px] font-semibold uppercase text-amber-900">
@@ -247,28 +287,39 @@ export function ClockInPage() {
                 </span>
               )}
             </div>
-            <div className="mt-1 grid grid-cols-2 gap-2 text-xs">
-              <div>
-                <div className="text-gray-600">Check in</div>
-                <div className="text-base font-semibold tabular-nums">
-                  {checkInLocalTime}
-                </div>
-                <div className="text-[10px] text-gray-500">
-                  {round0(Number(todayRow.check_in_distance_m))} m from office
-                </div>
-              </div>
-              <div>
-                <div className="text-gray-600">Check out</div>
-                <div className="text-base font-semibold tabular-nums">
-                  {checkOutLocalTime ?? '—'}
-                </div>
-                {todayRow.check_out_distance_m != null && (
-                  <div className="text-[10px] text-gray-500">
-                    {round0(Number(todayRow.check_out_distance_m))} m from
-                    office
-                  </div>
-                )}
-              </div>
+            <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+              <StatusSlot
+                label="Check in"
+                iso={todayRow.check_in_at}
+                distance={Number(todayRow.check_in_distance_m)}
+              />
+              <StatusSlot
+                label="Lunch out"
+                iso={todayRow.lunch_out_at}
+                distance={
+                  todayRow.lunch_out_distance_m != null
+                    ? Number(todayRow.lunch_out_distance_m)
+                    : null
+                }
+              />
+              <StatusSlot
+                label="Lunch in"
+                iso={todayRow.lunch_in_at}
+                distance={
+                  todayRow.lunch_in_distance_m != null
+                    ? Number(todayRow.lunch_in_distance_m)
+                    : null
+                }
+              />
+              <StatusSlot
+                label="Check out"
+                iso={todayRow.check_out_at}
+                distance={
+                  todayRow.check_out_distance_m != null
+                    ? Number(todayRow.check_out_distance_m)
+                    : null
+                }
+              />
             </div>
           </div>
         )}
@@ -343,7 +394,7 @@ export function ClockInPage() {
           </div>
         )}
 
-        {/* ---------- Big action button ---------- */}
+        {/* ---------- Action buttons (state machine) ---------- */}
         {!isCheckedIn && !isDoneForDay && (
           <button
             type="button"
@@ -354,16 +405,40 @@ export function ClockInPage() {
             {checkInMut.isPending ? 'Saving…' : '✓ Check In'}
           </button>
         )}
-        {isCheckedIn && (
+
+        {isCheckedIn && canLunchOut && (
+          <button
+            type="button"
+            onClick={handleLunchOut}
+            disabled={!ready || lunchOutMut.isPending}
+            className="w-full rounded-2xl bg-amber-500 px-6 py-5 text-xl font-semibold text-white shadow-lg transition hover:bg-amber-600 disabled:opacity-50"
+          >
+            {lunchOutMut.isPending ? 'Saving…' : '🍱 Out for lunch'}
+          </button>
+        )}
+
+        {isCheckedIn && canLunchIn && (
+          <button
+            type="button"
+            onClick={handleLunchIn}
+            disabled={!ready || lunchInMut.isPending}
+            className="w-full rounded-2xl bg-emerald-600 px-6 py-5 text-xl font-semibold text-white shadow-lg transition hover:bg-emerald-700 disabled:opacity-50"
+          >
+            {lunchInMut.isPending ? 'Saving…' : '↩ Back from lunch'}
+          </button>
+        )}
+
+        {isCheckedIn && !isOnLunch && (
           <button
             type="button"
             onClick={handleCheckOut}
             disabled={!ready || checkOutMut.isPending}
-            className="w-full rounded-2xl bg-rose-600 px-6 py-6 text-2xl font-semibold text-white shadow-lg transition hover:bg-rose-700 disabled:opacity-50"
+            className="mt-3 w-full rounded-2xl bg-rose-600 px-6 py-5 text-xl font-semibold text-white shadow-md transition hover:bg-rose-700 disabled:opacity-50"
           >
-            {checkOutMut.isPending ? 'Saving…' : '⏻ Check Out'}
+            {checkOutMut.isPending ? 'Saving…' : '⏻ Check Out (end day)'}
           </button>
         )}
+
         {isDoneForDay && (
           <div className="rounded-2xl border-2 border-dashed border-green-300 bg-green-50/50 px-6 py-6 text-center text-base font-medium text-green-800">
             All done for today. See you tomorrow!
@@ -398,4 +473,40 @@ function round2(n: number): number {
 }
 function round0(n: number): number {
   return Math.round(n)
+}
+
+function StatusSlot({
+  label,
+  iso,
+  distance,
+}: {
+  label: string
+  iso: string | null
+  distance: number | null
+}) {
+  const time = iso
+    ? new Date(iso).toLocaleTimeString('en-MY', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+        timeZone: 'Asia/Kuala_Lumpur',
+      })
+    : null
+  return (
+    <div>
+      <div className="text-gray-600">{label}</div>
+      <div
+        className={`text-base font-semibold tabular-nums ${
+          time ? '' : 'text-gray-400'
+        }`}
+      >
+        {time ?? '—'}
+      </div>
+      {distance != null && (
+        <div className="text-[10px] text-gray-500">
+          {Math.round(distance)} m from office
+        </div>
+      )}
+    </div>
+  )
 }

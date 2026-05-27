@@ -20,11 +20,14 @@ type TabKey = 'today' | 'month'
  * RLS that lets them see everyone's rows.
  */
 export function TeamAttendancePage() {
-  const { isAdmin, loading } = useAuth()
+  const { isAdmin, loading, role } = useAuth()
   const { data: profiles } = useProfiles()
   const { data: rows, error } = useAllAttendance(isAdmin)
   const [tab, setTab] = useState<TabKey>('today')
   const [cursor, setCursor] = useState(() => firstOfMonth(new Date()))
+
+  // CSV export is gated to roles that actually need it for payroll.
+  const canExport = role === 'super_admin' || role === 'service_manager'
 
   if (loading) {
     return (
@@ -46,6 +49,27 @@ export function TeamAttendancePage() {
     return rows.filter((r) => r.work_date >= from && r.work_date <= to)
   }, [rows, cursor])
 
+  const profileById = useMemo(() => {
+    const m = new Map<string, Profile>()
+    for (const p of profiles ?? []) m.set(p.id, p)
+    return m
+  }, [profiles])
+
+  function handleExport() {
+    // Export the current tab's scope: Today tab → just today's rows;
+    // Month tab → every row in the selected month.
+    const scope =
+      tab === 'today'
+        ? (rows ?? []).filter((r) => r.work_date === today)
+        : monthRows
+    const csv = toAttendanceCsv(scope, profileById)
+    const fileScope =
+      tab === 'today'
+        ? today
+        : `${cursor.getFullYear()}-${pad2(cursor.getMonth() + 1)}`
+    downloadCsv(`attendance-${fileScope}.csv`, csv)
+  }
+
   return (
     <AppShell>
       <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
@@ -57,13 +81,24 @@ export function TeamAttendancePage() {
             Who&rsquo;s in today and how the month is going.
           </p>
         </div>
-        <div className="flex gap-1">
+        <div className="flex flex-wrap items-center gap-1">
           <TabBtn active={tab === 'today'} onClick={() => setTab('today')}>
             Today
           </TabBtn>
           <TabBtn active={tab === 'month'} onClick={() => setTab('month')}>
             Month
           </TabBtn>
+          {canExport && (
+            <button
+              type="button"
+              onClick={handleExport}
+              disabled={!rows}
+              title="Download the current tab as a CSV (opens in Excel)"
+              className="ml-2 rounded-full bg-gray-900 px-3 py-1 text-xs font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+            >
+              ⬇ Export CSV
+            </button>
+          )}
         </div>
       </div>
 
@@ -103,7 +138,11 @@ function TodaySection({
   byProfile: Map<string, Attendance>
 }) {
   // Ignore the deprecated 'accountant' role (UI filtered everywhere).
-  const employees = profiles.filter((p) => p.role !== 'accountant')
+  // Sales advisors don't clock in (their dropdown hides the entry), so
+  // they don't belong in the team list either. Accountant is deprecated.
+  const employees = profiles.filter(
+    (p) => p.role !== 'accountant' && p.role !== 'sales_advisor',
+  )
 
   const lateCount = employees.filter((p) => {
     const r = byProfile.get(p.id)
@@ -134,6 +173,8 @@ function TodaySection({
               <th className="px-3 py-2 text-left font-medium">Employee</th>
               <th className="px-3 py-2 text-left font-medium">Role</th>
               <th className="px-3 py-2 text-left font-medium">Check in</th>
+              <th className="px-3 py-2 text-left font-medium">Lunch out</th>
+              <th className="px-3 py-2 text-left font-medium">Lunch in</th>
               <th className="px-3 py-2 text-left font-medium">Check out</th>
               <th className="px-3 py-2 text-right font-medium">
                 Distance (m)
@@ -144,13 +185,15 @@ function TodaySection({
           <tbody className="divide-y divide-gray-100">
             {employees.map((p) => {
               const r = byProfile.get(p.id)
-              const status = !r
+              const status: StatusKind = !r
                 ? 'not_yet'
                 : r.check_out_at
                   ? 'done'
-                  : isLate(r)
-                    ? 'late'
-                    : 'in'
+                  : r.lunch_out_at && !r.lunch_in_at
+                    ? 'lunch'
+                    : isLate(r)
+                      ? 'late'
+                      : 'in'
               return (
                 <tr key={p.id} className="hover:bg-gray-50">
                   <td className="px-3 py-2 font-medium text-gray-900">
@@ -161,6 +204,12 @@ function TodaySection({
                   </td>
                   <td className="whitespace-nowrap px-3 py-2 tabular-nums">
                     {r ? fmtTime(r.check_in_at) : '—'}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2 tabular-nums">
+                    {r?.lunch_out_at ? fmtTime(r.lunch_out_at) : '—'}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2 tabular-nums">
+                    {r?.lunch_in_at ? fmtTime(r.lunch_in_at) : '—'}
                   </td>
                   <td className="whitespace-nowrap px-3 py-2 tabular-nums">
                     {r?.check_out_at ? fmtTime(r.check_out_at) : '—'}
@@ -196,7 +245,11 @@ function MonthSection({
   onPrev: () => void
   onNext: () => void
 }) {
-  const employees = profiles.filter((p) => p.role !== 'accountant')
+  // Sales advisors don't clock in (their dropdown hides the entry), so
+  // they don't belong in the team list either. Accountant is deprecated.
+  const employees = profiles.filter(
+    (p) => p.role !== 'accountant' && p.role !== 'sales_advisor',
+  )
   const days = useMemo(() => buildMonthDays(cursor), [cursor])
 
   // index: profile_id → work_date → attendance row
@@ -444,17 +497,21 @@ function Card({
   )
 }
 
-function StatusPill({ kind }: { kind: 'not_yet' | 'in' | 'late' | 'done' }) {
+type StatusKind = 'not_yet' | 'in' | 'late' | 'lunch' | 'done'
+
+function StatusPill({ kind }: { kind: StatusKind }) {
   const cls = {
     not_yet: 'bg-gray-100 text-gray-600',
     in: 'bg-blue-100 text-blue-800',
     late: 'bg-amber-100 text-amber-800',
+    lunch: 'bg-yellow-100 text-yellow-800',
     done: 'bg-green-100 text-green-800',
   }[kind]
   const label = {
     not_yet: 'Not yet',
     in: 'Checked in',
     late: 'Late',
+    lunch: '🍱 On lunch',
     done: 'Done',
   }[kind]
   return (
@@ -464,4 +521,93 @@ function StatusPill({ kind }: { kind: 'not_yet' | 'in' | 'late' | 'done' }) {
       {label}
     </span>
   )
+}
+
+// ---------- CSV export ----------
+
+/** Two-digit padded number — used to build month/day strings. */
+function pad2(n: number): string {
+  return String(n).padStart(2, '0')
+}
+
+/** RFC 4180-ish CSV escape: wrap in quotes when needed, double internal quotes. */
+function csvCell(v: unknown): string {
+  if (v == null) return ''
+  const s = String(v)
+  if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+    return `"${s.replace(/"/g, '""')}"`
+  }
+  return s
+}
+
+function csvTime(iso: string | null): string {
+  if (!iso) return ''
+  return new Date(iso).toLocaleTimeString('en-MY', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'Asia/Kuala_Lumpur',
+  })
+}
+
+function workedMinutes(r: Attendance): number | '' {
+  if (!r.check_out_at) return ''
+  const span =
+    new Date(r.check_out_at).getTime() - new Date(r.check_in_at).getTime()
+  let lunch = 0
+  if (r.lunch_out_at && r.lunch_in_at) {
+    lunch =
+      new Date(r.lunch_in_at).getTime() - new Date(r.lunch_out_at).getTime()
+  }
+  return Math.max(0, Math.round((span - lunch) / 60_000))
+}
+
+function toAttendanceCsv(
+  rows: Attendance[],
+  profileById: Map<string, Profile>,
+): string {
+  const header = [
+    'work_date',
+    'employee',
+    'role',
+    'check_in',
+    'lunch_out',
+    'lunch_in',
+    'check_out',
+    'check_in_distance_m',
+    'late',
+    'worked_minutes',
+  ]
+  const lines = [header.join(',')]
+  for (const r of rows) {
+    const p = profileById.get(r.profile_id)
+    lines.push(
+      [
+        r.work_date,
+        csvCell(p?.full_name || p?.email || r.profile_id),
+        csvCell(p?.role ?? ''),
+        csvTime(r.check_in_at),
+        csvTime(r.lunch_out_at),
+        csvTime(r.lunch_in_at),
+        csvTime(r.check_out_at),
+        Math.round(Number(r.check_in_distance_m)),
+        isLate(r) ? 'Y' : 'N',
+        workedMinutes(r),
+      ].join(','),
+    )
+  }
+  return lines.join('\n')
+}
+
+function downloadCsv(filename: string, csv: string): void {
+  // BOM so Excel opens UTF-8 correctly on Windows.
+  const blob = new Blob(['﻿', csv], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
 }

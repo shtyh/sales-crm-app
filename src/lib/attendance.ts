@@ -3,6 +3,8 @@ import type {
   Attendance,
   AttendanceCheckOut,
   AttendanceInsert,
+  AttendanceLunchIn,
+  AttendanceLunchOut,
 } from './types'
 
 /** Every attendance row the caller can see (own + admins see all). */
@@ -54,6 +56,30 @@ export async function checkIn(input: AttendanceInsert) {
 
 /** Patch an existing row with check-out fields. */
 export async function checkOut(id: string, patch: AttendanceCheckOut) {
+  const { data, error } = await supabase
+    .from('attendance')
+    .update(patch)
+    .eq('id', id)
+    .select('*')
+    .single()
+  if (error) throw error
+  return data as Attendance
+}
+
+/** Record the start of lunch. */
+export async function lunchOut(id: string, patch: AttendanceLunchOut) {
+  const { data, error } = await supabase
+    .from('attendance')
+    .update(patch)
+    .eq('id', id)
+    .select('*')
+    .single()
+  if (error) throw error
+  return data as Attendance
+}
+
+/** Record returning from lunch. */
+export async function lunchIn(id: string, patch: AttendanceLunchIn) {
   const { data, error } = await supabase
     .from('attendance')
     .update(patch)

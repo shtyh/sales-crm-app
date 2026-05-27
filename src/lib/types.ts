@@ -373,6 +373,15 @@ export type Attendance = {
   check_in_lat: number
   check_in_lng: number
   check_in_distance_m: number
+  // Lunch (2026-05-27) — all nullable; skip-lunch days stay null.
+  lunch_out_at: string | null
+  lunch_out_lat: number | null
+  lunch_out_lng: number | null
+  lunch_out_distance_m: number | null
+  lunch_in_at: string | null
+  lunch_in_lat: number | null
+  lunch_in_lng: number | null
+  lunch_in_distance_m: number | null
   check_out_at: string | null
   check_out_lat: number | null
   check_out_lng: number | null
@@ -395,6 +404,20 @@ export type AttendanceCheckOut = {
   check_out_lat: number
   check_out_lng: number
   check_out_distance_m: number
+}
+
+export type AttendanceLunchOut = {
+  lunch_out_at: string
+  lunch_out_lat: number
+  lunch_out_lng: number
+  lunch_out_distance_m: number
+}
+
+export type AttendanceLunchIn = {
+  lunch_in_at: string
+  lunch_in_lat: number
+  lunch_in_lng: number
+  lunch_in_distance_m: number
 }
 
 export type Technician = {

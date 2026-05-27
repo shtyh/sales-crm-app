@@ -71,7 +71,7 @@ Current real users (`select id, full_name, role from public.profiles`):
 | `commission_payouts` | sales_manager + super_admin | batch label, paid_at, paid_by |
 | `audit_log` | trigger only (postgres) | reads = super_admin only; one row per INSERT/UPDATE/DELETE on bookings + cars |
 | storage bucket `booking-files` | matches `booking_attachments` ownership | private |
-| `attendance` | own row write/read; is_admin reads all; super_admin delete | one row per `(profile_id, work_date)`. check_in_* required at insert (lat/lng/distance_m + timestamp); check_out_* set later via UPDATE. work_date is Asia/KL local YYYY-MM-DD, FE-supplied. |
+| `attendance` | own row write/read; is_admin reads all; super_admin delete | one row per `(profile_id, work_date)`. check_in_* required at insert (lat/lng/distance_m + timestamp); check_out_* set later via UPDATE. **Lunch (2026-05-27)**: lunch_out_* and lunch_in_* (timestamptz + lat/lng/distance_m, all nullable). work_date is Asia/KL local YYYY-MM-DD, FE-supplied. |
 
 ## bookings.* column ownership matrix
 
@@ -271,15 +271,24 @@ Primary nav links by role:
 
 - **Clock-in system** (2026-05-26, sales-advisor exempt) — `/clock-in` runs the browser
   Geolocation API on mount, computes haversine distance to the office
-  (5.3449, 100.4891 — Bukit Mertajam, 500 m radius from `src/lib/geo.ts`),
-  and gates Check In behind being inside the geofence. Check Out is
-  unconstrained but still records distance for audit. One attendance
-  row per `(profile_id, work_date)`. `/attendance` is the employee's
-  own calendar + monthly summary (late = check-in hour ≥ 9 local).
-  `/admin/attendance` is the manager view (Today tab: who's in / late
-  / not yet / done; Month tab: employees × days dot grid + per-row
-  late count). All three entries hidden from the avatar dropdown for
-  `sales_advisor` (the sales floor doesn't clock in here).
+  (anchor 5.3073479, 100.4691911 — Bukit Mertajam, **100 m radius**, from
+  `src/lib/geo.ts`), and gates Check In behind being inside the
+  geofence. Phone-only — desktop browsers see a "open this on your
+  phone" panel instead. Once checked in the page follows a 4-state
+  flow: **Out for lunch** (amber) → **Back from lunch** (green) → **Check
+  Out (end day)** (rose). Lunch out / in are optional; staff who skip
+  lunch tracking can go straight to Check Out. One row per
+  `(profile_id, work_date)` with lunch_out_* + lunch_in_*
+  (timestamp + lat/lng/distance, all nullable). `/attendance` is the
+  employee's own calendar + monthly summary (late = check-in hour ≥ 9
+  local). `/admin/attendance` is the manager view (Today tab: who's
+  in / late / on lunch / not yet / done with lunch columns; Month tab:
+  employees × days dot grid + per-row late count). **Export CSV**
+  button on the manager view downloads the current tab as a UTF-8 CSV
+  (BOM-prefixed for Excel-on-Windows); gated to super_admin and
+  service_manager. Sales advisors are filtered out of the team list
+  entirely (they don't clock in) and the three avatar-dropdown entries
+  are hidden from them.
 
 - **Cross-side URL gates** (2026-05-27) — auth context exports two
   mirrored flags. `canAccessSales` is true for everyone except the four
@@ -354,6 +363,7 @@ Files in `supabase/migrations/` (chronological):
 20260526_drop_service_order_department.sql        drops service_orders.department (added + reverted same day; workshop doesn't use it)
 20260526_wms_account_fields.sql                   vehicles +account/membership/engine/capacity/year_make/registration_date/warranty_date; customers +city/state/post_code/phone2/fax_no/tin_no/tax_no/sex/race/marital_status/birthday/sales_dealer/status/fixed_discount_rate/preference_list_price + 3 renewal dates + 5 reminder flags + send_greeting_card
 20260526_attendance.sql                            attendance table (one row per profile per work_date), check-in/out lat-lng-distance, RLS: own + is_admin select-all, super delete
+20260527_attendance_lunch.sql                      attendance +lunch_out_* (4) +lunch_in_* (4); all nullable so staff can skip lunch tracking
 20260527_customer_type_and_booking_payment.sql    customers.customer_type ('individual'|'company') + bookings.booking_fee_method ('cash'|'qr'|'transfer') + bookings.official_receipt_no
 ```
 

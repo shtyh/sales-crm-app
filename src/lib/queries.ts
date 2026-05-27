@@ -18,6 +18,8 @@ import {
   getMyToday,
   listAllAttendance,
   listMyAttendance,
+  lunchIn,
+  lunchOut,
 } from './attendance'
 import { createCar, deleteCar, getCar, listCars, updateCar } from './cars'
 import {
@@ -66,6 +68,8 @@ import type {
   Attendance,
   AttendanceCheckOut,
   AttendanceInsert,
+  AttendanceLunchIn,
+  AttendanceLunchOut,
   AuditLogEntry,
   Booking,
   BookingInsert,
@@ -720,6 +724,36 @@ export function useCheckOut() {
   return useMutation({
     mutationFn: ({ id, patch }: { id: string; patch: AttendanceCheckOut }) =>
       checkOut(id, patch),
+    onSuccess: (row) => {
+      qc.setQueryData<Attendance>(
+        qk.attendanceToday(row.profile_id, row.work_date),
+        row,
+      )
+      qc.invalidateQueries({ queryKey: ['attendance'] })
+    },
+  })
+}
+
+export function useLunchOut() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: AttendanceLunchOut }) =>
+      lunchOut(id, patch),
+    onSuccess: (row) => {
+      qc.setQueryData<Attendance>(
+        qk.attendanceToday(row.profile_id, row.work_date),
+        row,
+      )
+      qc.invalidateQueries({ queryKey: ['attendance'] })
+    },
+  })
+}
+
+export function useLunchIn() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: AttendanceLunchIn }) =>
+      lunchIn(id, patch),
     onSuccess: (row) => {
       qc.setQueryData<Attendance>(
         qk.attendanceToday(row.profile_id, row.work_date),
