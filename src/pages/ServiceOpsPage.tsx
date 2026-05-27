@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link, Navigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
 import { useAuth } from '../lib/auth'
 import { useProfiles, useServiceOrders } from '../lib/queries'
@@ -46,6 +46,8 @@ export function ServiceOpsPage() {
   const { data: profiles } = useProfiles()
   const [filter, setFilter] = useState<Filter>('all')
   const [q, setQ] = useState('')
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [historyOpen, setHistoryOpen] = useState(false)
 
   const profileById = useMemo(() => {
     const m = new Map<string, Profile>()
@@ -103,6 +105,8 @@ export function ServiceOpsPage() {
 
   const today = new Date()
   const error = ordersErr ? formatError(ordersErr) : null
+  const selectedOrder =
+    (selectedId && rows.find((o) => o.id === selectedId)) || null
 
   return (
     <AppShell>
@@ -240,17 +244,28 @@ export function ServiceOpsPage() {
               const paid = o.status === 'collected'
               const amt = Number(o.total_amount ?? 0)
               const outstanding = paid ? 0 : amt
+              const isSelected = o.id === selectedId
               return (
-                <tr key={o.id} className="hover:bg-gray-50">
+                <tr
+                  key={o.id}
+                  onClick={() => setSelectedId(o.id)}
+                  className={`cursor-pointer ${
+                    isSelected
+                      ? 'bg-blue-50 ring-1 ring-inset ring-blue-300'
+                      : 'hover:bg-gray-50'
+                  }`}
+                >
                   <td className="whitespace-nowrap px-3 py-2 font-mono">
                     <Link
                       to={`/service-orders/${o.id}`}
+                      onClick={(e) => e.stopPropagation()}
                       className="text-gray-900 hover:underline"
                     >
                       {o.order_no ?? '—'}
                     </Link>
                     <Link
                       to={`/service-orders/${o.id}/billing`}
+                      onClick={(e) => e.stopPropagation()}
                       title="Open billing screen"
                       className="ml-2 text-[10px] font-semibold uppercase text-blue-700 hover:underline"
                     >
@@ -338,7 +353,17 @@ export function ServiceOpsPage() {
             Edit Job Sheet
           </ActionButton>
           <ActionButton disabled>Billing details</ActionButton>
-          <ActionButton disabled>Billing history</ActionButton>
+          <ActionButton
+            disabled={!selectedOrder}
+            onClick={() => setHistoryOpen(true)}
+            title={
+              selectedOrder
+                ? 'View billing history for the selected job'
+                : 'Select a job row first'
+            }
+          >
+            Billing history
+          </ActionButton>
           <ActionButton disabled>Create billing</ActionButton>
           <ActionButton disabled>Payment</ActionButton>
           <ActionButton disabled>Print Job Sheet</ActionButton>
@@ -354,9 +379,30 @@ export function ServiceOpsPage() {
           )}
         </div>
         <div className="mt-2 text-[10px] text-gray-500">
-          Greyed buttons are placeholders — tell us which to wire first.
+          {selectedOrder ? (
+            <>
+              Selected:{' '}
+              <span className="font-mono text-gray-700">
+                {selectedOrder.order_no ?? '—'}
+              </span>{' '}
+              · click another row to switch.
+            </>
+          ) : (
+            <>
+              Click a job row to select it, then use the actions above. Greyed
+              buttons are placeholders — tell us which to wire first.
+            </>
+          )}
         </div>
       </div>
+
+      {historyOpen && selectedOrder && (
+        <BillingHistoryDialog
+          anchor={selectedOrder}
+          allOrders={orders ?? []}
+          onClose={() => setHistoryOpen(false)}
+        />
+      )}
     </AppShell>
   )
 }
@@ -461,6 +507,7 @@ function ActionButton({
   primary,
   danger,
   title,
+  onClick,
   children,
 }: {
   to?: string
@@ -468,6 +515,7 @@ function ActionButton({
   primary?: boolean
   danger?: boolean
   title?: string
+  onClick?: () => void
   children: React.ReactNode
 }) {
   const base =
@@ -489,10 +537,249 @@ function ActionButton({
     <button
       type="button"
       disabled={disabled}
-      title={title ?? 'Not yet wired up'}
+      onClick={onClick}
+      title={title ?? (onClick ? undefined : 'Not yet wired up')}
       className={`${base} ${tone}${dim}`}
     >
       {children}
     </button>
+  )
+}
+
+// ---------- Billing History dialog (port of legacy WMS popup) ----------
+
+/**
+ * 1:1 port of the legacy "Billing History" dialog. Opens from the action
+ * bar with a job row selected; shows every service order for the same
+ * vehicle (registration_no) or chassis (chassis_no) — toggled by the
+ * radio group at the bottom. Drill-in actions match the legacy buttons:
+ * View JobSheet → /service-orders/:id, View Billing Item →
+ * /service-orders/:id/billing, Remark → inline expand of notes /
+ * diagnosis on the selected history row.
+ */
+function BillingHistoryDialog({
+  anchor,
+  allOrders,
+  onClose,
+}: {
+  anchor: ServiceOrderWithJoins
+  allOrders: ServiceOrderWithJoins[]
+  onClose: () => void
+}) {
+  const navigate = useNavigate()
+  const [mode, setMode] = useState<'vehicle' | 'chassis'>('vehicle')
+  const [historyId, setHistoryId] = useState<string | null>(null)
+  const [showRemark, setShowRemark] = useState(false)
+
+  const reg = anchor.vehicle?.registration_no ?? null
+  const chassis = anchor.vehicle?.chassis_no ?? null
+
+  const history = useMemo(() => {
+    return allOrders.filter((o) => {
+      if (mode === 'vehicle') {
+        return reg && o.vehicle?.registration_no === reg
+      }
+      return chassis && o.vehicle?.chassis_no === chassis
+    })
+  }, [allOrders, mode, reg, chassis])
+
+  const selected = historyId
+    ? history.find((o) => o.id === historyId) ?? null
+    : null
+
+  const remarkText = selected
+    ? [selected.complaint, selected.diagnosis, selected.notes]
+        .filter((s) => s && s.trim())
+        .join('\n\n') || 'No remarks recorded for this job.'
+    : ''
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Billing History"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-lg border border-gray-300 bg-white shadow-xl"
+      >
+        {/* Title bar */}
+        <div className="flex items-center justify-between border-b border-gray-200 bg-gray-100 px-3 py-1.5">
+          <div className="text-sm font-semibold text-gray-800">
+            Billing History
+          </div>
+          <button
+            type="button"
+            aria-label="Close"
+            onClick={onClose}
+            className="rounded px-2 text-gray-500 hover:bg-gray-200 hover:text-gray-700"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Section header */}
+        <div className="border-b border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-800">
+          Billing History :
+        </div>
+
+        {/* Results table */}
+        <div className="flex-1 overflow-auto">
+          <table className="min-w-full divide-y divide-gray-200 text-xs">
+            <thead className="bg-gray-50 uppercase tracking-wider text-gray-600">
+              <tr>
+                <Th>Job Date</Th>
+                <Th>Job No</Th>
+                <Th>Invoice Date</Th>
+                <Th>Invoice No</Th>
+                <Th>Account No</Th>
+                <Th>Vehicle No</Th>
+                <Th>Chassis Number</Th>
+                <Th alignRight>Total</Th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {history.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={8}
+                    className="px-3 py-12 text-center text-sm text-gray-500"
+                  >
+                    No billing history found for this{' '}
+                    {mode === 'vehicle' ? 'vehicle number' : 'chassis number'}.
+                  </td>
+                </tr>
+              )}
+              {history.map((o) => {
+                const isSel = o.id === historyId
+                const amt = Number(o.total_amount ?? 0)
+                return (
+                  <tr
+                    key={o.id}
+                    onClick={() => {
+                      setHistoryId(o.id)
+                      setShowRemark(false)
+                    }}
+                    onDoubleClick={() => navigate(`/service-orders/${o.id}`)}
+                    className={`cursor-pointer ${
+                      isSel
+                        ? 'bg-blue-100 ring-1 ring-inset ring-blue-300'
+                        : 'hover:bg-gray-50'
+                    }`}
+                  >
+                    <td className="whitespace-nowrap px-3 py-2 text-gray-700">
+                      {fmtDate(o.opened_at)}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2 font-mono text-gray-900">
+                      {o.order_no ?? '—'}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2 text-gray-400">
+                      —
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2 font-mono text-gray-400">
+                      —
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2 font-mono text-gray-700">
+                      {o.vehicle?.account_no ?? '—'}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2 font-mono text-gray-900">
+                      {o.vehicle?.registration_no ?? '—'}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2 font-mono text-gray-700">
+                      {o.vehicle?.chassis_no ?? '—'}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-gray-900">
+                      {amt > 0 ? formatMYR(amt) : '—'}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Remark popout */}
+        {showRemark && selected && (
+          <div className="border-t border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
+            <div className="mb-1 font-semibold">
+              Remark — {selected.order_no ?? '—'}
+            </div>
+            <pre className="whitespace-pre-wrap font-sans">{remarkText}</pre>
+          </div>
+        )}
+
+        {/* Footer: radio group + action buttons */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 bg-gray-50 px-4 py-3">
+          <div className="flex flex-col gap-1 text-xs text-gray-800">
+            <label className="inline-flex items-center gap-2">
+              <input
+                type="radio"
+                name="bh-mode"
+                checked={mode === 'vehicle'}
+                onChange={() => {
+                  setMode('vehicle')
+                  setHistoryId(null)
+                  setShowRemark(false)
+                }}
+              />
+              View History With Vehicle Number
+            </label>
+            <label className="inline-flex items-center gap-2">
+              <input
+                type="radio"
+                name="bh-mode"
+                checked={mode === 'chassis'}
+                onChange={() => {
+                  setMode('chassis')
+                  setHistoryId(null)
+                  setShowRemark(false)
+                }}
+              />
+              View History With Chassis Number
+            </label>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={!selected}
+              onClick={() =>
+                selected && navigate(`/service-orders/${selected.id}`)
+              }
+              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              View JobSheet
+            </button>
+            <button
+              type="button"
+              disabled={!selected}
+              onClick={() =>
+                selected && navigate(`/service-orders/${selected.id}/billing`)
+              }
+              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              View Billing Item
+            </button>
+            <button
+              type="button"
+              disabled={!selected}
+              onClick={() => setShowRemark((s) => !s)}
+              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Remark
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-md bg-gray-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-800"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   )
 }

@@ -7,7 +7,7 @@ import type {
 
 const JOINED_SELECT = [
   '*',
-  'vehicle:vehicles(id, registration_no, chassis_no, model, variant, color)',
+  'vehicle:vehicles(id, registration_no, chassis_no, model, variant, color, account_no)',
   'customer:customers(id, name, phone)',
   'technician:technicians(id, name)',
 ].join(', ')

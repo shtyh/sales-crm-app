@@ -481,7 +481,13 @@ export type ServiceOrderWithJoins = ServiceOrder & {
   vehicle:
     | Pick<
         Vehicle,
-        'id' | 'registration_no' | 'chassis_no' | 'model' | 'variant' | 'color'
+        | 'id'
+        | 'registration_no'
+        | 'chassis_no'
+        | 'model'
+        | 'variant'
+        | 'color'
+        | 'account_no'
       >
     | null
   customer: Pick<Customer, 'id' | 'name' | 'phone'> | null

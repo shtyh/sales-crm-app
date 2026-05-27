@@ -245,11 +245,29 @@ Primary nav links by role:
   Billed · Estimated · Paid · O/S Amount · Bill No · S.A · Mech. Columns
   with no backing data yet (Inv Date, Estimated, Bill No) render `—`.
   Counters across the top, filter chips (All / Open / Closed / Void for
-  super_admin) + search by job no / reg / chassis / customer. Action
-  bar at the bottom — only "+ New Job Sheet" and "Vehicle info" are
-  wired; the rest are placeholders waiting on quoting, invoicing,
-  payment-ledger, and warranty flows. The previous active-jobs dashboard
-  is gone (replaced by this view).
+  super_admin) + search by job no / reg / chassis / customer. Rows are
+  click-to-select (highlight + ring) so row-scoped actions can target a
+  specific job — selection state lives in the page. Action bar at the
+  bottom — wired: "+ New Job Sheet", "Vehicle info", and "Billing
+  history" (modal, see below). The rest are placeholders waiting on
+  quoting, invoicing, payment-ledger, and warranty flows. The previous
+  active-jobs dashboard is gone (replaced by this view).
+
+- **Billing History dialog** (in `ServiceOpsPage.tsx`) — 1:1 port of the
+  legacy WMS popup. Opens from the action bar with a job row selected;
+  shows every service order for the same vehicle (registration_no) or
+  chassis (chassis_no), toggled by the radio group at the bottom. Columns:
+  Job Date · Job No · Invoice Date · Invoice No · Account No · Vehicle No
+  · Chassis Number · Total. Invoice Date / Invoice No render `—` (no
+  service-side invoicing yet). Account No comes from
+  `vehicles.account_no` (added to the `ServiceOrderWithJoins.vehicle`
+  pick + the `serviceOrders.JOINED_SELECT` in 2026-05-27). Row click
+  selects, double-click jumps to the job sheet. Footer buttons mirror
+  the legacy: View JobSheet → `/service-orders/:id`, View Billing Item
+  → `/service-orders/:id/billing`, Remark expands inline showing the
+  selected row's complaint / diagnosis / notes, Close dismisses. The
+  modal filters the already-loaded `useServiceOrders()` client-side, so
+  no extra DB round trip.
 
 - **Clock-in system** (2026-05-26, sales-advisor exempt) — `/clock-in` runs the browser
   Geolocation API on mount, computes haversine distance to the office
