@@ -53,6 +53,7 @@ export function ServiceOpsPage() {
   const [historyOpen, setHistoryOpen] = useState(false)
   const [paymentOpen, setPaymentOpen] = useState(false)
   const [printOpen, setPrintOpen] = useState(false)
+  const [jobSheetOpen, setJobSheetOpen] = useState(false)
 
   const profileById = useMemo(() => {
     const m = new Map<string, Profile>()
@@ -360,8 +361,16 @@ export function ServiceOpsPage() {
             + New Job Sheet
           </ActionButton>
           <ActionButton to="/vehicles">Vehicle info</ActionButton>
-          <ActionButton disabled title="Click a job row to edit it">
-            Edit Job Sheet
+          <ActionButton
+            disabled={!selectedOrder}
+            onClick={() => setJobSheetOpen(true)}
+            title={
+              selectedOrder
+                ? 'Open the Job Sheet print selector (Stock Requisition / Repair Order)'
+                : 'Select a job row first'
+            }
+          >
+            Print Job Sheet
           </ActionButton>
           <ActionButton disabled>Billing details</ActionButton>
           <ActionButton
@@ -460,6 +469,13 @@ export function ServiceOpsPage() {
         <PrintBillingDialog
           order={selectedOrder}
           onClose={() => setPrintOpen(false)}
+        />
+      )}
+
+      {jobSheetOpen && selectedOrder && (
+        <JobSheetSelectionDialog
+          order={selectedOrder}
+          onClose={() => setJobSheetOpen(false)}
         />
       )}
     </AppShell>
@@ -1460,6 +1476,107 @@ function PrintRow({
     <div className="mb-1.5 grid grid-cols-[140px_1fr] items-center gap-2">
       <label className="text-xs font-medium text-gray-700">{label}</label>
       <div>{children}</div>
+    </div>
+  )
+}
+
+// ---------- Job Sheet Selection dialog ----------
+
+/**
+ * 1:1 port of the legacy WMS "Job Sheet Selection" popup. Two big
+ * tiles — Stock Requisition (Material Requisition Form, jobsheetstd
+ * template) and Job Sheet or Repair Order (jobsheet template) — open
+ * the matching print page in a new tab so the browser's print dialog
+ * fires immediately.
+ */
+function JobSheetSelectionDialog({
+  order,
+  onClose,
+}: {
+  order: ServiceOrderWithJoins
+  onClose: () => void
+}) {
+  function openInNewTab(path: string) {
+    window.open(path, '_blank', 'noopener,noreferrer')
+    onClose()
+  }
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Job Sheet Selection"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-md overflow-hidden rounded-lg border border-gray-300 bg-white shadow-xl"
+      >
+        <div className="flex items-center justify-between border-b border-gray-200 bg-gray-100 px-3 py-1.5">
+          <div className="text-sm font-semibold text-gray-800">
+            Job Sheet Selection
+          </div>
+          <button
+            type="button"
+            aria-label="Close"
+            onClick={onClose}
+            className="rounded px-2 text-gray-500 hover:bg-gray-200 hover:text-gray-700"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="px-4 py-3">
+          <div className="mb-3 text-sm font-semibold text-gray-800">
+            Please Select The Job Sheet Type
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() =>
+                openInNewTab(
+                  `/service-orders/${order.id}/stock-requisition`,
+                )
+              }
+              className="flex h-28 flex-col items-center justify-center gap-2 rounded-md border-2 border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-800 hover:border-gray-900 hover:bg-gray-50"
+            >
+              <span className="text-2xl">📦</span>
+              Stock Requisition
+              <span className="text-[10px] font-normal text-gray-500">
+                Material Requisition Form
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                openInNewTab(`/service-orders/${order.id}/repair-order`)
+              }
+              className="flex h-28 flex-col items-center justify-center gap-2 rounded-md border-2 border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-800 hover:border-gray-900 hover:bg-gray-50"
+            >
+              <span className="text-2xl">🔧</span>
+              Job Sheet / Repair Order
+              <span className="text-[10px] font-normal text-gray-500">
+                Customer-signed RO
+              </span>
+            </button>
+          </div>
+          <div className="mt-3 text-[10px] text-gray-500">
+            Each opens in a new tab and auto-launches your browser's print
+            dialog. Use "Save as PDF" there for a digital copy.
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-2 border-t border-gray-200 bg-gray-50 px-4 py-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+          >
+            Close
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

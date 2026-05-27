@@ -120,6 +120,16 @@ const BillPrintPage = lazy(() =>
     default: m.BillPrintPage,
   })),
 )
+const RepairOrderPrintPage = lazy(() =>
+  import('./pages/RepairOrderPrintPage').then((m) => ({
+    default: m.RepairOrderPrintPage,
+  })),
+)
+const StockRequisitionPrintPage = lazy(() =>
+  import('./pages/StockRequisitionPrintPage').then((m) => ({
+    default: m.StockRequisitionPrintPage,
+  })),
+)
 const ClockInPage = lazy(() =>
   import('./pages/ClockInPage').then((m) => ({ default: m.ClockInPage })),
 )
@@ -407,6 +417,22 @@ function App() {
           element={
             <ProtectedRoute>
               <BillPrintPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/service-orders/:id/repair-order"
+          element={
+            <ProtectedRoute>
+              <RepairOrderPrintPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/service-orders/:id/stock-requisition"
+          element={
+            <ProtectedRoute>
+              <StockRequisitionPrintPage />
             </ProtectedRoute>
           }
         />

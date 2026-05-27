@@ -283,6 +283,22 @@ Primary nav links by role:
   &nextKm=…` which renders `BillPrintPage` and auto-fires
   `window.print()` once layout settles.
 
+- **Job Sheet Selection dialog** (in `ServiceOpsPage.tsx`) — 1:1 port
+  of the legacy WMS popup. Opens from the **Print Job Sheet** action
+  button (which replaced the disabled "Edit Job Sheet" slot). Two
+  tiles: **Stock Requisition** → `/service-orders/:id/stock-requisition`
+  (`StockRequisitionPrintPage`, port of `jobsheetstd.xls` — Material
+  Requisition Form for the parts counter, parts-only items list,
+  Stock Code / Material / Qty / Remark / Mechanic columns); **Job
+  Sheet / Repair Order** → `/service-orders/:id/repair-order`
+  (`RepairOrderPrintPage`, port of `jobsheet.xls` — full RO including
+  the Estimated Charges box, complaint/additional-job blocks, vehicle
+  inventory checklist, customer signature + service-advisor lines,
+  and the long workshop disclaimer). Both reuse the shared
+  `Letterhead` component, auto-fire `window.print()` on load, and
+  share the `useServiceOrder / useServiceOrderItems / useCustomers /
+  useVehicles` data path.
+
 - **BillPrintPage** (`/service-orders/:id/bill`) — printable cash bill
   / invoice / delivery order, 1:1 layout port of the legacy
   `cashbill.xls` template. Shared `Letterhead` component
