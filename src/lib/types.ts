@@ -165,9 +165,13 @@ export type CustomerSex = 'M' | 'F'
 export type CustomerRace = 'C' | 'M' | 'I' | 'O'
 export type CustomerMaritalStatus = 'S' | 'M' | 'D'
 export type CustomerStatus = 'active' | 'inactive'
+/** Individual or Company. When 'company', `nric` holds the SSM / business
+ *  registration number instead of an IC. */
+export type CustomerType = 'individual' | 'company'
 
 export type Customer = {
   id: string
+  customer_type: CustomerType
   name: string
   nric: string
   phone: string
@@ -203,6 +207,7 @@ export type Customer = {
 }
 
 export type CustomerInsert = {
+  customer_type?: CustomerType
   name: string
   nric: string
   phone: string
@@ -527,6 +532,10 @@ export type Booking = {
   // finance_admin-owned cash status
   deposit_status: DepositStatus
   payment_status: PaymentStatus
+  /** How the booking fee was received: cash / qr / transfer (null until set). */
+  booking_fee_method: 'cash' | 'qr' | 'transfer' | null
+  /** Official receipt number issued for the booking fee. Free text. */
+  official_receipt_no: string | null
 
   // general_admin-owned JPJ tracking
   jpj_status: JpjStatus
@@ -655,6 +664,9 @@ export type BookingInsert = {
   jpj_status?: JpjStatus
   jpj_submitted_at?: string | null
   jpj_expected_completion?: string | null
+  /** Booking-fee receipt info — captured at intake. */
+  booking_fee_method?: 'cash' | 'qr' | 'transfer' | null
+  official_receipt_no?: string | null
   /** sales_manager reassignment of leads */
   owner_id?: string
   /** general_admin links the booking to a specific physical car. */

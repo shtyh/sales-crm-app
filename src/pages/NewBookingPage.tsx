@@ -21,6 +21,9 @@ export function NewBookingPage() {
   // Workshop-only roles can't create bookings — bounce them home.
   if (canAccessSales === false) return <Navigate to="/" replace />
 
+  const [customerType, setCustomerType] = useState<'individual' | 'company'>(
+    'individual',
+  )
   const [customerName, setCustomerName] = useState('')
   const [customerNric, setCustomerNric] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
@@ -35,6 +38,10 @@ export function NewBookingPage() {
   // (NOT NULL), so we submit 0 for new bookings until/unless the column gets
   // dropped.
   const [bookingFee, setBookingFee] = useState('')
+  const [bookingFeeMethod, setBookingFeeMethod] = useState<
+    '' | 'cash' | 'qr' | 'transfer'
+  >('')
+  const [officialReceiptNo, setOfficialReceiptNo] = useState('')
   const [discountAmount, setDiscountAmount] = useState('')
 
   const [bookingDate, setBookingDate] = useState(today())
@@ -66,6 +73,10 @@ export function NewBookingPage() {
     setCustomerPhone((curr) => curr || existing.data!.phone)
     setCustomerEmail((curr) => curr || existing.data!.email || '')
     setCustomerAddress((curr) => curr || existing.data!.address || '')
+    // A customer's individual/company flag is sticky — once filed,
+    // adopt whatever's on the record rather than overriding from the
+    // form default.
+    setCustomerType(existing.data.customer_type)
   }, [existing.data])
 
   function handleModelChange(newModel: string) {
@@ -82,6 +93,7 @@ export function NewBookingPage() {
       // updates it with the latest contact details the SA typed; otherwise
       // it inserts a new customer. Either way we get back the customer id.
       const customer = await upsertCustomerMut.mutateAsync({
+        customer_type: customerType,
         name: customerName,
         nric: customerNric,
         phone: customerPhone,
@@ -103,6 +115,8 @@ export function NewBookingPage() {
         vehicle_color: vehicleColor.trim(),
         otr_price: 0,
         booking_fee: Number(bookingFee) || 0,
+        booking_fee_method: bookingFeeMethod || null,
+        official_receipt_no: officialReceiptNo.trim() || null,
         discount_amount: Number(discountAmount) || 0,
         booking_date: bookingDate,
         notes: notes.trim() || null,
@@ -141,7 +155,46 @@ export function NewBookingPage() {
       >
         {/* ---------- Customer ---------- */}
         <Section title="👤 Customer">
-          <Field label="NRIC" required>
+          <div className="sm:col-span-2">
+            <Field label="Customer type" required>
+              <div className="flex flex-wrap gap-2">
+                <label
+                  className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm ${
+                    customerType === 'individual'
+                      ? 'border-gray-900 bg-gray-900/5'
+                      : 'border-gray-300 bg-white'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="customerType"
+                    checked={customerType === 'individual'}
+                    onChange={() => setCustomerType('individual')}
+                  />
+                  Individual / Personal
+                </label>
+                <label
+                  className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm ${
+                    customerType === 'company'
+                      ? 'border-gray-900 bg-gray-900/5'
+                      : 'border-gray-300 bg-white'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="customerType"
+                    checked={customerType === 'company'}
+                    onChange={() => setCustomerType('company')}
+                  />
+                  Company / Corporate
+                </label>
+              </div>
+            </Field>
+          </div>
+          <Field
+            label={customerType === 'company' ? 'SSM / Business Reg No' : 'NRIC'}
+            required
+          >
             <input
               type="text"
               required
@@ -149,15 +202,20 @@ export function NewBookingPage() {
               onChange={(e) =>
                 // Strip non-digits as the SA types so 970624-07-5367 / spaces
                 // / dashes silently normalise to the bare 12-digit form the
-                // DB CHECK constraint expects.
+                // DB CHECK constraint expects. (Both MY NRIC and SSM are
+                // 12-digit strings — the same validator works.)
                 setCustomerNric(e.target.value.replace(/\D/g, ''))
               }
               className={inputClass}
-              placeholder="990999XXXXXX"
+              placeholder={customerType === 'company' ? '200101011591' : '990999XXXXXX'}
               inputMode="numeric"
               pattern="[0-9]{12}"
               maxLength={12}
-              title="NRIC must be exactly 12 digits"
+              title={
+                customerType === 'company'
+                  ? 'SSM / business reg number — 12 digits'
+                  : 'NRIC must be exactly 12 digits'
+              }
             />
             {matched && (
               <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-medium text-green-700">
@@ -165,14 +223,25 @@ export function NewBookingPage() {
               </span>
             )}
           </Field>
-          <Field label="Full name" required>
+          <Field
+            label={
+              customerType === 'company'
+                ? 'Company name / PIC'
+                : 'Full name'
+            }
+            required
+          >
             <input
               type="text"
               required
               value={customerName}
               onChange={(e) => setCustomerName(e.target.value)}
               className={inputClass}
-              placeholder="As shown on IC"
+              placeholder={
+                customerType === 'company'
+                  ? 'Company name (or PIC name)'
+                  : 'As shown on IC'
+              }
             />
           </Field>
           <Field label="Phone" required>
@@ -288,6 +357,47 @@ export function NewBookingPage() {
               className={inputClass}
               placeholder="1000"
               inputMode="decimal"
+            />
+          </Field>
+          <Field label="Amount received via">
+            <div className="flex flex-wrap gap-2">
+              {(['cash', 'qr', 'transfer'] as const).map((m) => (
+                <label
+                  key={m}
+                  className={`flex cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-2 text-sm ${
+                    bookingFeeMethod === m
+                      ? 'border-gray-900 bg-gray-900/5'
+                      : 'border-gray-300 bg-white'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="bookingFeeMethod"
+                    checked={bookingFeeMethod === m}
+                    onChange={() => setBookingFeeMethod(m)}
+                  />
+                  {m === 'cash' ? 'Cash' : m === 'qr' ? 'QR' : 'Transfer'}
+                </label>
+              ))}
+              {bookingFeeMethod && (
+                <button
+                  type="button"
+                  onClick={() => setBookingFeeMethod('')}
+                  className="rounded-lg border border-gray-300 bg-white px-2 py-2 text-xs text-gray-600 hover:bg-gray-50"
+                  title="Clear payment method"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          </Field>
+          <Field label="Official Receipt No">
+            <input
+              type="text"
+              value={officialReceiptNo}
+              onChange={(e) => setOfficialReceiptNo(e.target.value)}
+              className={inputClass}
+              placeholder="OR-#####"
             />
           </Field>
           <Field label="Discount (MYR)">
