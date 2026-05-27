@@ -974,10 +974,10 @@ function DirectPaymentDialog({
             <ReadOnlyField value={billNo} />
           </div>
 
-          <div>
-            {/* Payment Details */}
-            <Fieldset legend="Payment Details">
-              <div className="mb-2 rounded-md border border-gray-200 px-3 py-2">
+          <Fieldset legend="Payment Details">
+            <div className="grid gap-3 md:grid-cols-2">
+              {/* Left column — read-only "Previous Payment Information" */}
+              <div className="rounded-md border border-gray-200 px-3 py-2">
                 <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-500">
                   Previous Payment Information
                 </div>
@@ -997,51 +997,54 @@ function DirectPaymentDialog({
                 </Row>
               </div>
 
-              <Row label="Collection Date">
-                <input
-                  type="date"
-                  value={collectionDate}
-                  onChange={(e) => setCollectionDate(e.target.value)}
-                  className={inputCls}
-                />
-              </Row>
-              <Row label="Payment Type">
-                <select
-                  value={paymentType}
-                  onChange={(e) =>
-                    setPaymentType(e.target.value as PaymentType)
-                  }
-                  className={inputCls}
-                >
-                  {(Object.keys(PAYMENT_TYPE_LABEL) as PaymentType[]).map(
-                    (t) => (
-                      <option key={t} value={t}>
-                        {PAYMENT_TYPE_LABEL[t]}
-                      </option>
-                    ),
-                  )}
-                </select>
-              </Row>
-              <Row label="This Payment">
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={thisPaymentStr}
-                  onChange={(e) => setThisPaymentStr(e.target.value)}
-                  className={`${inputCls} text-right tabular-nums`}
-                />
-              </Row>
-              <Row label={<span className="text-rose-700">Outstanding Remaining</span>}>
-                <ReadOnlyNum
-                  value={remaining}
-                  className={
-                    remaining > 0 ? 'text-rose-700' : 'text-green-700'
-                  }
-                />
-              </Row>
-            </Fieldset>
-          </div>
+              {/* Right column — editable entry */}
+              <div className="rounded-md border border-gray-200 px-3 py-2">
+                <Row label="Collection Date">
+                  <input
+                    type="date"
+                    value={collectionDate}
+                    onChange={(e) => setCollectionDate(e.target.value)}
+                    className={inputCls}
+                  />
+                </Row>
+                <Row label="Payment Type">
+                  <select
+                    value={paymentType}
+                    onChange={(e) =>
+                      setPaymentType(e.target.value as PaymentType)
+                    }
+                    className={inputCls}
+                  >
+                    {(Object.keys(PAYMENT_TYPE_LABEL) as PaymentType[]).map(
+                      (t) => (
+                        <option key={t} value={t}>
+                          {PAYMENT_TYPE_LABEL[t]}
+                        </option>
+                      ),
+                    )}
+                  </select>
+                </Row>
+                <Row label="This Payment">
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={thisPaymentStr}
+                    onChange={(e) => setThisPaymentStr(e.target.value)}
+                    className={`${inputCls} text-right tabular-nums`}
+                  />
+                </Row>
+                <Row label={<span className="text-rose-700">Outstanding Remaining</span>}>
+                  <ReadOnlyNum
+                    value={remaining}
+                    className={
+                      remaining > 0 ? 'text-rose-700' : 'text-green-700'
+                    }
+                  />
+                </Row>
+              </div>
+            </div>
+          </Fieldset>
 
           {/* Notices */}
           {alreadyCollected && (
