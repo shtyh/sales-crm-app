@@ -402,7 +402,7 @@ export function ServiceOpsPage() {
             disabled={!selectedOrder}
             to={
               selectedOrder
-                ? `/service-orders/${selectedOrder}/quotation`
+                ? `/service-orders/${selectedOrder.id}/quotation`
                 : undefined
             }
             title={
