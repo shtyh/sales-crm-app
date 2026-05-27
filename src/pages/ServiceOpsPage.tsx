@@ -483,7 +483,7 @@ function Th({
 }) {
   return (
     <th
-      className={`px-3 py-2 font-medium ${alignRight ? 'text-right' : 'text-left'}`}
+      className={`whitespace-nowrap px-3 py-2 font-medium ${alignRight ? 'text-right' : 'text-left'}`}
     >
       {children}
     </th>
