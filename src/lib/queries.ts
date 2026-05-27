@@ -54,6 +54,7 @@ import {
   cancelAppointment,
   confirmAppointment,
   getAppointmentByToken,
+  getAvailableSlots,
   listAppointments,
   rejectAppointment,
   submitAppointment,
@@ -92,6 +93,7 @@ import type {
   Invoice,
   Part,
   Payment,
+  AvailableSlot,
   Profile,
   PublicServiceAppointment,
   ServiceAppointment,
@@ -145,6 +147,8 @@ export const qk = {
   serviceAppointments: ['service-appointments'] as const,
   serviceAppointmentByToken: (token: string) =>
     ['service-appointments', 'by-token', token] as const,
+  availableSlots: (date: string) =>
+    ['service-appointments', 'available-slots', date] as const,
 }
 
 // ---------- Bookings -------------------------------------------------------
@@ -783,8 +787,26 @@ export function useLunchIn() {
 /** Submit a new appointment. Works from anon (public /book) and from
  *  signed-in staff (the staff form fills the same fields). */
 export function useSubmitAppointment() {
+  const qc = useQueryClient()
   return useMutation({
     mutationFn: (input: ServiceAppointmentInput) => submitAppointment(input),
+    onSuccess: (_, input) => {
+      qc.invalidateQueries({ queryKey: qk.availableSlots(input.preferred_date) })
+      qc.invalidateQueries({ queryKey: qk.serviceAppointments })
+    },
+  })
+}
+
+/** Open slots for a given date — powers the booking form's slot picker.
+ *  Anon + authenticated callable, refetches on window focus so a tab
+ *  left open doesn't try to book a now-full slot. */
+export function useAvailableSlots(date: string | null | undefined) {
+  return useQuery<AvailableSlot[]>({
+    queryKey: qk.availableSlots(date ?? ''),
+    queryFn: () => getAvailableSlots(date as string),
+    enabled: !!date,
+    refetchOnWindowFocus: true,
+    refetchInterval: 60_000,
   })
 }
 

@@ -285,6 +285,39 @@ Primary nav links by role:
   closes. All cheque / other-payment fields are UI-only — none are
   persisted until the service payments ledger lands.
 
+- **Service appointments** (2026-05-27) — customer-facing booking flow
+  with hour-long time slots. Tables: `service_appointments` (token-keyed
+  for public read-back). RPCs (all SECURITY DEFINER, anon-callable
+  except where noted):
+  - `submit_appointment(... p_slot_time time, p_phone_block boolean)` —
+    anon path creates `source='public'` status='pending'; signed-in
+    staff get `source='staff'`; staff + `p_phone_block=true` (gated to
+    `service_manager` / `service_advisor` / `super_admin`) creates
+    `source='phone'` status='confirmed' with `confirmed_at`/`confirmed_by`
+    populated, so the slot locks immediately.
+  - `get_available_slots(p_date date)` — returns the 8 hour slots
+    (09:00–16:00) for the date with `taken` / `capacity`. Sundays and
+    past dates return empty. Capacity is 2 cars in parallel.
+  - `get_appointment_by_token(uuid)` — public read-back for `/book/:token`.
+
+  Routes (split into public + staff):
+  - `/book` (public, **no login**) — standalone form using
+    `useAvailableSlots(date)` to render the slot grid; customer picks
+    one of the 8 hour slots (full ones disabled) and submits.
+  - `/book/:token` (public) — confirmation read-back. Pending shows
+    amber, confirmed shows green with "Confirmed for <date> at <time>"
+    and the booking summary in read-only mode (the "slot lock").
+  - `/service/book` (staff) — same form inside AppShell, plus a
+    "Phone booking" checkbox that flips `p_phone_block`.
+  - `/service/appointments` (workshop SM/SA/super_admin write,
+    store_keeper + mechanic read-only) — queue with Pending /
+    Confirmed / Rejected / All tabs, search, per-row Confirm / Reject
+    (with reason) / Cancel (on confirmed). Source column tags
+    `public` / `staff` / `phone` so phone-blocks are obvious.
+
+  Workshop dashboard tile: the "Payment / Receipt" placeholder slot in
+  `ServiceDashboardPage.tsx` now hosts the wired 📅 Appointments tile.
+
 - **Clock-in system** (2026-05-26, sales-advisor exempt) — `/clock-in` runs the browser
   Geolocation API on mount, computes haversine distance to the office
   (anchor 5.3073479, 100.4691911 — Bukit Mertajam, **100 m radius**, from

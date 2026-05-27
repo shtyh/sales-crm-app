@@ -10,8 +10,8 @@ import {
 } from '../lib/queries'
 import { formatError } from '../lib/errors'
 import {
-  APPOINTMENT_PERIOD_LABEL,
   APPOINTMENT_STATUS_LABEL,
+  formatSlot,
   type AppointmentStatus,
   type ServiceAppointment,
 } from '../lib/types'
@@ -87,8 +87,9 @@ export function ServiceAppointmentsPage() {
               <Link
                 to="/service/book"
                 className="rounded-md bg-white px-3 py-1.5 text-xs font-medium text-gray-900 hover:bg-gray-100"
+                title="Walk-in or phone booking — tick 'Phone booking' on the form to auto-confirm and lock the slot"
               >
-                + New on behalf of customer
+                + Phone / walk-in booking
               </Link>
               <Link
                 to="/book"
@@ -154,7 +155,7 @@ export function ServiceAppointmentsPage() {
           <thead className="bg-gray-50 uppercase tracking-wider text-gray-500">
             <tr>
               <Th>Date</Th>
-              <Th>Time</Th>
+              <Th>Slot</Th>
               <Th>Customer</Th>
               <Th>Phone</Th>
               <Th>Vehicle</Th>
@@ -228,7 +229,7 @@ function Row({
       <tr className="hover:bg-gray-50">
         <td className="whitespace-nowrap px-3 py-2 text-gray-700">{dateLabel}</td>
         <td className="whitespace-nowrap px-3 py-2 text-gray-700">
-          {APPOINTMENT_PERIOD_LABEL[row.preferred_period]}
+          {row.slot_time ? formatSlot(row.slot_time) : <span className="text-gray-400">—</span>}
         </td>
         <td className="whitespace-nowrap px-3 py-2 text-gray-900">
           {row.customer_name}

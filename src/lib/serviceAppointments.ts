@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import type {
+  AvailableSlot,
   PublicServiceAppointment,
   ServiceAppointment,
   ServiceAppointmentInput,
@@ -24,11 +25,27 @@ export async function submitAppointment(
     p_vehicle_chassis: input.vehicle_chassis ?? null,
     p_vehicle_model: input.vehicle_model ?? null,
     p_preferred_date: input.preferred_date,
-    p_preferred_period: input.preferred_period,
+    p_slot_time: input.slot_time,
     p_complaint: input.complaint ?? null,
+    p_phone_block: input.phone_block ?? false,
   })
   if (error) throw error
   return data as string
+}
+
+/**
+ * Slot picker source. Returns the eight hour-long slots for the given
+ * date with their current `taken` count. Empty array on Sundays and
+ * past dates — those branches bail out inside the RPC.
+ */
+export async function getAvailableSlots(
+  date: string,
+): Promise<AvailableSlot[]> {
+  const { data, error } = await supabase.rpc('get_available_slots', {
+    p_date: date,
+  })
+  if (error) throw error
+  return (data as AvailableSlot[] | null) ?? []
 }
 
 /** Public read-back. Returns null when the token doesn't match. */

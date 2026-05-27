@@ -4,6 +4,7 @@ import { formatError } from '../lib/errors'
 import {
   APPOINTMENT_PERIOD_LABEL,
   APPOINTMENT_STATUS_LABEL,
+  formatSlot,
   type PublicServiceAppointment,
 } from '../lib/types'
 
@@ -70,6 +71,9 @@ function Status({ row }: { row: PublicServiceAppointment }) {
     'en-MY',
     { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' },
   )
+  const timeLabel = row.slot_time
+    ? formatSlot(row.slot_time)
+    : APPOINTMENT_PERIOD_LABEL[row.preferred_period]
 
   const banner = (() => {
     switch (row.status) {
@@ -77,7 +81,7 @@ function Status({ row }: { row: PublicServiceAppointment }) {
         return (
           <div className="rounded-2xl border border-green-200 bg-green-50 px-4 py-4 text-sm text-green-900">
             <div className="text-base font-semibold">
-              ✓ Confirmed for {dateLabel} ({APPOINTMENT_PERIOD_LABEL[row.preferred_period]})
+              ✓ Confirmed for {dateLabel} at {timeLabel}
             </div>
             <div className="mt-1 text-xs">
               See you then. Please bring your IC and the vehicle's service
@@ -150,11 +154,8 @@ function Status({ row }: { row: PublicServiceAppointment }) {
             label="Email"
             value={row.customer_email ?? <Muted>—</Muted>}
           />
-          <Item label="Preferred date" value={dateLabel} />
-          <Item
-            label="Preferred time"
-            value={APPOINTMENT_PERIOD_LABEL[row.preferred_period]}
-          />
+          <Item label="Date" value={dateLabel} />
+          <Item label="Time" value={timeLabel} />
           <Item label="Vehicle" value={row.vehicle_reg} mono />
           <Item
             label="Chassis"

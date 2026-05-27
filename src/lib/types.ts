@@ -496,6 +496,53 @@ export const APPOINTMENT_PERIOD_LABEL: Record<AppointmentPeriod, string> = {
   pm: 'Afternoon (PM)',
 }
 
+/** Hour-long slot timestamps stored as Postgres `time` (HH:MM:SS).
+ *  Mon–Sat workshop hours are 9am–5pm, eight slots a day. Sunday is
+ *  closed and rejected at the DB level. Change these and the matching
+ *  arrays inside the `submit_appointment` + `get_available_slots` RPCs
+ *  together. */
+export const SLOT_TIMES = [
+  '09:00:00',
+  '10:00:00',
+  '11:00:00',
+  '12:00:00',
+  '13:00:00',
+  '14:00:00',
+  '15:00:00',
+  '16:00:00',
+] as const
+
+export type SlotTime = (typeof SLOT_TIMES)[number]
+
+export const SLOT_LABEL: Record<SlotTime, string> = {
+  '09:00:00': '9:00 AM',
+  '10:00:00': '10:00 AM',
+  '11:00:00': '11:00 AM',
+  '12:00:00': '12:00 PM',
+  '13:00:00': '1:00 PM',
+  '14:00:00': '2:00 PM',
+  '15:00:00': '3:00 PM',
+  '16:00:00': '4:00 PM',
+}
+
+/** Format any slot value (HH:MM:SS, HH:MM, or null) into a human label. */
+export function formatSlot(raw: string | null | undefined): string {
+  if (!raw) return '—'
+  const norm = raw.length === 5 ? `${raw}:00` : raw
+  return (SLOT_LABEL as Record<string, string>)[norm] ?? raw
+}
+
+/** Number of cars the workshop can run in parallel per slot. Mirrors
+ *  the `v_capacity` value inside the RPCs. */
+export const SLOT_CAPACITY = 2
+
+/** One row returned by `get_available_slots(date)`. */
+export type AvailableSlot = {
+  slot_time: string // HH:MM:SS
+  taken: number
+  capacity: number
+}
+
 export type ServiceAppointment = {
   id: string
   token: string
@@ -507,6 +554,9 @@ export type ServiceAppointment = {
   vehicle_chassis: string | null
   vehicle_model: string | null
   preferred_date: string // YYYY-MM-DD
+  /** Hour slot, HH:MM:SS. Nullable on legacy rows from before the slot
+   *  refactor; new rows always have a value. */
+  slot_time: string | null
   preferred_period: AppointmentPeriod
   complaint: string | null
   status: AppointmentStatus
@@ -515,7 +565,8 @@ export type ServiceAppointment = {
   confirmed_at: string | null
   rejected_reason: string | null
   submitted_by: string | null
-  source: 'public' | 'staff'
+  /** `phone` = staff entered on behalf via the phone-block toggle. */
+  source: 'public' | 'staff' | 'phone'
   created_at: string
   updated_at: string
 }
@@ -532,6 +583,7 @@ export type PublicServiceAppointment = {
   vehicle_chassis: string | null
   vehicle_model: string | null
   preferred_date: string
+  slot_time: string | null
   preferred_period: AppointmentPeriod
   complaint: string | null
   status: AppointmentStatus
@@ -549,8 +601,12 @@ export type ServiceAppointmentInput = {
   vehicle_chassis?: string | null
   vehicle_model?: string | null
   preferred_date: string
-  preferred_period: AppointmentPeriod
+  slot_time: string // HH:MM:SS
   complaint?: string | null
+  /** Staff-only: marks the row as a phone-call booking, skips pending,
+   *  occupies the slot immediately. The RPC rejects this from anon
+   *  callers and from non-workshop roles. */
+  phone_block?: boolean
 }
 
 export type ServiceOrder = {
