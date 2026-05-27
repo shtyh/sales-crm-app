@@ -53,8 +53,13 @@ export function BookPage({
   const today = new Date().toISOString().slice(0, 10)
   const [preferredDate, setPreferredDate] = useState(today)
   const [slotTime, setSlotTime] = useState<SlotTime | null>(null)
-  const [serviceMileage, setServiceMileage] =
-    useState<ServiceMileage | null>(null)
+  /** A picked tier from SERVICE_MILEAGE_OPTIONS, or the sentinel
+   *  `'other'` for the free-form km input below the select. */
+  const [mileageChoice, setMileageChoice] = useState<
+    ServiceMileage | 'other' | null
+  >(null)
+  /** Free-form km value when `mileageChoice === 'other'`. */
+  const [otherMileageStr, setOtherMileageStr] = useState('')
   const [complaint, setComplaint] = useState('')
   const [phoneBlock, setPhoneBlock] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
@@ -87,9 +92,22 @@ export function BookPage({
       setFormError('Please pick a time slot.')
       return
     }
-    if (!serviceMileage) {
+    if (!mileageChoice) {
       setFormError('Please pick which service interval (km) you need.')
       return
+    }
+    let mileage: number
+    if (mileageChoice === 'other') {
+      const parsed = Number(otherMileageStr)
+      if (!Number.isFinite(parsed) || parsed <= 100000) {
+        setFormError(
+          'For "Other", enter a mileage greater than 100,000 km.',
+        )
+        return
+      }
+      mileage = Math.round(parsed)
+    } else {
+      mileage = mileageChoice
     }
     try {
       const token = await submitMut.mutateAsync({
@@ -100,7 +118,7 @@ export function BookPage({
         vehicle_model: model,
         preferred_date: preferredDate,
         slot_time: slotTime,
-        service_mileage: serviceMileage,
+        service_mileage: mileage,
         complaint: complaint.trim() || null,
         phone_block: staffPhoneBlockEnabled ? phoneBlock : false,
       })
@@ -185,14 +203,13 @@ export function BookPage({
       <Section title="Pick a slot">
         <Field label="Service interval (km)" required>
           <select
-            value={serviceMileage ?? ''}
-            onChange={(e) =>
-              setServiceMileage(
-                e.target.value
-                  ? (Number(e.target.value) as ServiceMileage)
-                  : null,
-              )
-            }
+            value={mileageChoice ?? ''}
+            onChange={(e) => {
+              const v = e.target.value
+              if (v === '') setMileageChoice(null)
+              else if (v === 'other') setMileageChoice('other')
+              else setMileageChoice(Number(v) as ServiceMileage)
+            }}
             required
             className={inputCls}
           >
@@ -204,8 +221,24 @@ export function BookPage({
                 {formatServiceMileage(km)}
               </option>
             ))}
+            <option value="other">Other (more than 100,000 km)</option>
           </select>
         </Field>
+        {mileageChoice === 'other' && (
+          <Field label="Your mileage (km)" required>
+            <input
+              type="number"
+              min={100001}
+              step={1000}
+              inputMode="numeric"
+              value={otherMileageStr}
+              onChange={(e) => setOtherMileageStr(e.target.value)}
+              required
+              placeholder="e.g. 120000"
+              className={inputCls}
+            />
+          </Field>
+        )}
         <Field label="Date" required>
           <input
             type="date"
@@ -266,7 +299,12 @@ export function BookPage({
 
       <button
         type="submit"
-        disabled={submitMut.isPending || !slotTime || !serviceMileage}
+        disabled={
+          submitMut.isPending ||
+          !slotTime ||
+          !mileageChoice ||
+          (mileageChoice === 'other' && !otherMileageStr.trim())
+        }
         className="w-full rounded-md bg-gray-900 px-4 py-3 text-sm font-medium text-white shadow hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
       >
         {submitMut.isPending
