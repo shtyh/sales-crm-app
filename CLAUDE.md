@@ -269,6 +269,22 @@ Primary nav links by role:
   modal filters the already-loaded `useServiceOrders()` client-side, so
   no extra DB round trip.
 
+- **Direct Payment dialog** (in `ServiceOpsPage.tsx`) — 1:1 port of the
+  legacy WMS "Direct Payment Section" popup. Opens from the action bar
+  ("Payment") against the selected job. Pre-fills Account No from
+  `vehicle.account_no || customer.name || 'CASH'`, Bill No from
+  `order_no`, Billing Amount from `service_orders.total_amount`. There's
+  **no service-side payments ledger yet**, so Total Payment is 0 and
+  Outstanding == Billing for any not-yet-collected job. Payment Type
+  dropdown (Cash / Cheque / Credit Card / Bank Transfer / Other) toggles
+  the Cheque Details and Other Payment Type Details fieldsets dim/active
+  for visual fidelity. OK is only enabled when `This Payment >=
+  Outstanding` and flips `service_orders.status` to `'collected'` (the
+  workshop's "fully paid"); partial payments show an inline amber
+  notice. Already-collected jobs show a green notice and OK simply
+  closes. All cheque / other-payment fields are UI-only — none are
+  persisted until the service payments ledger lands.
+
 - **Clock-in system** (2026-05-26, sales-advisor exempt) — `/clock-in` runs the browser
   Geolocation API on mount, computes haversine distance to the office
   (anchor 5.3073479, 100.4691911 — Bukit Mertajam, **100 m radius**, from

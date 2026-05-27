@@ -2,7 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
 import { useAuth } from '../lib/auth'
-import { useProfiles, useServiceOrders } from '../lib/queries'
+import {
+  useProfiles,
+  useServiceOrders,
+  useUpdateServiceOrder,
+} from '../lib/queries'
 import { formatError } from '../lib/errors'
 import { formatMYR } from '../lib/format'
 import {
@@ -47,6 +51,7 @@ export function ServiceOpsPage() {
   const [q, setQ] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [paymentOpen, setPaymentOpen] = useState(false)
 
   const profileById = useMemo(() => {
     const m = new Map<string, Profile>()
@@ -370,7 +375,17 @@ export function ServiceOpsPage() {
             Billing history
           </ActionButton>
           <ActionButton disabled>Create billing</ActionButton>
-          <ActionButton disabled>Payment</ActionButton>
+          <ActionButton
+            disabled={!selectedOrder}
+            onClick={() => setPaymentOpen(true)}
+            title={
+              selectedOrder
+                ? 'Record a direct payment against the selected job'
+                : 'Select a job row first'
+            }
+          >
+            Payment
+          </ActionButton>
           <ActionButton disabled>Print Job Sheet</ActionButton>
           <ActionButton disabled>Print quotation</ActionButton>
           <ActionButton disabled>Submit e-Invoice</ActionButton>
@@ -406,6 +421,13 @@ export function ServiceOpsPage() {
           anchor={selectedOrder}
           allOrders={orders ?? []}
           onClose={() => setHistoryOpen(false)}
+        />
+      )}
+
+      {paymentOpen && selectedOrder && (
+        <DirectPaymentDialog
+          order={selectedOrder}
+          onClose={() => setPaymentOpen(false)}
         />
       )}
     </AppShell>
@@ -786,5 +808,392 @@ function BillingHistoryDialog({
         </div>
       </div>
     </div>
+  )
+}
+
+// ---------- Direct Payment dialog (port of legacy WMS popup) ----------
+
+type PaymentType = 'cash' | 'cheque' | 'card' | 'transfer' | 'other'
+
+const PAYMENT_TYPE_LABEL: Record<PaymentType, string> = {
+  cash: 'Cash',
+  cheque: 'Cheque',
+  card: 'Credit Card',
+  transfer: 'Bank Transfer',
+  other: 'Other',
+}
+
+/**
+ * 1:1 port of the legacy WMS "Direct Payment Section" popup. Opens from
+ * the action bar against the selected job. Pre-fills Account No from
+ * the vehicle / customer, Bill No from order_no, Billing Amount from
+ * service_orders.total_amount. There's no service-side payments ledger
+ * yet, so Total Payment is 0 and Outstanding == Billing. Clicking OK
+ * with `This Payment >= Outstanding` flips the order's status to
+ * `collected` (the workshop's equivalent of "fully paid"); partial
+ * payments aren't tracked yet and show an inline notice.
+ */
+function DirectPaymentDialog({
+  order,
+  onClose,
+}: {
+  order: ServiceOrderWithJoins
+  onClose: () => void
+}) {
+  const updateMut = useUpdateServiceOrder()
+
+  const billing = Number(order.total_amount ?? 0)
+  const totalPaid = order.status === 'collected' ? billing : 0
+  const outstanding = Math.max(0, billing - totalPaid)
+
+  const today = new Date().toISOString().slice(0, 10)
+
+  const accountNo =
+    order.vehicle?.account_no || order.customer?.name || 'CASH'
+  const billNo = order.order_no ?? ''
+
+  const [collectionDate, setCollectionDate] = useState(today)
+  const [paymentType, setPaymentType] = useState<PaymentType>('cash')
+  const [thisPaymentStr, setThisPaymentStr] = useState('0.00')
+  const [bankCode, setBankCode] = useState('')
+  const [chequeNo, setChequeNo] = useState('')
+  const [chequeDate, setChequeDate] = useState('')
+  const [otherType, setOtherType] = useState('')
+  const [otherNo, setOtherNo] = useState('')
+  const [otherExpire, setOtherExpire] = useState('')
+  const [otherApproval, setOtherApproval] = useState('')
+
+  const thisPayment = Number(thisPaymentStr) || 0
+  const remaining = Math.max(0, outstanding - thisPayment)
+  const isCheque = paymentType === 'cheque'
+  const isOther = paymentType === 'card' || paymentType === 'other' ||
+    paymentType === 'transfer'
+
+  const alreadyCollected = order.status === 'collected'
+  const fullSettle = !alreadyCollected && thisPayment >= outstanding &&
+    outstanding > 0
+  const partialUnsupported = !alreadyCollected && thisPayment > 0 &&
+    thisPayment < outstanding
+
+  async function handleOk() {
+    if (alreadyCollected) {
+      onClose()
+      return
+    }
+    if (fullSettle) {
+      try {
+        await updateMut.mutateAsync({
+          id: order.id,
+          patch: {
+            status: 'collected',
+          },
+        })
+        onClose()
+      } catch (err) {
+        alert(formatError(err))
+      }
+    }
+    // Partial payment: do nothing — message is shown inline.
+  }
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Direct Payment Section"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="flex max-h-[95vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-gray-300 bg-white shadow-xl"
+      >
+        {/* Title bar */}
+        <div className="flex items-center justify-between border-b border-gray-200 bg-gray-100 px-3 py-1.5">
+          <div className="text-sm font-semibold text-gray-800">
+            Direct Payment Section
+          </div>
+          <button
+            type="button"
+            aria-label="Close"
+            onClick={onClose}
+            className="rounded px-2 text-gray-500 hover:bg-gray-200 hover:text-gray-700"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-auto px-4 py-3">
+          {/* Section header */}
+          <div className="mb-3 text-sm font-semibold text-gray-800">
+            Direct Payment
+          </div>
+
+          {/* Account / Bill No */}
+          <div className="mb-3 grid grid-cols-[110px_1fr] gap-x-3 gap-y-2 text-xs">
+            <Label>Account No</Label>
+            <ReadOnlyField value={accountNo} />
+            <Label>Bill No</Label>
+            <ReadOnlyField value={billNo} />
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            {/* Payment Details */}
+            <Fieldset legend="Payment Details">
+              <div className="mb-2 rounded-md border border-gray-200 px-3 py-2">
+                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+                  Previous Payment Information
+                </div>
+                <Row label="Billing Amount">
+                  <ReadOnlyNum value={billing} />
+                </Row>
+                <Row label="Total Payment">
+                  <ReadOnlyNum value={totalPaid} />
+                </Row>
+                <Row label="Outstanding Amount">
+                  <ReadOnlyNum
+                    value={outstanding}
+                    className={
+                      outstanding > 0 ? 'text-rose-700' : 'text-gray-700'
+                    }
+                  />
+                </Row>
+              </div>
+
+              <Row label="Collection Date">
+                <input
+                  type="date"
+                  value={collectionDate}
+                  onChange={(e) => setCollectionDate(e.target.value)}
+                  className={inputCls}
+                />
+              </Row>
+              <Row label="Payment Type">
+                <select
+                  value={paymentType}
+                  onChange={(e) =>
+                    setPaymentType(e.target.value as PaymentType)
+                  }
+                  className={inputCls}
+                >
+                  {(Object.keys(PAYMENT_TYPE_LABEL) as PaymentType[]).map(
+                    (t) => (
+                      <option key={t} value={t}>
+                        {PAYMENT_TYPE_LABEL[t]}
+                      </option>
+                    ),
+                  )}
+                </select>
+              </Row>
+              <Row label="This Payment">
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={thisPaymentStr}
+                  onChange={(e) => setThisPaymentStr(e.target.value)}
+                  className={`${inputCls} text-right tabular-nums`}
+                />
+              </Row>
+              <Row label={<span className="text-rose-700">Outstanding Remaining</span>}>
+                <ReadOnlyNum
+                  value={remaining}
+                  className={
+                    remaining > 0 ? 'text-rose-700' : 'text-green-700'
+                  }
+                />
+              </Row>
+            </Fieldset>
+
+            {/* Cheque + Other Payment details */}
+            <div className="flex flex-col gap-3">
+              <Fieldset legend="Cheque Details" dim={!isCheque}>
+                <Row label="Bank Code">
+                  <input
+                    disabled={!isCheque}
+                    value={bankCode}
+                    onChange={(e) => setBankCode(e.target.value)}
+                    className={inputCls}
+                  />
+                </Row>
+                <Row label="Cheque No">
+                  <input
+                    disabled={!isCheque}
+                    value={chequeNo}
+                    onChange={(e) => setChequeNo(e.target.value)}
+                    className={inputCls}
+                  />
+                </Row>
+                <Row label="Cheque Date">
+                  <input
+                    type="date"
+                    disabled={!isCheque}
+                    value={chequeDate}
+                    onChange={(e) => setChequeDate(e.target.value)}
+                    className={inputCls}
+                  />
+                </Row>
+              </Fieldset>
+
+              <Fieldset legend="Other Payment Type Details" dim={!isOther}>
+                <Row label="Type">
+                  <input
+                    disabled={!isOther}
+                    value={otherType}
+                    onChange={(e) => setOtherType(e.target.value)}
+                    className={inputCls}
+                  />
+                </Row>
+                <Row label="No">
+                  <input
+                    disabled={!isOther}
+                    value={otherNo}
+                    onChange={(e) => setOtherNo(e.target.value)}
+                    className={inputCls}
+                  />
+                </Row>
+                <Row label="Expire Date">
+                  <input
+                    type="date"
+                    disabled={!isOther}
+                    value={otherExpire}
+                    onChange={(e) => setOtherExpire(e.target.value)}
+                    className={inputCls}
+                  />
+                </Row>
+                <Row label="Approval Code">
+                  <input
+                    disabled={!isOther}
+                    value={otherApproval}
+                    onChange={(e) => setOtherApproval(e.target.value)}
+                    className={inputCls}
+                  />
+                </Row>
+              </Fieldset>
+            </div>
+          </div>
+
+          {/* Notices */}
+          {alreadyCollected && (
+            <div className="mt-3 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-800">
+              This job is already marked collected — no outstanding amount.
+            </div>
+          )}
+          {partialUnsupported && (
+            <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              Partial payments aren't tracked yet (no service-side payments
+              ledger). Enter the full outstanding amount to settle this job,
+              or close and wait for the partial-payment flow.
+            </div>
+          )}
+          {updateMut.isError && (
+            <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+              {formatError(updateMut.error)}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-2 border-t border-gray-200 bg-gray-50 px-4 py-3">
+          <button
+            type="button"
+            onClick={handleOk}
+            disabled={updateMut.isPending || (!fullSettle && !alreadyCollected)}
+            title={
+              alreadyCollected
+                ? 'Already collected — closes the dialog'
+                : fullSettle
+                  ? 'Settle this job and mark it collected'
+                  : 'Enter at least the outstanding amount to enable OK'
+            }
+            className="rounded-md bg-gray-900 px-4 py-1.5 text-xs font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {updateMut.isPending ? 'Saving…' : 'OK'}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md border border-gray-300 bg-white px-4 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ---------- shared form helpers for the payment dialog ----------
+
+const inputCls =
+  'w-full rounded-md border border-gray-300 bg-white px-2 py-1 text-xs outline-none focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10 disabled:bg-gray-100 disabled:text-gray-400'
+
+function Label({ children }: { children: React.ReactNode }) {
+  return (
+    <label className="self-center text-xs font-medium text-gray-700">
+      {children}
+    </label>
+  )
+}
+
+function ReadOnlyField({ value }: { value: string }) {
+  return (
+    <input
+      readOnly
+      value={value}
+      className="w-full rounded-md border border-gray-300 bg-gray-50 px-2 py-1 text-xs text-gray-700"
+    />
+  )
+}
+
+function ReadOnlyNum({
+  value,
+  className = '',
+}: {
+  value: number
+  className?: string
+}) {
+  return (
+    <input
+      readOnly
+      value={value.toFixed(2)}
+      className={`w-full rounded-md border border-gray-300 bg-gray-50 px-2 py-1 text-right text-xs tabular-nums text-gray-700 ${className}`}
+    />
+  )
+}
+
+function Row({
+  label,
+  children,
+}: {
+  label: React.ReactNode
+  children: React.ReactNode
+}) {
+  return (
+    <div className="mb-1.5 grid grid-cols-[120px_1fr] items-center gap-2">
+      <label className="text-xs font-medium text-gray-700">{label}</label>
+      <div>{children}</div>
+    </div>
+  )
+}
+
+function Fieldset({
+  legend,
+  dim,
+  children,
+}: {
+  legend: string
+  dim?: boolean
+  children: React.ReactNode
+}) {
+  return (
+    <fieldset
+      className={`rounded-lg border border-gray-200 px-3 pb-3 pt-1 ${dim ? 'opacity-60' : ''}`}
+    >
+      <legend className="px-1 text-xs font-semibold text-gray-700">
+        {legend}
+      </legend>
+      {children}
+    </fieldset>
   )
 }
