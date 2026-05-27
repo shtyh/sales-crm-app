@@ -6,7 +6,7 @@ import {
   useServiceOrderItems,
   useVehicles,
 } from '../lib/queries'
-import { COMPANY } from '../lib/company'
+import { Letterhead } from '../components/Letterhead'
 import { formatError } from '../lib/errors'
 import { formatMYR } from '../lib/format'
 import { SST_LABOUR_LABEL, labourSST } from '../lib/tax'
@@ -160,48 +160,26 @@ export function BillPrintPage() {
       {/* ---------- The bill sheet ---------- */}
       <div className="mx-auto my-6 max-w-4xl bg-white p-8 shadow-md print:my-0 print:max-w-full print:p-6 print:shadow-none">
         {/* Header strip */}
-        <div className="flex items-start justify-between border-b-2 border-gray-900 pb-3">
-          <div>
-            <div className="text-xl font-bold tracking-tight uppercase text-gray-900">
-              {COMPANY.name}
-            </div>
-            <div className="mt-1 text-[11px] leading-snug text-gray-700">
-              {COMPANY.address.map((line, i) => (
-                <div key={i}>{line}</div>
-              ))}
-            </div>
-            <div className="mt-1 grid grid-cols-2 gap-x-4 text-[11px] text-gray-700">
-              <div>Company Reg No: {COMPANY.regNo}</div>
-              <div>Tel No: {COMPANY.tel}</div>
-              <div>SST No: {COMPANY.sstNo}</div>
-              <div>H/P No: {COMPANY.hp}</div>
-              <div className="col-span-2">eMail: {COMPANY.email}</div>
-            </div>
-          </div>
-          <div className="text-right">
-            <div className="text-2xl font-bold tracking-wide uppercase text-gray-900">
-              {title}
-            </div>
-            <div className="mt-1 grid grid-cols-[auto_1fr] gap-x-2 text-[11px] text-gray-700">
-              <span className="text-right">Page No:</span>
-              <span className="text-left">1</span>
-              <span className="text-right">
-                {billingType === 'invoice' || billingType === 'invoice-distribution'
-                  ? 'Invoice No:'
-                  : 'Bill No:'}
-              </span>
-              <span className="text-left font-mono">{billNo}</span>
-              <span className="text-right">
-                {billingType === 'invoice' || billingType === 'invoice-distribution'
-                  ? 'Invoice Date:'
-                  : 'Bill Date:'}
-              </span>
-              <span className="text-left">
-                {todayLocal} {todayDow}
-              </span>
-            </div>
-          </div>
-        </div>
+        <Letterhead
+          title={title}
+          meta={[
+            ['Page No:', '1'],
+            [
+              billingType === 'invoice' ||
+              billingType === 'invoice-distribution'
+                ? 'Invoice No:'
+                : 'Bill No:',
+              <span className="font-mono">{billNo}</span>,
+            ],
+            [
+              billingType === 'invoice' ||
+              billingType === 'invoice-distribution'
+                ? 'Invoice Date:'
+                : 'Bill Date:',
+              `${todayLocal} ${todayDow}`,
+            ],
+          ]}
+        />
 
         {/* Account + Vehicle block */}
         <div className="mt-3 grid grid-cols-2 gap-6 text-[11px] text-gray-800">

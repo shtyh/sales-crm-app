@@ -285,8 +285,10 @@ Primary nav links by role:
 
 - **BillPrintPage** (`/service-orders/:id/bill`) — printable cash bill
   / invoice / delivery order, 1:1 layout port of the legacy
-  `cashbill.xls` template. Same letterhead as the quotation
-  (`src/lib/company.ts`), legacy column set (Item / Description / Qty
+  `cashbill.xls` template. Shared `Letterhead` component
+  (`src/components/Letterhead.tsx`) at the top — Proton logo from
+  `/proton-logo.png` (graceful onError hide), company name + tagline
+  + address + regulatory numbers from `src/lib/company.ts`, legacy column set (Item / Description / Qty
   / Unit / U/Price / Dis (%) / Amount / Tax / Total RM), Next Service
   Date + KM in the bottom-left, SubTotal / Service Tax / Total
   Payable on the bottom-right, then the acknowledgement block with

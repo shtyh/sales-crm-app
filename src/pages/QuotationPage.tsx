@@ -6,7 +6,7 @@ import {
   useServiceOrderItems,
   useVehicles,
 } from '../lib/queries'
-import { COMPANY } from '../lib/company'
+import { Letterhead } from '../components/Letterhead'
 import { formatError } from '../lib/errors'
 import { formatMYR } from '../lib/format'
 import { SST_LABOUR_LABEL, labourSST } from '../lib/tax'
@@ -122,43 +122,17 @@ export function QuotationPage() {
       {/* ---------- The quotation sheet ---------- */}
       <div className="mx-auto my-6 max-w-4xl bg-white p-8 shadow-md print:my-0 print:max-w-full print:p-6 print:shadow-none">
         {/* Header strip */}
-        <div className="flex items-start justify-between border-b-2 border-gray-900 pb-3">
-          <div>
-            <div className="text-xl font-bold tracking-tight uppercase text-gray-900">
-              {COMPANY.name}
-            </div>
-            <div className="mt-0.5 text-[11px] text-gray-700">
-              {COMPANY.tagline}
-            </div>
-            <div className="mt-1 text-[11px] leading-snug text-gray-700">
-              {COMPANY.address.map((line, i) => (
-                <div key={i}>{line}</div>
-              ))}
-            </div>
-            <div className="mt-1 grid grid-cols-2 gap-x-4 text-[11px] text-gray-700">
-              <div>Company Reg No: {COMPANY.regNo}</div>
-              <div>Tel No: {COMPANY.tel}</div>
-              <div>SST No: {COMPANY.sstNo}</div>
-              <div>H/P No: {COMPANY.hp}</div>
-              <div className="col-span-2">eMail: {COMPANY.email}</div>
-            </div>
-          </div>
-          <div className="text-right">
-            <div className="text-2xl font-bold tracking-wide text-gray-900">
-              Quotation
-            </div>
-            <div className="mt-1 grid grid-cols-[auto_1fr] gap-x-2 text-[11px] text-gray-700">
-              <span className="text-right">Quotation No:</span>
-              <span className="text-left font-mono">
-                {order.order_no ?? '—'}
-              </span>
-              <span className="text-right">Quotation Date:</span>
-              <span className="text-left">{todayLocal}</span>
-              <span className="text-right">Page No:</span>
-              <span className="text-left">1</span>
-            </div>
-          </div>
-        </div>
+        <Letterhead
+          title="Quotation"
+          meta={[
+            [
+              'Quotation No:',
+              <span className="font-mono">{order.order_no ?? '—'}</span>,
+            ],
+            ['Quotation Date:', todayLocal],
+            ['Page No:', '1'],
+          ]}
+        />
 
         {/* Customer + Vehicle */}
         <div className="mt-4 grid grid-cols-2 gap-6 border-b border-gray-300 pb-3 text-[11px]">
