@@ -274,6 +274,14 @@ Primary nav links by role:
   else                  → DashboardPage  (sales_advisor)
   ```
 
+## Malaysian SST on labour
+
+`src/lib/tax.ts` exports `SST_LABOUR_RATE` (default `0.08`, the post-2024
+service tax rate) + `SST_LABOUR_LABEL` + `labourSST(nett)`. The Billing
+screen applies it to `kind='labour'` line items only; parts are
+zero-rated. Change the constant and every screen (entry-form Calc strip,
+per-row Tax Amount (S), Totals "Tax Amount (+)") picks up the new rate.
+
 ## Performance work already done
 
 - Vite `manualChunks` splits react / supabase vendor into stable chunks (cached forever).

@@ -15,7 +15,12 @@ import {
 } from '../lib/queries'
 import { formatError } from '../lib/errors'
 import { formatMYR } from '../lib/format'
-import type { Part, ServiceOrderItem } from '../lib/types'
+import { SST_LABOUR_LABEL, labourSST } from '../lib/tax'
+import type {
+  Part,
+  ServiceItemKind,
+  ServiceOrderItem,
+} from '../lib/types'
 
 /**
  * Billing Screen — adds line items to a service order; rows persist via
@@ -52,6 +57,7 @@ export function BillingPage() {
   const updateItem = useUpdateServiceOrderItem()
   const deleteItem = useDeleteServiceOrderItem()
 
+  const [kind, setKind] = useState<ServiceItemKind>('part')
   const [partCode, setPartCode] = useState('')
   const [partName, setPartName] = useState('')
   const [remarks, setRemarks] = useState('')
@@ -91,16 +97,30 @@ export function BillingPage() {
   const discountAmount =
     discountMode === '%' ? (gross * discountN) / 100 : discountN
   const nett = Math.max(0, gross - discountAmount)
+  // SST 8% applies to labour lines only — parts are zero-rated.
+  const lineTax = kind === 'labour' ? labourSST(nett) : 0
 
-  // Totals across all saved line items.
+  // Totals across all saved line items. Tax is summed only on labour
+  // rows; parts contribute 0 to tax. Total Invoice = gross + tax.
   const totals = useMemo(() => {
     let g = 0
-    for (const it of items ?? []) g += Number(it.line_total) || 0
-    return { gross: g, invoice: g, sales: g }
+    let tax = 0
+    for (const it of items ?? []) {
+      const lt = Number(it.line_total) || 0
+      g += lt
+      if (it.kind === 'labour') tax += labourSST(lt)
+    }
+    return {
+      gross: g,
+      tax,
+      invoice: g + tax,
+      sales: g + tax,
+    }
   }, [items])
 
   function clearEntry() {
     setSelectedId(null)
+    setKind('part')
     setPartCode('')
     setPartName('')
     setRemarks('')
@@ -114,6 +134,7 @@ export function BillingPage() {
 
   function loadIntoEntry(it: ServiceOrderItem) {
     setSelectedId(it.id)
+    setKind(it.kind)
     // The DB stores one description string; split it back into a name
     // (best-effort) — anything before the first " · " is treated as the
     // part name, the rest as remarks.
@@ -161,7 +182,7 @@ export function BillingPage() {
         await updateItem.mutateAsync({
           id: selectedId,
           patch: {
-            kind: 'part',
+            kind,
             description,
             quantity: qtyN,
             unit_price: unitPriceN,
@@ -171,7 +192,7 @@ export function BillingPage() {
       } else {
         await createItem.mutateAsync({
           service_order_id: id,
-          kind: 'part',
+          kind,
           description,
           quantity: qtyN,
           unit_price: unitPriceN,
@@ -340,32 +361,73 @@ export function BillingPage() {
           className="mt-4 grid grid-cols-1 gap-x-6 gap-y-2 border-t border-gray-200 pt-3 sm:grid-cols-[1fr_18rem]"
         >
           <div className="space-y-2">
-            <Field label="Part Code">
+            <Field label="Type">
+              <div className="flex items-center gap-3 py-1 text-sm">
+                <label className="flex items-center gap-1.5">
+                  <input
+                    type="radio"
+                    name="kind"
+                    checked={kind === 'part'}
+                    onChange={() => setKind('part')}
+                  />
+                  Part
+                  <span className="text-[10px] text-gray-500">
+                    (no tax)
+                  </span>
+                </label>
+                <label className="flex items-center gap-1.5">
+                  <input
+                    type="radio"
+                    name="kind"
+                    checked={kind === 'labour'}
+                    onChange={() => setKind('labour')}
+                  />
+                  Labour
+                  <span className="text-[10px] text-gray-500">
+                    ({SST_LABOUR_LABEL})
+                  </span>
+                </label>
+              </div>
+            </Field>
+            <Field label={kind === 'labour' ? 'Service Code' : 'Part Code'}>
               <div className="flex w-full items-center gap-1.5">
                 <input
                   type="text"
                   value={partCode}
                   onChange={(e) => setPartCode(e.target.value.toUpperCase())}
                   className={`${inputClass} font-mono`}
-                  placeholder="Type or click 🔍 to search inventory"
+                  placeholder={
+                    kind === 'labour'
+                      ? 'e.g. LAB-OIL-CHANGE'
+                      : 'Type or click 🔍 to search inventory'
+                  }
                 />
                 <button
                   type="button"
                   onClick={() => setPartsOpen(true)}
-                  title="Search parts inventory"
-                  className="rounded border border-gray-300 bg-white px-2 py-1 text-sm hover:bg-gray-50"
+                  disabled={kind === 'labour'}
+                  title={
+                    kind === 'labour'
+                      ? 'Inventory search is for parts only'
+                      : 'Search parts inventory'
+                  }
+                  className="rounded border border-gray-300 bg-white px-2 py-1 text-sm hover:bg-gray-50 disabled:opacity-40"
                 >
                   🔍
                 </button>
               </div>
             </Field>
-            <Field label="Part Name">
+            <Field label={kind === 'labour' ? 'Description' : 'Part Name'}>
               <input
                 type="text"
                 value={partName}
                 onChange={(e) => setPartName(e.target.value)}
                 className={inputClass}
-                placeholder="Auto-fills when a part is picked"
+                placeholder={
+                  kind === 'labour'
+                    ? 'What the labour is for'
+                    : 'Auto-fills when a part is picked'
+                }
               />
             </Field>
             <Field label="Remarks">
@@ -447,9 +509,18 @@ export function BillingPage() {
             {/* Amount strip — live as the SA types */}
             <div className="mt-2 grid grid-cols-2 gap-2 rounded-lg border border-gray-200 bg-gray-50 p-2">
               <Calc label="Gross Amount" value={gross} />
-              <Calc label="Tax Code (Sales %)" placeholder readOnlyText="—" />
+              <Calc
+                label="Tax Code (Sales)"
+                placeholder
+                readOnlyText={kind === 'labour' ? SST_LABOUR_LABEL : '—'}
+              />
               <Calc label="Nett Amount" value={nett} highlight />
-              <Calc label="Tax Amount (Sales)" placeholder readOnlyText="—" />
+              <Calc
+                label="Tax Amount (Sales)"
+                value={kind === 'labour' ? lineTax : undefined}
+                placeholder={kind !== 'labour'}
+                readOnlyText="—"
+              />
               <Calc label="Bonus Point" placeholder readOnlyText="0.00" />
               <Calc
                 label="Tax Code (Purchase %)"
@@ -580,41 +651,69 @@ export function BillingPage() {
                     </td>
                   </tr>
                 )}
-                {(items ?? []).map((it) => (
-                  <tr
-                    key={it.id}
-                    onClick={() => loadIntoEntry(it)}
-                    className={`cursor-pointer ${
-                      selectedId === it.id
-                        ? 'bg-blue-50'
-                        : 'hover:bg-gray-50'
-                    }`}
-                  >
-                    <td className="whitespace-nowrap px-3 py-1.5 uppercase">
-                      {it.kind}
-                    </td>
-                    <td className="px-3 py-1.5">{it.description}</td>
-                    <td className="whitespace-nowrap px-3 py-1.5 text-right tabular-nums">
-                      {Number(it.quantity).toFixed(2)}
-                    </td>
-                    <td className="whitespace-nowrap px-3 py-1.5 text-right tabular-nums">
-                      {formatMYR(Number(it.unit_price))}
-                    </td>
-                    <td className="whitespace-nowrap px-3 py-1.5 text-right tabular-nums text-gray-400">
-                      —
-                    </td>
-                    <td className="whitespace-nowrap px-3 py-1.5 text-right tabular-nums font-semibold">
-                      {formatMYR(Number(it.line_total))}
-                    </td>
-                    <td className="px-3 py-1.5 text-gray-400">—</td>
-                    <td className="px-3 py-1.5 text-right text-gray-400">
-                      —
-                    </td>
-                    <td className="px-3 py-1.5 text-right text-gray-400">
-                      —
-                    </td>
-                  </tr>
-                ))}
+                {(items ?? []).map((it) => {
+                  const isLabour = it.kind === 'labour'
+                  const rowTax = isLabour
+                    ? labourSST(Number(it.line_total))
+                    : 0
+                  return (
+                    <tr
+                      key={it.id}
+                      onClick={() => loadIntoEntry(it)}
+                      className={`cursor-pointer ${
+                        selectedId === it.id
+                          ? 'bg-blue-50'
+                          : 'hover:bg-gray-50'
+                      }`}
+                    >
+                      <td className="whitespace-nowrap px-3 py-1.5 uppercase">
+                        <span
+                          className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                            isLabour
+                              ? 'bg-amber-100 text-amber-800'
+                              : 'bg-blue-100 text-blue-800'
+                          }`}
+                        >
+                          {it.kind}
+                        </span>
+                      </td>
+                      <td className="px-3 py-1.5">{it.description}</td>
+                      <td className="whitespace-nowrap px-3 py-1.5 text-right tabular-nums">
+                        {Number(it.quantity).toFixed(2)}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-1.5 text-right tabular-nums">
+                        {formatMYR(Number(it.unit_price))}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-1.5 text-right tabular-nums text-gray-400">
+                        —
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-1.5 text-right tabular-nums font-semibold">
+                        {formatMYR(Number(it.line_total))}
+                      </td>
+                      <td className="px-3 py-1.5 text-gray-700">
+                        {isLabour ? (
+                          SST_LABOUR_LABEL
+                        ) : (
+                          <span className="text-gray-400">—</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-1.5 text-right tabular-nums text-gray-700">
+                        {isLabour ? (
+                          `${Math.round(0.08 * 100)}%`
+                        ) : (
+                          <span className="text-gray-400">—</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-1.5 text-right tabular-nums font-semibold text-amber-700">
+                        {isLabour ? (
+                          formatMYR(rowTax)
+                        ) : (
+                          <span className="text-gray-400">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -624,7 +723,7 @@ export function BillingPage() {
         <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
           <div className="space-y-1 text-xs">
             <Total label="Total Gross Amount" value={totals.gross} />
-            <Total label="Tax Amount (+)" placeholder readOnlyText="0.00" />
+            <Total label={`Tax Amount (+) ${SST_LABOUR_LABEL}`} value={totals.tax} />
             <Total label="Discount (−)" placeholder readOnlyText="0.00" />
           </div>
           <div className="space-y-1 text-xs">
