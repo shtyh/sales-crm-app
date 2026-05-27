@@ -845,14 +845,13 @@ function BillingHistoryDialog({
 
 // ---------- Direct Payment dialog (port of legacy WMS popup) ----------
 
-type PaymentType = 'cash' | 'cheque' | 'card' | 'transfer' | 'other'
+type PaymentType = 'cash' | 'card' | 'ewallet' | 'transfer'
 
 const PAYMENT_TYPE_LABEL: Record<PaymentType, string> = {
   cash: 'Cash',
-  cheque: 'Cheque',
-  card: 'Credit Card',
+  card: 'Credit Card / Debit Card',
+  ewallet: 'eWallet',
   transfer: 'Bank Transfer',
-  other: 'Other',
 }
 
 /**
@@ -887,19 +886,9 @@ function DirectPaymentDialog({
   const [collectionDate, setCollectionDate] = useState(today)
   const [paymentType, setPaymentType] = useState<PaymentType>('cash')
   const [thisPaymentStr, setThisPaymentStr] = useState('0.00')
-  const [bankCode, setBankCode] = useState('')
-  const [chequeNo, setChequeNo] = useState('')
-  const [chequeDate, setChequeDate] = useState('')
-  const [otherType, setOtherType] = useState('')
-  const [otherNo, setOtherNo] = useState('')
-  const [otherExpire, setOtherExpire] = useState('')
-  const [otherApproval, setOtherApproval] = useState('')
 
   const thisPayment = Number(thisPaymentStr) || 0
   const remaining = Math.max(0, outstanding - thisPayment)
-  const isCheque = paymentType === 'cheque'
-  const isOther = paymentType === 'card' || paymentType === 'other' ||
-    paymentType === 'transfer'
 
   const alreadyCollected = order.status === 'collected'
   const fullSettle = !alreadyCollected && thisPayment >= outstanding &&
@@ -969,7 +958,7 @@ function DirectPaymentDialog({
             <ReadOnlyField value={billNo} />
           </div>
 
-          <div className="grid gap-3 md:grid-cols-2">
+          <div>
             {/* Payment Details */}
             <Fieldset legend="Payment Details">
               <div className="mb-2 rounded-md border border-gray-200 px-3 py-2">
@@ -1036,73 +1025,6 @@ function DirectPaymentDialog({
                 />
               </Row>
             </Fieldset>
-
-            {/* Cheque + Other Payment details */}
-            <div className="flex flex-col gap-3">
-              <Fieldset legend="Cheque Details" dim={!isCheque}>
-                <Row label="Bank Code">
-                  <input
-                    disabled={!isCheque}
-                    value={bankCode}
-                    onChange={(e) => setBankCode(e.target.value)}
-                    className={inputCls}
-                  />
-                </Row>
-                <Row label="Cheque No">
-                  <input
-                    disabled={!isCheque}
-                    value={chequeNo}
-                    onChange={(e) => setChequeNo(e.target.value)}
-                    className={inputCls}
-                  />
-                </Row>
-                <Row label="Cheque Date">
-                  <input
-                    type="date"
-                    disabled={!isCheque}
-                    value={chequeDate}
-                    onChange={(e) => setChequeDate(e.target.value)}
-                    className={inputCls}
-                  />
-                </Row>
-              </Fieldset>
-
-              <Fieldset legend="Other Payment Type Details" dim={!isOther}>
-                <Row label="Type">
-                  <input
-                    disabled={!isOther}
-                    value={otherType}
-                    onChange={(e) => setOtherType(e.target.value)}
-                    className={inputCls}
-                  />
-                </Row>
-                <Row label="No">
-                  <input
-                    disabled={!isOther}
-                    value={otherNo}
-                    onChange={(e) => setOtherNo(e.target.value)}
-                    className={inputCls}
-                  />
-                </Row>
-                <Row label="Expire Date">
-                  <input
-                    type="date"
-                    disabled={!isOther}
-                    value={otherExpire}
-                    onChange={(e) => setOtherExpire(e.target.value)}
-                    className={inputCls}
-                  />
-                </Row>
-                <Row label="Approval Code">
-                  <input
-                    disabled={!isOther}
-                    value={otherApproval}
-                    onChange={(e) => setOtherApproval(e.target.value)}
-                    className={inputCls}
-                  />
-                </Row>
-              </Fieldset>
-            </div>
           </div>
 
           {/* Notices */}
