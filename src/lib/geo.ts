@@ -46,6 +46,29 @@ export function malaysiaToday(): string {
 }
 
 /**
+ * True when the user-agent string looks like a phone / tablet — what
+ * we use to gate the clock-in screen so staff can't punch in from a
+ * desktop browser sitting on someone else's machine.
+ *
+ * UA sniffing isn't perfect (it can be spoofed) but covers the honest-
+ * mistake case; combined with the GPS geofence the bar to fake a
+ * check-in is meaningfully higher than just trusting the browser.
+ */
+export function isMobileDevice(): boolean {
+  if (typeof navigator === 'undefined') return false
+  // navigator.userAgentData is the modern Chromium signal; fall back to
+  // the legacy UA regex for everything else (Safari iOS, Firefox, etc.).
+  const uaData = (navigator as Navigator & {
+    userAgentData?: { mobile?: boolean }
+  }).userAgentData
+  if (uaData?.mobile === true) return true
+  const ua = navigator.userAgent || ''
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(
+    ua,
+  )
+}
+
+/**
  * Promise-y wrapper around navigator.geolocation.getCurrentPosition so
  * callers can `await` it. High-accuracy + 10s timeout + no cached
  * positions older than 30s.

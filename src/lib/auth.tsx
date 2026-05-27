@@ -54,6 +54,13 @@ type AuthState = {
   isWorkshopOnly: boolean
   /** Inverse of isWorkshopOnly. Used as the redirect gate on sales pages. */
   canAccessSales: boolean
+  /**
+   * Workshop side gate — true for super_admin and the four workshop
+   * roles (service_advisor / service_manager / store_keeper / mechanic).
+   * Sales-only roles (sales_advisor / sales_manager / general_admin /
+   * finance_admin) get redirected off the service URLs.
+   */
+  canAccessService: boolean
   loading: boolean
   refreshProfile: () => Promise<void>
 }
@@ -77,6 +84,7 @@ const AuthContext = createContext<AuthState>({
   canViewCustomers: false,
   isWorkshopOnly: false,
   canAccessSales: false,
+  canAccessService: false,
   loading: true,
   refreshProfile: async () => {},
 })
@@ -251,6 +259,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           role === 'store_keeper' ||
           role === 'mechanic'
         ),
+      canAccessService:
+        // Mirror image: super_admin + the four workshop roles only.
+        // While role is null (still hydrating) we allow access so the
+        // page mounts and then re-renders with the correct decision.
+        role == null ||
+        role === 'super_admin' ||
+        role === 'service_advisor' ||
+        role === 'service_manager' ||
+        role === 'store_keeper' ||
+        role === 'mechanic',
       loading,
       refreshProfile,
     }

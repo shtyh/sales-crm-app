@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, Navigate } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
 import { useAuth } from '../lib/auth'
 import { useProfiles, useServiceOrders } from '../lib/queries'
@@ -40,7 +40,8 @@ function bucketOf(status: ServiceOrderStatus): 'OPEN' | 'CLOSED' | 'VOID' {
 type Filter = 'all' | 'open' | 'closed' | 'void'
 
 export function ServiceOpsPage() {
-  const { isSuperAdmin } = useAuth()
+  const { isSuperAdmin, canAccessService } = useAuth()
+  if (canAccessService === false) return <Navigate to="/" replace />
   const { data: orders, error: ordersErr } = useServiceOrders()
   const { data: profiles } = useProfiles()
   const [filter, setFilter] = useState<Filter>('all')

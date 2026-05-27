@@ -48,10 +48,11 @@ function formatMyr(n: number) {
 
 export function VehicleDetailPage() {
   const { id = '' } = useParams<{ id: string }>()
-  const { role, isAdmin } = useAuth()
+  const { canAccessService } = useAuth()
 
-  // SA can't reach this page from the nav, but block the URL too.
-  if (role && !isAdmin) return <Navigate to="/" replace />
+  // Workshop-side detail page. Sales-side staff bounced even if they
+  // type /vehicles/:id directly.
+  if (canAccessService === false) return <Navigate to="/" replace />
 
   const { data: vehicle, error: vehicleErr, isLoading } = useVehicle(id)
   const { data: history, error: historyErr } = useServiceOrdersByVehicle(id)

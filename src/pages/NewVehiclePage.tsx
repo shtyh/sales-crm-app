@@ -15,11 +15,11 @@ const inputClass =
 
 export function NewVehiclePage() {
   const navigate = useNavigate()
-  const { isAdmin, role } = useAuth()
+  const { canAccessService } = useAuth()
 
-  // Mirror the workshop nav gate: any non-SA can write to vehicles via
-  // the Phase-1 RLS. An SA navigating here directly gets bounced.
-  if (role && !isAdmin) return <Navigate to="/" replace />
+  // Workshop-side intake. Sales staff bounced even if they type
+  // /vehicles/new directly.
+  if (canAccessService === false) return <Navigate to="/" replace />
 
   const { data: customers, error: customersErr } = useCustomers(true)
   const createMut = useCreateVehicle()

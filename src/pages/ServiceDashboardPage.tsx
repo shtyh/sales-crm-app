@@ -1,5 +1,6 @@
-import { Link } from 'react-router-dom'
+import { Link, Navigate } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
+import { useAuth } from '../lib/auth'
 
 type Tile = {
   title: string
@@ -54,6 +55,12 @@ const TILES: Tile[] = [
  * Job Sheet / Billing links to.
  */
 export function ServiceDashboardPage() {
+  // Sales-side staff (sales_advisor / sales_manager / general_admin /
+  // finance_admin) shouldn't see the workshop home, even if they type
+  // the URL directly. Workshop roles + super_admin pass.
+  const { canAccessService } = useAuth()
+  if (canAccessService === false) return <Navigate to="/" replace />
+
   return (
     <AppShell>
       <div className="-mt-6 mb-6 -mx-4 sm:-mx-6">

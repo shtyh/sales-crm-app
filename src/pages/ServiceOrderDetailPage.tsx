@@ -51,10 +51,10 @@ function formatMyr(n: number) {
 export function ServiceOrderDetailPage() {
   const { id = '' } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { role, isAdmin, isSuperAdmin } = useAuth()
+  const { isSuperAdmin, canAccessService } = useAuth()
 
-  // Workshop only — SAs (sales side) bounced.
-  if (role && !isAdmin) return <Navigate to="/" replace />
+  // Workshop only — sales-side staff bounced even via direct URL.
+  if (canAccessService === false) return <Navigate to="/" replace />
 
   const { data: order, error: orderErr, isLoading } = useServiceOrder(id)
   const { data: items, error: itemsErr } = useServiceOrderItems(id)

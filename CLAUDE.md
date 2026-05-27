@@ -263,6 +263,16 @@ Primary nav links by role:
   late count). All three entries hidden from the avatar dropdown for
   `sales_advisor` (the sales floor doesn't clock in here).
 
+- **Cross-side URL gates** (2026-05-27) — auth context exports two
+  mirrored flags. `canAccessSales` is true for everyone except the four
+  workshop-only roles; `canAccessService` is true only for super_admin
+  and the four workshop roles. Every page on the opposite side starts
+  with `if (canAccessX === false) return <Navigate to="/" replace />`
+  so a sales advisor who types `/vehicles` or a workshop role who
+  types `/bookings` lands back on their own home. While the role is
+  still hydrating (`role == null`) both flags default to true so the
+  page mounts and then re-renders with the right decision.
+
 - **AdminDashboardPage** still serves super_admin and sales_manager.
   `RoleHome` dispatches:
   ```

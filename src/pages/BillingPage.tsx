@@ -44,10 +44,11 @@ const labelClass = 'text-[11px] font-medium text-gray-700'
 export function BillingPage() {
   const { id = '' } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { role, isAdmin } = useAuth()
+  const { canAccessService } = useAuth()
 
-  // Same gate as the rest of the workshop side.
-  if (role && !isAdmin) return <Navigate to="/" replace />
+  // Same gate as the rest of the workshop side — sales staff bounced
+  // even if they type the URL.
+  if (canAccessService === false) return <Navigate to="/" replace />
 
   const { data: order, error: orderErr, isLoading } = useServiceOrder(id)
   const { data: items, error: itemsErr } = useServiceOrderItems(id)

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
 import { useAuth } from '../lib/auth'
 import { useVehicles } from '../lib/queries'
@@ -16,7 +16,10 @@ import { formatError } from '../lib/errors'
  */
 export function VehiclesPage() {
   const navigate = useNavigate()
-  const { isAdmin } = useAuth()
+  const { isAdmin, canAccessService } = useAuth()
+  // Workshop-side directory. Sales staff bounced even if they type
+  // /vehicles directly.
+  if (canAccessService === false) return <Navigate to="/" replace />
 
   const { data: vehicles, error: vehiclesErr } = useVehicles(isAdmin)
   const [q, setQ] = useState('')

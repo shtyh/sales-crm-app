@@ -51,11 +51,13 @@ const SERVICE_TYPES: ServiceType[] = [
  */
 export function NewServiceOrderPage() {
   const navigate = useNavigate()
-  const { role, profile, isAdmin } = useAuth()
+  const { profile, canAccessService } = useAuth()
 
-  // Mirror the workshop access gate: sales-side advisors can't open
-  // service jobs.
-  if (role && !isAdmin) return <Navigate to="/" replace />
+  // Mirror the workshop access gate: sales-side staff (sales advisor,
+  // sales manager, general admin, finance admin) bounced even if they
+  // type the URL directly. canAccessService stays true while role is
+  // still loading so we don't flash a redirect.
+  if (canAccessService === false) return <Navigate to="/" replace />
 
   const { data: customers } = useCustomers(true)
   const { data: vehicles } = useVehicles(true)
