@@ -4,8 +4,11 @@
  */
 export const OFFICE = {
   name: 'Proton SWL Motors, Bukit Mertajam',
-  lat: 5.3449,
-  lng: 100.4891,
+  // Anchor verified on the ground 2026-05-27 — the original spec coords
+  // (5.3449, 100.4891) were ~4.7 km off and put the geofence in the
+  // wrong place.
+  lat: 5.3073479,
+  lng: 100.4691911,
   /** Check-in is permitted only within this radius (metres). */
   radiusM: 500,
 } as const
