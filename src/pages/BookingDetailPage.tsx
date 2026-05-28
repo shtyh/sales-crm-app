@@ -145,7 +145,9 @@ export function BookingDetailPage() {
   const [customerAddress, setCustomerAddress] = useState('')
   const [vehicleModel, setVehicleModel] = useState<string>(PROTON_MODELS[0])
   const [vehicleVariant, setVehicleVariant] = useState('')
-  const [vehicleColor, setVehicleColor] = useState('')
+  const [vehicleColor, setVehicleColor] = useState<string[]>([])
+  /** Free-text fallback (when the model has no preset palette). */
+  const [vehicleColorFree, setVehicleColorFree] = useState('')
   // OTR is hidden from the UI but the column is preserved; we leave whatever
   // was stored alone on save (no patch sent).
   const [bookingFee, setBookingFee] = useState('')
@@ -214,7 +216,13 @@ export function BookingDetailPage() {
     }
     setVehicleModel(booking.vehicle_model)
     setVehicleVariant(booking.vehicle_variant)
-    setVehicleColor(booking.vehicle_color)
+    {
+      const arr = booking.vehicle_color ?? []
+      setVehicleColor(arr)
+      // Pre-fill the free-text fallback for models without a preset
+      // palette so the user can keep editing the colours they saw.
+      setVehicleColorFree(arr.join(', '))
+    }
     setBookingFee(String(booking.booking_fee))
     setDiscountAmount(String(booking.discount_amount ?? 0))
     setSpecialSupport(String(booking.special_support ?? 0))
@@ -240,9 +248,16 @@ export function BookingDetailPage() {
       setVehicleVariant('')
     }
     const palette = coloursFor(newModel)
-    if (palette.length > 0 && !palette.includes(vehicleColor)) {
-      setVehicleColor('')
+    if (palette.length > 0) {
+      // Drop any selected colours that aren't in the new model's palette.
+      setVehicleColor((cur) => cur.filter((c) => palette.includes(c)))
     }
+  }
+
+  function toggleColour(c: string) {
+    setVehicleColor((cur) =>
+      cur.includes(c) ? cur.filter((x) => x !== c) : [...cur, c],
+    )
   }
 
   async function handleSave(e: FormEvent) {
@@ -275,7 +290,13 @@ export function BookingDetailPage() {
           customer_email: customerEmail.trim() || null,
           vehicle_model: vehicleModel,
           vehicle_variant: vehicleVariant,
-          vehicle_color: vehicleColor.trim(),
+          vehicle_color: (() => {
+            const fromFree = vehicleColorFree
+              .split(',')
+              .map((s) => s.trim())
+              .filter(Boolean)
+            return vehicleColor.length > 0 ? vehicleColor : fromFree
+          })(),
           booking_fee: Number(bookingFee) || 0,
           discount_amount: Number(discountAmount) || 0,
           booking_date: bookingDate,
@@ -620,49 +641,56 @@ export function BookingDetailPage() {
               ))}
             </select>
           </Field>
-          <Field label="Color" required>
+          <Field label="Color (pick one or more)" required>
             {(() => {
               const palette = coloursFor(vehicleModel)
               if (palette.length === 0) {
-                // No factory palette for this model (e.g. Persona) — fall
-                // back to free-text so admins can still record whatever's
-                // on the LOU.
+                // No factory palette for this model (e.g. Persona) —
+                // free-text, comma-separated for multi-colour entry.
                 return (
                   <input
                     type="text"
                     required
-                    value={vehicleColor}
-                    onChange={(e) => setVehicleColor(e.target.value)}
+                    value={vehicleColorFree}
+                    onChange={(e) => setVehicleColorFree(e.target.value)}
                     className={inputClass}
+                    placeholder="e.g. Snow White, Jet Grey"
                   />
                 )
               }
-              // Legacy bookings may already hold a colour that isn't in the
-              // current palette; surface it as a selectable option so we
-              // don't silently lose the value.
-              const options = palette.includes(
-                vehicleColor as (typeof palette)[number],
+              // Legacy bookings may carry a colour that isn't in the
+              // current palette; merge it in so we don't silently drop it.
+              const options = Array.from(
+                new Set([...palette, ...vehicleColor]),
               )
-                ? palette
-                : vehicleColor
-                  ? [vehicleColor, ...palette]
-                  : palette
               return (
-                <select
-                  required
-                  value={vehicleColor}
-                  onChange={(e) => setVehicleColor(e.target.value)}
-                  className={inputClass}
-                >
-                  <option value="" disabled>
-                    — Select colour —
-                  </option>
-                  {options.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
+                <>
+                  <div className="flex flex-wrap gap-2">
+                    {options.map((c) => {
+                      const on = vehicleColor.includes(c)
+                      return (
+                        <button
+                          key={c}
+                          type="button"
+                          onClick={() => toggleColour(c)}
+                          className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+                            on
+                              ? 'border-gray-900 bg-gray-900 text-white'
+                              : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          {on ? '✓ ' : ''}
+                          {c}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <div className="mt-1 text-[10px] text-gray-500">
+                    {vehicleColor.length === 0
+                      ? 'Tick at least one colour.'
+                      : `Selected: ${vehicleColor.join(', ')}`}
+                  </div>
+                </>
               )
             })()}
           </Field>

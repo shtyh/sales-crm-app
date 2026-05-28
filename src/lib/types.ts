@@ -711,7 +711,10 @@ export type Booking = {
 
   vehicle_model: string
   vehicle_variant: string
-  vehicle_color: string
+  /** One or more colour preferences the customer is open to. Stored as
+   *  text[] since 2026-05-28; legacy single-colour rows are 1-element
+   *  arrays. Nullable when the SA hasn't captured one yet. */
+  vehicle_color: string[] | null
 
   otr_price: number
   booking_fee: number
@@ -851,7 +854,8 @@ export type BookingInsert = {
   customer_email?: string | null
   vehicle_model: string
   vehicle_variant: string
-  vehicle_color: string
+  /** Multi-select; pass an empty array if no colour preference. */
+  vehicle_color: string[]
   otr_price: number
   booking_fee: number
   discount_amount?: number

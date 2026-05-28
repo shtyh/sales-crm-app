@@ -32,7 +32,12 @@ export function NewBookingPage() {
 
   const [vehicleModel, setVehicleModel] = useState<string>(PROTON_MODELS[0])
   const [vehicleVariant, setVehicleVariant] = useState('')
-  const [vehicleColor, setVehicleColor] = useState('')
+  /** Multi-select colours. Customers often ask for "X or Y, whichever
+   *  is in stock"; the SA can tick more than one and the booking
+   *  carries all of them. */
+  const [vehicleColor, setVehicleColor] = useState<string[]>([])
+  /** Free-text fallback (when the model has no preset colour list). */
+  const [vehicleColorFree, setVehicleColorFree] = useState('')
 
   // OTR is hidden from the booking flow but the DB column is still required
   // (NOT NULL), so we submit 0 for new bookings until/unless the column gets
@@ -82,7 +87,14 @@ export function NewBookingPage() {
   function handleModelChange(newModel: string) {
     setVehicleModel(newModel)
     setVehicleVariant('')
-    setVehicleColor('')
+    setVehicleColor([])
+    setVehicleColorFree('')
+  }
+
+  function toggleColour(c: string) {
+    setVehicleColor((cur) =>
+      cur.includes(c) ? cur.filter((x) => x !== c) : [...cur, c],
+    )
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -112,7 +124,15 @@ export function NewBookingPage() {
         customer_id: customer.id,
         vehicle_model: vehicleModel,
         vehicle_variant: vehicleVariant,
-        vehicle_color: vehicleColor.trim(),
+        vehicle_color: (() => {
+          // Preset-list path: send the ticked pills as-is.
+          // Free-text fallback: split on commas, trim, drop empties.
+          const fromFree = vehicleColorFree
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean)
+          return vehicleColor.length > 0 ? vehicleColor : fromFree
+        })(),
         otr_price: 0,
         booking_fee: Number(bookingFee) || 0,
         booking_fee_method: bookingFeeMethod || null,
@@ -314,31 +334,54 @@ export function NewBookingPage() {
               ))}
             </select>
           </Field>
-          <Field label="Color" required>
+          <Field label="Color (pick one or more)" required>
             {coloursFor(vehicleModel).length > 0 ? (
-              <select
-                required
-                value={vehicleColor}
-                onChange={(e) => setVehicleColor(e.target.value)}
-                className={inputClass}
-              >
-                <option value="" disabled>
-                  — Select colour —
-                </option>
-                {coloursFor(vehicleModel).map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
+              <>
+                <div className="flex flex-wrap gap-2">
+                  {coloursFor(vehicleModel).map((c) => {
+                    const on = vehicleColor.includes(c)
+                    return (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => toggleColour(c)}
+                        className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+                          on
+                            ? 'border-gray-900 bg-gray-900 text-white'
+                            : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        {on ? '✓ ' : ''}
+                        {c}
+                      </button>
+                    )
+                  })}
+                </div>
+                {vehicleColor.length === 0 && (
+                  <input
+                    type="text"
+                    required
+                    value=""
+                    onChange={() => {}}
+                    aria-hidden
+                    tabIndex={-1}
+                    className="sr-only"
+                  />
+                )}
+                <div className="mt-1 text-[10px] text-gray-500">
+                  {vehicleColor.length === 0
+                    ? 'Tick at least one colour.'
+                    : `Selected: ${vehicleColor.join(', ')}`}
+                </div>
+              </>
             ) : (
               <input
                 type="text"
                 required
-                value={vehicleColor}
-                onChange={(e) => setVehicleColor(e.target.value)}
+                value={vehicleColorFree}
+                onChange={(e) => setVehicleColorFree(e.target.value)}
                 className={inputClass}
-                placeholder="e.g. Snow White"
+                placeholder="e.g. Snow White, Jet Grey"
               />
             )}
           </Field>

@@ -102,8 +102,14 @@ export function BookingsPage() {
 
   const colourOptions = useMemo(() => {
     if (!bookings) return [] as string[]
+    // vehicle_color is text[] (multi). Flatten across all bookings so
+    // the filter dropdown lists every colour ever used.
     return Array.from(
-      new Set(bookings.map((b) => b.vehicle_color).filter(Boolean)),
+      new Set(
+        bookings
+          .flatMap((b) => b.vehicle_color ?? [])
+          .filter((c): c is string => Boolean(c)),
+      ),
     ).sort()
   }, [bookings])
 
@@ -129,7 +135,7 @@ export function BookingsPage() {
       if (statusFilter && b.status !== statusFilter) return false
       if (modelFilter && b.vehicle_model !== modelFilter) return false
       if (variantFilter && b.vehicle_variant !== variantFilter) return false
-      if (colourFilter && b.vehicle_color !== colourFilter) return false
+      if (colourFilter && !(b.vehicle_color ?? []).includes(colourFilter)) return false
       if (needles.length > 0) {
         const hay = [
           b.code,
@@ -139,7 +145,7 @@ export function BookingsPage() {
           b.customer_email,
           b.vehicle_model,
           b.vehicle_variant,
-          b.vehicle_color,
+          ...(b.vehicle_color ?? []),
         ]
           .filter(Boolean)
           .join(' ')
@@ -423,7 +429,9 @@ export function BookingsPage() {
                       {b.vehicle_variant && (
                         <div className="text-xs text-gray-500">
                           {b.vehicle_variant}
-                          {b.vehicle_color ? ` · ${b.vehicle_color}` : ''}
+                          {(b.vehicle_color ?? []).length > 0
+                            ? ` · ${(b.vehicle_color ?? []).join(' / ')}`
+                            : ''}
                         </div>
                       )}
                     </td>
