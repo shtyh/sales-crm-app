@@ -355,6 +355,16 @@ Primary nav links by role:
   paid"); partial payments show an inline amber notice. Already-
   collected jobs show a green notice and OK simply closes.
 
+- **Daily sales digest to Telegram** (2026-05-28) — `pg_cron` job
+  `sales_daily_digest` fires `0 11 * * *` UTC (= 7pm Asia/Kuala_Lumpur)
+  and calls `public.send_sales_digest_now()`, which posts the ASM's
+  five-line funnel snapshot to the new `@PROTON_SWL_MOTORS_SALES_bot`:
+  Today booking · Pending register · Up-to-date Done Register · Have
+  LOU · Wait loan. Metric SQL lives in `compute_sales_digest(date)` so
+  the definitions are easy to tweak after a real-world sanity check.
+  Secrets in Vault: `telegram_sales_bot_token` + `telegram_sales_chat_id`.
+  Migration: `20260528_sales_daily_telegram_digest.sql`.
+
 - **Telegram service-team notifications** (2026-05-28) — every new
   `service_appointments` row fires a Telegram `sendMessage` via
   `pg_net`. Trigger lives in
