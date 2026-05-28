@@ -72,6 +72,7 @@ Current real users (`select id, full_name, role from public.profiles`):
 | `audit_log` | trigger only (postgres) | reads = super_admin only; one row per INSERT/UPDATE/DELETE on bookings + cars |
 | storage bucket `booking-files` | matches `booking_attachments` ownership | private |
 | `attendance` | own row write/read; is_admin reads all; super_admin delete | one row per `(profile_id, work_date)`. check_in_* required at insert (lat/lng/distance_m + timestamp); check_out_* set later via UPDATE. **Lunch (2026-05-27)**: lunch_out_* and lunch_in_* (timestamptz + lat/lng/distance_m, all nullable). work_date is Asia/KL local YYYY-MM-DD, FE-supplied. |
+| `commission_verifications` | SA writes own; SM + super UPDATE any; super DELETE. SELECT visible to SA on own, SM/FA/super on all. | `booking_id` FK (set null on delete), `uploaded_by` FK→profiles, `image_path` (Storage path), `extracted_*` fields from the Gemini extraction, `matched` boolean, `discrepancy_notes`. Populated by the `/commission-verify` upload flow + `match_commission_verification(id)` RPC. |
 
 ## bookings.* column ownership matrix
 
@@ -150,6 +151,7 @@ Trigger `sync_car_status_from_booking` fires AFTER INSERT/UPDATE/DELETE on booki
 | `/clock-in` | ClockInPage (GPS-gated check in / out) | any auth |
 | `/attendance` | MyAttendancePage (own calendar + monthly summary) | any auth |
 | `/admin/attendance` | TeamAttendancePage (today + month-by-employee, **org-chart scoped**) | super_admin / sales_manager / service_manager only (others redirected to `/attendance`) |
+| `/commission-verify` | CommissionVerifyPage (upload All-In-One photo → Gemini extracts → auto-match to booking → discrepancy table) | sales_advisor / sales_manager / super_admin (nav link shown to SA+SM only) |
 
 Top nav layout (2026-05-26 cleanup):
 
@@ -165,8 +167,8 @@ Primary nav links by role:
 
 | Role | Sees in primary nav |
 |---|---|
-| sales_advisor | Home · Bookings |
-| sales_manager | Home · Bookings · Customers · Inventory · Commissions |
+| sales_advisor | Home · Bookings · Verify Commission |
+| sales_manager | Home · Bookings · Customers · Inventory · Commissions · Verify Commission |
 | general_admin | Home · Bookings · Customers · Inventory |
 | finance_admin | Bookings · Inventory · Finance (Home link hidden — Finance is the landing) |
 | super_admin (Sales workspace) | Home · Bookings · Customers · Inventory · Commissions · + New |
@@ -392,6 +394,48 @@ Primary nav links by role:
   fallback for models without a preset palette accepts comma-separated
   values. BookingsPage colour filter flattens across rows; the row
   display joins multi-colour bookings with " / ".
+
+- **Commission verification — Gemini extraction** (2026-05-29, migration
+  `20260529_commission_verifications.sql` + edge function
+  `supabase/functions/extract-allinone/index.ts`). Sales advisors snap a
+  photo of the dealership's "All In One Preparation" form on `/commission-verify`;
+  the image lands in Storage at `commission/{uid}/{ts}.jpg` (new
+  `bf_commission_*` policies on `storage.objects` scope the prefix —
+  uploads only allowed when the second path segment is the caller's uid;
+  reads are SA-own / SM+FA+super=all). Frontend then calls the
+  `extract-allinone` Edge Function, which:
+  - verifies the JWT with `auth.getUser(jwt)` (401 if missing/invalid),
+  - looks up the caller's role from `profiles` (403 if not SA/SM/super),
+  - enforces an in-memory rate limit (10 req / 60 s / user → 429),
+  - path-validates `commission/{uuid}/{filename}` and confirms SAs only
+    pull their own uid,
+  - downloads the image via the **service-role** client (the FE never
+    sees raw bytes, never sees the API key),
+  - calls Gemini 1.5 Flash with the 12-field JSON prompt
+    (`temperature: 0`, `responseMimeType: 'application/json'`),
+  - sanitises the response to only the 12 expected keys, returns
+    `{ extracted, file_path }`,
+  - logs every call (CALL / ERROR) to `audit_log` with the actor,
+    role, stage, and (on failure) the upstream provider's body — the
+    user only ever sees `{ error: 'Something went wrong' }`.
+  After the user confirms / edits the extracted fields, the FE inserts
+  into `commission_verifications` and calls the SECURITY DEFINER RPC
+  `match_commission_verification(id)`, which finds the unique booking
+  where `customer_name ILIKE extracted_customer_name AND vehicle_model
+  ILIKE extracted_model`, sets `booking_id` + `matched=true`, and
+  writes `discrepancy_notes` if `extracted_commission ≠
+  bookings.commission_amount` (or "Ambiguous: N bookings match…" if
+  multiple, or "No matching booking found" if zero). The history table
+  shows each row with status pill (green ✓ matched · red ✗ discrepancy
+  · amber ⚠ unmatched), a clickable RM diff, and a Re-match button so
+  the user can re-run the matcher after editing the booking. **Secret
+  setup**: set `GEMINI_API_KEY` via `supabase secrets set
+  GEMINI_API_KEY=… --project-ref dguohpdqwyfxlpurnwjw` (free key from
+  aistudio.google.com). `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` /
+  `SUPABASE_ANON_KEY` are auto-injected by the Supabase runtime.
+  `audit_log` also relaxed in the same migration — `row_id` is now
+  nullable and the operation check accepts `CALL` / `ERROR` so edge
+  function events fit.
 
 - **bookings_insert policy** (reverted 2026-05-28, migration
   `20260528_allow_super_admin_booking_insert.sql`). Briefly locked
@@ -629,6 +673,7 @@ Files in `supabase/migrations/` (chronological):
 20260528_service_orders_shared_read.sql            can_read_service_order: every workshop role sees the full job-sheet queue (was scoped to service_advisor = caller)
 20260528_block_super_admin_booking_insert.sql      bookings_insert RLS: super_admin removed; only sales_advisor / sales_manager (with own owner_id) can author bookings (REVERTED later same day, see next)
 20260528_allow_super_admin_booking_insert.sql      Revert: bookings_insert RLS restored to is_super_admin() OR (sales_advisor / sales_manager AND owner_id = auth.uid())
+20260529_commission_verifications.sql              commission_verifications table + RLS + match_commission_verification RPC + storage policies for commission/{uid}/* prefix on booking-files. audit_log loosened (row_id nullable, ops now include 'CALL'/'ERROR') so the extract-allinone edge function can log events.
 20260528_booking_vehicle_color_multi.sql           bookings.vehicle_color text → text[] (legacy single-colour rows become 1-element arrays). Multi-select pill picker in NewBookingPage + BookingDetailPage.
 20260528_hq_discount_dealer_support_approval.sql   commission_schedules + bookings get hq_discount + dealer_support; bookings +approval_notes; lookup_schedule_for() helper; guard rewrite to snapshot HQ+dealer + auto-flip approval_status on the discount-vs-commission rule (manager's decision sticks once set)
 ```

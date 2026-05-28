@@ -953,3 +953,52 @@ export type Invoice = {
   status: InvoiceStatus
   created_at: string
 }
+
+// ----- Commission verification --------------------------------------------
+//
+// Sales advisor uploads a photo of the "All In One Preparation" form;
+// the extract-allinone Edge Function reads it with Gemini and returns the
+// fields below. The user confirms / edits, we insert a row into
+// commission_verifications, then call match_commission_verification(id)
+// to auto-link to the matching booking and flag any commission diff.
+
+/** Raw extraction result from Gemini. All fields optional — the model may
+ *  fail to read individual cells of the form. */
+export type ExtractedAllInOne = {
+  customer_name?: string
+  sa_name?: string
+  model?: string
+  otr_price?: number
+  total_otr?: number
+  booking_fee?: number
+  commission_amount?: number
+  payment_type?: string // 'cash' or 'loan' (free text fallback)
+  date?: string // YYYY-MM-DD
+  ncd_discount?: number
+  own_discount?: number
+  pesb_discount?: number
+}
+
+export type CommissionVerification = {
+  id: string
+  booking_id: string | null
+  uploaded_by: string
+  uploaded_at: string
+  image_path: string
+  extracted_customer_name: string | null
+  extracted_sa_name: string | null
+  extracted_model: string | null
+  extracted_otr_price: number | null
+  extracted_commission: number | null
+  extracted_payment_type: string | null
+  extracted_date: string | null
+  matched: boolean
+  discrepancy_notes: string | null
+}
+
+/** Joined shape returned by the verification list query — includes the
+ *  matched booking's commission so the table can render side-by-side. */
+export type CommissionVerificationRow = CommissionVerification & {
+  booking_commission: number | null
+  uploader_name: string | null
+}

@@ -179,6 +179,11 @@ const ServiceAppointmentsPage = lazy(() =>
     default: m.ServiceAppointmentsPage,
   })),
 )
+const CommissionVerifyPage = lazy(() =>
+  import('./pages/CommissionVerifyPage').then((m) => ({
+    default: m.CommissionVerifyPage,
+  })),
+)
 
 function RouteFallback() {
   return (
@@ -483,6 +488,14 @@ function App() {
           element={
             <ProtectedRoute>
               <TeamAttendancePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/commission-verify"
+          element={
+            <ProtectedRoute>
+              <CommissionVerifyPage />
             </ProtectedRoute>
           }
         />

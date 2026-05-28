@@ -72,6 +72,14 @@ import {
   listSchedules,
   updateSchedule,
 } from './commissions'
+import {
+  createVerification,
+  extractAllInOne,
+  listVerifications,
+  rematchVerification,
+  uploadAllInOneImage,
+  type CreateVerificationInput,
+} from './commissionVerifications'
 import type {
   Attachment,
   Attendance,
@@ -88,8 +96,11 @@ import type {
   CommissionPayoutInsert,
   CommissionSchedule,
   CommissionScheduleInsert,
+  CommissionVerification,
+  CommissionVerificationRow,
   Customer,
   CustomerInsert,
+  ExtractedAllInOne,
   Invoice,
   Part,
   Payment,
@@ -149,6 +160,7 @@ export const qk = {
     ['service-appointments', 'by-token', token] as const,
   availableSlots: (date: string) =>
     ['service-appointments', 'available-slots', date] as const,
+  commissionVerifications: ['commission-verifications'] as const,
 }
 
 // ---------- Bookings -------------------------------------------------------
@@ -865,3 +877,57 @@ export function useCancelAppointment() {
     },
   })
 }
+
+// ---------- Commission verifications --------------------------------------
+
+export function useCommissionVerifications(enabled = true) {
+  return useQuery<CommissionVerificationRow[]>({
+    queryKey: qk.commissionVerifications,
+    queryFn: listVerifications,
+    enabled,
+  })
+}
+
+/** Two-stage mutation:
+ *   1. Upload the chosen image to Storage as the signed-in user.
+ *   2. Ask the Edge Function to extract.
+ *  Returns both so the page can preview before the user saves. */
+export function useUploadAndExtract() {
+  return useMutation({
+    mutationFn: async ({
+      userId,
+      file,
+    }: {
+      userId: string
+      file: File
+    }): Promise<{ file_path: string; extracted: ExtractedAllInOne }> => {
+      const { file_path } = await uploadAllInOneImage(userId, file)
+      const extracted = await extractAllInOne(file_path)
+      return { file_path, extracted }
+    },
+  })
+}
+
+export function useCreateCommissionVerification() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: CreateVerificationInput) => createVerification(input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.commissionVerifications })
+    },
+  })
+}
+
+export function useRematchVerification() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => rematchVerification(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.commissionVerifications })
+    },
+  })
+}
+
+// Re-export the type so the page can import everything from queries.ts and
+// not have to know about the lower-level module.
+export type { CommissionVerification }

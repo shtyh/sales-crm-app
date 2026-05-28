@@ -113,6 +113,12 @@ export function AppShell({ children }: { children: ReactNode }) {
                   Commissions
                 </NavLink>
               )}
+              {showSales &&
+                (role === 'sales_advisor' || role === 'sales_manager') && (
+                  <NavLink to="/commission-verify" className={navLinkClass}>
+                    Verify Commission
+                  </NavLink>
+                )}
             </nav>
           </div>
 
