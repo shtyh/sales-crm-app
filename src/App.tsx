@@ -130,6 +130,11 @@ const StockRequisitionPrintPage = lazy(() =>
     default: m.StockRequisitionPrintPage,
   })),
 )
+const StockOnHandPage = lazy(() =>
+  import('./pages/StockOnHandPage').then((m) => ({
+    default: m.StockOnHandPage,
+  })),
+)
 const ClockInPage = lazy(() =>
   import('./pages/ClockInPage').then((m) => ({ default: m.ClockInPage })),
 )
@@ -433,6 +438,14 @@ function App() {
           element={
             <ProtectedRoute>
               <StockRequisitionPrintPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/service/stock"
+          element={
+            <ProtectedRoute>
+              <StockOnHandPage />
             </ProtectedRoute>
           }
         />

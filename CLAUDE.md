@@ -283,6 +283,19 @@ Primary nav links by role:
   &nextKm=…` which renders `BillPrintPage` and auto-fires
   `window.print()` once layout settles.
 
+- **StockOnHandPage** (`/service/stock`) — port of the legacy WMS
+  `restk-closingstk.xls` Closing Stock report. Wired to the **Stock
+  Control** tile on the service dashboard (was a placeholder). Groups
+  parts by `parts_inventory.category` (OIL / PRT, see migration
+  `20260528_parts_inventory_category.sql` — defaults to 'PRT', backfill
+  OIL rows manually). Columns mirror the legacy: No · Group (brand) ·
+  S/Grp · Code · Description · LOC · BIN · Qty Recv / Issued / Bal ·
+  Amt Rec / Issued / on Hand. Sub-totals per category + grand total.
+  Qty Bal = `stock_qty`; Amt on Hand = `stock_qty × unit_cost`. The
+  Received / Issued columns render `—` until a stock-movements ledger
+  lands. Print mode toggle hides the AppShell so the page can be sent
+  straight to a printer.
+
 - **Job Sheet Selection dialog** (in `ServiceOpsPage.tsx`) — 1:1 port
   of the legacy WMS popup. Opens from the **Print Job Sheet** action
   button (which replaced the disabled "Edit Job Sheet" slot). Two

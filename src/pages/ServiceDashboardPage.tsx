@@ -33,8 +33,9 @@ const TILES: Tile[] = [
   },
   {
     title: 'Stock Control',
-    subtitle: 'Parts inventory, reorder levels, consumption',
+    subtitle: 'Closing stock report, on-hand value by group',
     icon: '📦',
+    to: '/service/stock',
   },
   {
     title: 'Inquiry',

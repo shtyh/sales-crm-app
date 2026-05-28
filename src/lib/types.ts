@@ -432,6 +432,13 @@ export type Technician = {
   updated_at: string
 }
 
+export type PartCategory = 'OIL' | 'PRT'
+
+export const PART_CATEGORY_LABEL: Record<PartCategory, string> = {
+  OIL: 'OIL',
+  PRT: 'PRT',
+}
+
 export type Part = {
   id: string
   part_no: string
@@ -445,6 +452,10 @@ export type Part = {
   reorder_level: number
   location: string | null
   is_active: boolean
+  /** Group bucket the Stock On Hand report rolls up by. Defaults to
+   *  'PRT' for existing rows; 'OIL' for engine / transmission /
+   *  brake-fluid stock. */
+  category: PartCategory
   created_at: string
   updated_at: string
 }
