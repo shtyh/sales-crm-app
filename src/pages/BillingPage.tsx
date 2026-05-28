@@ -444,9 +444,13 @@ export function BillingPage() {
                 <input
                   type="number"
                   min={0}
-                  step="0.001"
+                  step={1}
                   value={quantity}
-                  onChange={(e) => setQuantity(e.target.value)}
+                  onChange={(e) =>
+                    // Whole-unit only — strip decimals + non-digits on
+                    // input so the field can never show 0.999.
+                    setQuantity(e.target.value.replace(/[^\d]/g, ''))
+                  }
                   className={`${inputClass} text-right tabular-nums`}
                 />
               </Field>
@@ -680,7 +684,7 @@ export function BillingPage() {
                       </td>
                       <td className="px-3 py-1.5">{it.description}</td>
                       <td className="whitespace-nowrap px-3 py-1.5 text-right tabular-nums">
-                        {Number(it.quantity).toFixed(2)}
+                        {Math.round(Number(it.quantity))}
                       </td>
                       <td className="whitespace-nowrap px-3 py-1.5 text-right tabular-nums">
                         {formatMYR(Number(it.unit_price))}
