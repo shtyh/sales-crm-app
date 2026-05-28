@@ -17,9 +17,17 @@ const today = () => new Date().toISOString().slice(0, 10)
 
 export function NewBookingPage() {
   const navigate = useNavigate()
-  const { canAccessSales } = useAuth()
+  const { role, canAccessSales } = useAuth()
   // Workshop-only roles can't create bookings — bounce them home.
   if (canAccessSales === false) return <Navigate to="/" replace />
+  // Sales-side roles that don't author bookings (finance_admin reviews
+  // money/loans on /finance; general_admin works the JPJ queue;
+  // super_admin doesn't take customer bookings) get bounced to their
+  // own landing. The DB policy already rejects their inserts; this
+  // saves them from filling out a form that will fail to save.
+  if (role && role !== 'sales_advisor' && role !== 'sales_manager') {
+    return <Navigate to="/" replace />
+  }
 
   const [customerType, setCustomerType] = useState<'individual' | 'company'>(
     'individual',
