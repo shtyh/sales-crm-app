@@ -459,6 +459,49 @@ per-row Tax Amount (S), Totals "Tax Amount (+)") picks up the new rate.
 - React Query with 30s staleTime, 5min gcTime, retry 1. All pages use `useQuery` / `useMutation` via `src/lib/queries.ts`.
 - supabase-js auth-lock deadlock fixed in `src/lib/auth.tsx` — `onAuthStateChange` callback stays synchronous, profile fetch deferred via `setTimeout(0)`. See <https://github.com/supabase/auth-js/issues/762> for context.
 
+## Security posture (last audited 2026-05-27)
+
+- **RLS:** all 17 public tables have RLS enabled with ≥1 policy. Verified
+  via `pg_class.relrowsecurity` + `pg_policies` join. No table is wide
+  open.
+- **API keys:** FE reads `import.meta.env.VITE_SUPABASE_URL` +
+  `VITE_SUPABASE_PUBLISHABLE_KEY` only (`src/lib/supabase.ts`); no JWT
+  strings or supabase.co URLs are hardcoded in `src/` or `supabase/`.
+  `.env.local` is gitignored via `*.local` and not tracked. The
+  Telegram edge function reads `SUPABASE_SERVICE_ROLE_KEY` from
+  `Deno.env.get(…)` — that key must stay in the edge function's env
+  scope on Vercel and never leak into the browser bundle.
+- **Linter sweep** — migration `20260527_security_lints.sql` cleared the
+  five fixable warnings (search_path on `generate_service_order_no`;
+  revoked anon EXECUTE on `can_read_service_order` /
+  `can_write_service_order` while keeping authenticated EXECUTE;
+  revoked everyone from `rls_auto_enable`). Warning count is now
+  20 → 15.
+- **Intentional residual warnings** — kept as-is because removing them
+  would break the app:
+  - `customers_insert` / `customers_update` policies are `(true)` —
+    the SA booking flow upserts customers by NRIC, so any signed-in
+    user needs INSERT + UPDATE. To tighten this we'd need a
+    `created_by` column on customers and a per-row owner gate.
+  - `submit_appointment`, `get_appointment_by_token`,
+    `get_available_slots` are anon-callable — the public `/book`
+    customer flow depends on them.
+  - `is_admin`, `is_super_admin`, `has_role`, `current_app_role`,
+    `can_read_service_order`, `can_write_service_order` are
+    authenticated-callable via `/rest/v1/rpc/*` because every RLS
+    policy in the app invokes them. The only way to hide them from
+    PostgREST is to move them into a non-public schema, which is an
+    invasive refactor with no real security gain.
+- **Dashboard TODOs (cannot be done via SQL):**
+  - Auth → Policies → enable **Leaked-password protection** (HIBP).
+  - Project Settings → Database → Backups → verify daily backups are
+    on (Free = 1-day retention, Pro = 7-day; toggle PITR if you need
+    point-in-time recovery).
+  - Vercel → Project Settings → Environment Variables — confirm
+    `VITE_SUPABASE_URL` + `VITE_SUPABASE_PUBLISHABLE_KEY` exist for
+    Production / Preview / Development, and that
+    `SUPABASE_SERVICE_ROLE_KEY` is only scoped to the edge function.
+
 ## Migrations (apply order)
 
 Files in `supabase/migrations/` (chronological):
@@ -497,6 +540,7 @@ Files in `supabase/migrations/` (chronological):
 20260526_attendance.sql                            attendance table (one row per profile per work_date), check-in/out lat-lng-distance, RLS: own + is_admin select-all, super delete
 20260527_attendance_lunch.sql                      attendance +lunch_out_* (4) +lunch_in_* (4); all nullable so staff can skip lunch tracking
 20260527_customer_type_and_booking_payment.sql    customers.customer_type ('individual'|'company') + bookings.booking_fee_method ('cash'|'qr'|'transfer') + bookings.official_receipt_no
+20260527_security_lints.sql                        search_path pin on generate_service_order_no + revoke anon EXECUTE on can_read/can_write_service_order + drop all EXECUTE on rls_auto_enable (5 of 20 advisor warnings cleared)
 ```
 
 Some early ones were **applied by hand** in Supabase SQL editor and so don't show up in `supabase_migrations.schema_migrations`. The files are still source of truth for what should exist.
