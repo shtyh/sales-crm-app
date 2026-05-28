@@ -64,7 +64,7 @@ Current real users (`select id, full_name, role from public.profiles`):
 | `parts_inventory` | any auth read; non-SA write; super delete | `part_no unique`, name, brand, unit, unit_cost/price, stock_qty (not auto-decremented yet), reorder_level, location, is_active. |
 | `service_orders` | any auth read; non-SA write; super delete (UI exposed on `/service-orders/:id` "★ Delete order"; two-step confirm with typed `order_no`; service_order_items cascade) | `order_no?` unique-when-set, `customer_id` + `vehicle_id` FK, `technician_id?`, `service_advisor_id?`, status enum (open/in_progress/awaiting_parts/completed/collected/cancelled), complaint/diagnosis, mileage_in **(NOT NULL on the FE; column itself is nullable)**, opened_at/completed_at/collected_at, subtotal/tax/total. **Intake (2026-05-26)**: `service_types text[]` (maintenance / int_g_repair / warranty_service / service_coupon / come_back_job / body_repair / inspection), `appointment_type` ('walk_in' default / 'by_appointment'), `days_to_complete`. The earlier `department` column was added and removed the same day (see migrations). |
 | `service_order_items` | any auth read; non-SA write; super delete | `service_order_id` FK (cascade), `kind` enum (part/labour), `part_id?` (required when kind=part), description, quantity, unit_price, line_total. |
-| `bookings` | per-column gated by trigger. INSERT locked to `sales_advisor` / `sales_manager` only (super_admin removed 2026-05-28). | see below. `hq_discount`, `dealer_support`, `approval_notes`, `vehicle_color text[]` added 2026-05-28. |
+| `bookings` | per-column gated by trigger. INSERT allowed for `sales_advisor` / `sales_manager` (with `owner_id = auth.uid()`) and `super_admin` (no owner constraint). | see below. `hq_discount`, `dealer_support`, `approval_notes`, `vehicle_color text[]` added 2026-05-28. |
 | `booking_attachments` | booking owner + any admin | `kind` enum (bank_transaction / bank_statement / lou / cancellation_form / other) |
 | `cars` | per-column gated by trigger; delete super only (UI exposed at `/cars/:id` ★ Delete; two-step chassis-typed confirm; bookings.car_id is `on delete set null` so deletion never blocks) | `chassis_no unique`, `floor_stock_*`, `status enum(in_stock/reserved/delivered/returned)` |
 | `commission_schedules` | super_admin | `(model, variant) → base_commission` (variant nullable as catch-all) |
@@ -137,7 +137,7 @@ Trigger `sync_car_status_from_booking` fires AFTER INSERT/UPDATE/DELETE on booki
 | `/login` | LoginPage | anon |
 | `/` | RoleHome → role-specific dashboard. finance_admin → redirect to `/finance`; general_admin → `GeneralAdminDashboardPage`; workshop roles → service dashboards; everyone else → AdminDashboardPage or DashboardPage. | any auth |
 | `/bookings` | BookingsPage (list) | any auth |
-| `/bookings/new` | NewBookingPage | sales_advisor / sales_manager / super_admin (nav link hidden from others; RLS still gates insert) |
+| `/bookings/new` | NewBookingPage | sales_advisor / sales_manager / super_admin (nav link hidden from others; RLS gates insert to the same three roles) |
 | `/bookings/:id` | BookingDetailPage | any auth (RLS still gates select) |
 | `/cars` | CarsPage (list) | any auth |
 | `/cars/new` | NewCarPage | finance_admin + super_admin (was general_admin until 2026-05-26) |
@@ -169,7 +169,7 @@ Primary nav links by role:
 | sales_manager | Home · Bookings · Customers · Inventory · Commissions |
 | general_admin | Home · Bookings · Customers · Inventory |
 | finance_admin | Bookings · Inventory · Finance (Home link hidden — Finance is the landing) |
-| super_admin (Sales workspace) | Home · Bookings · Customers · Inventory · Commissions (no + New — super admin doesn't author bookings) |
+| super_admin (Sales workspace) | Home · Bookings · Customers · Inventory · Commissions · + New |
 | super_admin (Service workspace) | Home · + Job order (Vehicles reached via Housekeeping tile) |
 | workshop roles | Home · + Job order (Vehicles reached via Housekeeping tile) |
 
@@ -393,14 +393,15 @@ Primary nav links by role:
   values. BookingsPage colour filter flattens across rows; the row
   display joins multi-colour bookings with " / ".
 
-- **bookings_insert policy locked** (2026-05-28, migration
-  `20260528_block_super_admin_booking_insert.sql`). The previous
-  `is_super_admin() OR ...` was replaced with a strict
-  `current_app_role() in (sales_advisor, sales_manager) AND
-  owner_id = auth.uid()`. Super admin keeps god-mode on
-  SELECT / UPDATE / DELETE — only authoring is closed. Frontend
-  defense-in-depth: NewBookingPage redirects every non-creator role
-  (including super_admin) back to `/`.
+- **bookings_insert policy** (reverted 2026-05-28, migration
+  `20260528_allow_super_admin_booking_insert.sql`). Briefly locked
+  super_admin out of authoring earlier the same day, then reverted at
+  user request. Policy is back to `is_super_admin() OR
+  (current_app_role() in (sales_advisor, sales_manager) AND owner_id
+  = auth.uid())`. NewBookingPage and the AppShell "+ New" pill both
+  let super_admin through again. SA / SM rows are still tied to
+  `owner_id = auth.uid()`; super_admin has no owner constraint, so
+  they can pick any owner (or default to themselves).
 
 - **service_orders RLS — shared workshop reads** (2026-05-28,
   migration `20260528_service_orders_shared_read.sql`). The previous
@@ -626,7 +627,8 @@ Files in `supabase/migrations/` (chronological):
 20260528_sales_daily_telegram_digest.sql           pg_cron job sales_daily_digest + compute_sales_digest(date) + send_sales_digest_now() → @PROTON_SWL_MOTORS_SALES_bot
 20260528_sales_digest_refine.sql                   Refine funnel (no payment requirement on Pending register; Have LOU mutually exclusive with Pending register) + reschedule Mon–Sat only (0 11 * * 1-6)
 20260528_service_orders_shared_read.sql            can_read_service_order: every workshop role sees the full job-sheet queue (was scoped to service_advisor = caller)
-20260528_block_super_admin_booking_insert.sql      bookings_insert RLS: super_admin removed; only sales_advisor / sales_manager (with own owner_id) can author bookings
+20260528_block_super_admin_booking_insert.sql      bookings_insert RLS: super_admin removed; only sales_advisor / sales_manager (with own owner_id) can author bookings (REVERTED later same day, see next)
+20260528_allow_super_admin_booking_insert.sql      Revert: bookings_insert RLS restored to is_super_admin() OR (sales_advisor / sales_manager AND owner_id = auth.uid())
 20260528_booking_vehicle_color_multi.sql           bookings.vehicle_color text → text[] (legacy single-colour rows become 1-element arrays). Multi-select pill picker in NewBookingPage + BookingDetailPage.
 20260528_hq_discount_dealer_support_approval.sql   commission_schedules + bookings get hq_discount + dealer_support; bookings +approval_notes; lookup_schedule_for() helper; guard rewrite to snapshot HQ+dealer + auto-flip approval_status on the discount-vs-commission rule (manager's decision sticks once set)
 ```
