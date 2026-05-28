@@ -169,7 +169,10 @@ export function NewServiceOrderPage() {
 
   // Reg input → vehicle id resolver. Runs on blur and on Enter — picks
   // the matching vehicle if there is one, otherwise pops the new-reg
-  // alert and offers the registration modal.
+  // alert *once* and opens the registration modal. Guards keep the
+  // alert from re-firing if the user blurs back into the field while
+  // the modal is already open or while we're still waiting on the same
+  // unresolved reg (the previous version fired on every blur).
   function resolveReg() {
     const norm = regNoInput.trim().toUpperCase().replace(/\s+/g, ' ')
     if (!norm) {
@@ -184,7 +187,8 @@ export function NewServiceOrderPage() {
       setRegNoInput(match.registration_no)
       return
     }
-    // Not found — mirror the legacy WMS popup, then open the modal.
+    // Already prompting for this exact reg → skip the alert.
+    if (registerOpen || pendingNewReg === norm) return
     window.alert('This is a New Registration Car No.')
     setPendingNewReg(norm)
     setRegisterOpen(true)
