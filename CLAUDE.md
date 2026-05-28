@@ -355,6 +355,19 @@ Primary nav links by role:
   paid"); partial payments show an inline amber notice. Already-
   collected jobs show a green notice and OK simply closes.
 
+- **Telegram service-team notifications** (2026-05-28) — every new
+  `service_appointments` row fires a Telegram `sendMessage` via
+  `pg_net`. Trigger lives in
+  `20260528_appointment_telegram_notify.sql`; SECURITY DEFINER
+  function `public.notify_telegram_appointment()` reads the bot
+  token + service team chat ID from Supabase Vault (`vault.secrets`
+  named `telegram_bot_token` and `telegram_service_chat_id`), so the
+  values are encrypted at rest. The function NO-OPs if either secret
+  is empty (safe to apply before credentials are provisioned) and
+  swallows HTTP failures so a Telegram outage never blocks an
+  INSERT. Rotate creds via
+  `select vault.update_secret(id, 'NEW') from vault.secrets where name = ...`.
+
 - **Service appointments** (2026-05-27) — customer-facing booking flow
   with hour-long time slots. Tables: `service_appointments` (token-keyed
   for public read-back). Required fields on the public form: name,
