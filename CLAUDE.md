@@ -64,7 +64,7 @@ Current real users (`select id, full_name, role from public.profiles`):
 | `parts_inventory` | any auth read; non-SA write; super delete | `part_no unique`, name, brand, unit, unit_cost/price, stock_qty (not auto-decremented yet), reorder_level, location, is_active. |
 | `service_orders` | any auth read; non-SA write; super delete (UI exposed on `/service-orders/:id` "★ Delete order"; two-step confirm with typed `order_no`; service_order_items cascade) | `order_no?` unique-when-set, `customer_id` + `vehicle_id` FK, `technician_id?`, `service_advisor_id?`, status enum (open/in_progress/awaiting_parts/completed/collected/cancelled), complaint/diagnosis, mileage_in **(NOT NULL on the FE; column itself is nullable)**, opened_at/completed_at/collected_at, subtotal/tax/total. **Intake (2026-05-26)**: `service_types text[]` (maintenance / int_g_repair / warranty_service / service_coupon / come_back_job / body_repair / inspection), `appointment_type` ('walk_in' default / 'by_appointment'), `days_to_complete`. The earlier `department` column was added and removed the same day (see migrations). |
 | `service_order_items` | any auth read; non-SA write; super delete | `service_order_id` FK (cascade), `kind` enum (part/labour), `part_id?` (required when kind=part), description, quantity, unit_price, line_total. |
-| `bookings` | per-column gated by trigger | see below |
+| `bookings` | per-column gated by trigger. INSERT locked to `sales_advisor` / `sales_manager` only (super_admin removed 2026-05-28). | see below. `hq_discount`, `dealer_support`, `approval_notes`, `vehicle_color text[]` added 2026-05-28. |
 | `booking_attachments` | booking owner + any admin | `kind` enum (bank_transaction / bank_statement / lou / cancellation_form / other) |
 | `cars` | per-column gated by trigger; delete super only (UI exposed at `/cars/:id` ★ Delete; two-step chassis-typed confirm; bookings.car_id is `on delete set null` so deletion never blocks) | `chassis_no unique`, `floor_stock_*`, `status enum(in_stock/reserved/delivered/returned)` |
 | `commission_schedules` | super_admin | `(model, variant) → base_commission` (variant nullable as catch-all) |
@@ -82,9 +82,12 @@ These are enforced by `public.guard_booking_field_writes` BEFORE INSERT/UPDATE.
 |---|---|
 | `customer_*`, `vehicle_*`, `otr_price`, `booking_fee`, `booking_date`, `notes` | booking owner (SA) + any privileged role (general_admin / sales_manager / finance_admin) |
 | `status` (non-cancel transitions) | DB-only — no UI form field as of 2026-05-26. Cancel is sales_manager via the cancel button; `delivered` requires car `paid_off`. The Status dropdown was removed from NewBookingPage + BookingDetailPage because the workflow is now driven by finance_admin actions on `deposit_status` / `payment_status`. |
-| `discount_amount` | same set; no approval flow as of 2026-05-23 |
+| `discount_amount` | same set. Approval flow restored 2026-05-28: trigger auto-flips `approval_status` to `pending` whenever discount > base_commission. |
 | `special_support` | sales_manager only — RM bonus that adds to commission |
-| `approval_status` | legacy, sales_manager only when explicit. No longer auto-flipped. |
+| `approval_status` | sales_manager when explicit (manager's decision sticks once set); otherwise auto-flipped by the guard on INSERT + on discount UPDATE — `discount ≤ base_commission` → `not_required`, `discount > base_commission` → `pending`. |
+| `approval_notes` | sales_manager — short reason captured when approving/rejecting from the queue on `/`. |
+| `hq_discount`, `dealer_support` | system-managed snapshot from `commission_schedules` on INSERT; super_admin only after that. |
+| `vehicle_color` | now `text[]` (2026-05-28) — multi-select on the booking form. Legacy rows are 1-element arrays. |
 | `owner_id` (lead reassignment) | sales_manager only (UI hidden 2026-05-23) |
 | `loan_bank`, `loan_status`, `loan_notes`, `loan_amount`, `insurance_company`, `insurance_amount` | finance_admin only |
 | `deposit_status`, `payment_status` | finance_admin only |
@@ -356,14 +359,64 @@ Primary nav links by role:
   collected jobs show a green notice and OK simply closes.
 
 - **Daily sales digest to Telegram** (2026-05-28) — `pg_cron` job
-  `sales_daily_digest` fires `0 11 * * *` UTC (= 7pm Asia/Kuala_Lumpur)
-  and calls `public.send_sales_digest_now()`, which posts the ASM's
-  five-line funnel snapshot to the new `@PROTON_SWL_MOTORS_SALES_bot`:
-  Today booking · Pending register · Up-to-date Done Register · Have
-  LOU · Wait loan. Metric SQL lives in `compute_sales_digest(date)` so
-  the definitions are easy to tweak after a real-world sanity check.
-  Secrets in Vault: `telegram_sales_bot_token` + `telegram_sales_chat_id`.
-  Migration: `20260528_sales_daily_telegram_digest.sql`.
+  `sales_daily_digest` fires `0 11 * * 1-6` UTC (= 7pm Mon–Sat
+  Asia/Kuala_Lumpur, Sundays skipped) and calls
+  `public.send_sales_digest_now()`, which posts the ASM's five-line
+  funnel snapshot to `@PROTON_SWL_MOTORS_SALES_bot`: Today booking ·
+  Pending register · Up-to-date Done Register · Have LOU · Wait loan.
+  Metric SQL lives in `compute_sales_digest(date)` so the definitions
+  are easy to tweak. Pending register and Have LOU are mutually
+  exclusive — a row counts in exactly one line. Secrets in Vault:
+  `telegram_sales_bot_token` + `telegram_sales_chat_id`. Migrations:
+  `20260528_sales_daily_telegram_digest.sql` +
+  `20260528_sales_digest_refine.sql`. Manual "Send now" button on
+  `AdminDashboardPage` (sales_manager + super_admin) fires the digest
+  ad-hoc via the same RPC.
+
+- **Discount approval system** (2026-05-28) — full breakdown rendered
+  on the booking form and gated by an auto-flip in the bookings guard
+  trigger. Migration:
+  `20260528_hq_discount_dealer_support_approval.sql`.
+  - `commission_schedules` gains `hq_discount numeric` + `dealer_support numeric` (default 0, ≥ 0). Super admin tunes both on `/admin/commissions` alongside `base_commission`. Reads are open; writes are super_admin only.
+  - `bookings` gains `hq_discount` + `dealer_support` (snapshotted from the schedule on INSERT, can't be overridden by anyone except super_admin) and `approval_notes` (manager's reason on approve/reject).
+  - `lookup_schedule_for(model, variant)` returns the full schedule row; the BEFORE-INSERT path inside `guard_booking_field_writes` snapshots all three values.
+  - `approval_status` auto-flip restored: `discount_amount ≤ base_commission` → `not_required`; `discount_amount > base_commission` → `pending`. Fires on INSERT and on UPDATE-when-discount-changes — but a manager's explicit `approved`/`rejected` decision is sticky once set.
+  - NewBookingPage: SA discount input shows a "Cap: RM X" hint and a "Discount breakdown (auto-applied)" section (HQ discount + dealer support + your commission before/after). Amber warning when the SA exceeds their commission.
+  - BookingDetailPage: HQ + Dealer strip surfaces above the existing commission breakdown when either value is non-zero.
+  - AdminDashboardPage: the discount-approval queue rows show how far the discount exceeds commission, plus an inline notes input. Note is **required when rejecting**. Persists to `bookings.approval_notes`.
+
+- **bookings.vehicle_color is now `text[]`** (2026-05-28, migration
+  `20260528_booking_vehicle_color_multi.sql`). Customers can express
+  multiple colour preferences ("X or Y, whichever is in stock"). UI:
+  pill picker in NewBookingPage + BookingDetailPage; free-text
+  fallback for models without a preset palette accepts comma-separated
+  values. BookingsPage colour filter flattens across rows; the row
+  display joins multi-colour bookings with " / ".
+
+- **bookings_insert policy locked** (2026-05-28, migration
+  `20260528_block_super_admin_booking_insert.sql`). The previous
+  `is_super_admin() OR ...` was replaced with a strict
+  `current_app_role() in (sales_advisor, sales_manager) AND
+  owner_id = auth.uid()`. Super admin keeps god-mode on
+  SELECT / UPDATE / DELETE — only authoring is closed. Frontend
+  defense-in-depth: NewBookingPage redirects every non-creator role
+  (including super_admin) back to `/`.
+
+- **service_orders RLS — shared workshop reads** (2026-05-28,
+  migration `20260528_service_orders_shared_read.sql`). The previous
+  `can_read_service_order` scoped a service_advisor caller to rows
+  where `service_advisor_id = auth.uid()` (their own jobs). Workshop
+  wanted every advisor to see the full floor for handoffs and
+  cover. Now anyone except `sales_advisor` can read every row. Write
+  access is still tied to ownership via `can_write_service_order`.
+
+- **parts_inventory.category** (2026-05-28, migration
+  `20260528_parts_inventory_category.sql`) — `text` column with CHECK
+  `in ('OIL', 'PRT')`, default 'PRT'. Powers the OIL/PRT grouping on
+  the Closing Stock report. The legacy stock XLS (`restk-closingstk
+  .xls`, 1,615 rows) was imported via batched upserts into
+  `parts_inventory` so the Inventory Search modal on the Billing
+  screen has a working catalogue.
 
 - **Telegram service-team notifications** (2026-05-28) — every new
   `service_appointments` row fires a Telegram `sendMessage` via
@@ -564,6 +617,18 @@ Files in `supabase/migrations/` (chronological):
 20260527_attendance_lunch.sql                      attendance +lunch_out_* (4) +lunch_in_* (4); all nullable so staff can skip lunch tracking
 20260527_customer_type_and_booking_payment.sql    customers.customer_type ('individual'|'company') + bookings.booking_fee_method ('cash'|'qr'|'transfer') + bookings.official_receipt_no
 20260527_security_lints.sql                        search_path pin on generate_service_order_no + revoke anon EXECUTE on can_read/can_write_service_order + drop all EXECUTE on rls_auto_enable (5 of 20 advisor warnings cleared)
+20260527_service_appointments.sql                  service_appointments table + submit_appointment RPC + get_appointment_by_token RPC (customer-facing booking flow)
+20260527_service_appointment_slots.sql             service_appointments.slot_time (HH:MM:SS) + 'phone' source + capacity check inside submit_appointment + get_available_slots RPC (8 hour slots Mon–Sat 9–5, capacity 2)
+20260527_service_appointment_form_v2.sql           submit_appointment v2: drop NRIC param, require email/chassis/model/mileage, add service_mileage int (1k/5k/10k/.../100k)
+20260527_service_appointment_drop_chassis.sql      submit_appointment v3: drop chassis param (per user feedback)
+20260528_parts_inventory_category.sql              parts_inventory +category text default 'PRT' check in ('OIL','PRT') + index; powers the Closing Stock report grouping
+20260528_appointment_telegram_notify.sql           pg_net trigger on service_appointments INSERT → Telegram via @protonswlservicebot. Bot token + chat ID in Supabase Vault (telegram_bot_token / telegram_service_chat_id)
+20260528_sales_daily_telegram_digest.sql           pg_cron job sales_daily_digest + compute_sales_digest(date) + send_sales_digest_now() → @PROTON_SWL_MOTORS_SALES_bot
+20260528_sales_digest_refine.sql                   Refine funnel (no payment requirement on Pending register; Have LOU mutually exclusive with Pending register) + reschedule Mon–Sat only (0 11 * * 1-6)
+20260528_service_orders_shared_read.sql            can_read_service_order: every workshop role sees the full job-sheet queue (was scoped to service_advisor = caller)
+20260528_block_super_admin_booking_insert.sql      bookings_insert RLS: super_admin removed; only sales_advisor / sales_manager (with own owner_id) can author bookings
+20260528_booking_vehicle_color_multi.sql           bookings.vehicle_color text → text[] (legacy single-colour rows become 1-element arrays). Multi-select pill picker in NewBookingPage + BookingDetailPage.
+20260528_hq_discount_dealer_support_approval.sql   commission_schedules + bookings get hq_discount + dealer_support; bookings +approval_notes; lookup_schedule_for() helper; guard rewrite to snapshot HQ+dealer + auto-flip approval_status on the discount-vs-commission rule (manager's decision sticks once set)
 ```
 
 Some early ones were **applied by hand** in Supabase SQL editor and so don't show up in `supabase_migrations.schema_migrations`. The files are still source of truth for what should exist.
