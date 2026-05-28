@@ -283,9 +283,20 @@ Primary nav links by role:
   &nextKm=…` which renders `BillPrintPage` and auto-fires
   `window.print()` once layout settles.
 
-- **StockOnHandPage** (`/service/stock`) — port of the legacy WMS
-  `restk-closingstk.xls` Closing Stock report. Wired to the **Stock
-  Control** tile on the service dashboard (was a placeholder). Groups
+- **StockMenuPage** (`/service/stock`) — Stock Control landing,
+  ported from the legacy WMS "Stock Menu" screen. Six tiles: Closing
+  Stock Report, Parts List (both wired to the closing-stock report),
+  Purchase Order, Stock Received, Stock Issued, FIFO / WIP
+  Re-Calculate (placeholders until a stock-movements ledger lands).
+  Quick-stats strip at the top sums `parts_inventory` for
+  catalogued / active counts, total value (Σ stock_qty × unit_cost),
+  and at-or-below reorder count.
+
+- **StockOnHandPage** (`/service/stock/closing`) — port of the
+  legacy WMS `restk-closingstk.xls` Closing Stock report. Reachable
+  from the Stock Menu (Closing Stock Report and Parts List tiles).
+  Was previously mounted at `/service/stock` directly; moved to make
+  room for the menu landing. Groups
   parts by `parts_inventory.category` (OIL / PRT, see migration
   `20260528_parts_inventory_category.sql` — defaults to 'PRT', backfill
   OIL rows manually). Columns mirror the legacy: No · Group (brand) ·

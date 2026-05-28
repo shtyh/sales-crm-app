@@ -135,6 +135,11 @@ const StockOnHandPage = lazy(() =>
     default: m.StockOnHandPage,
   })),
 )
+const StockMenuPage = lazy(() =>
+  import('./pages/StockMenuPage').then((m) => ({
+    default: m.StockMenuPage,
+  })),
+)
 const ClockInPage = lazy(() =>
   import('./pages/ClockInPage').then((m) => ({ default: m.ClockInPage })),
 )
@@ -443,6 +448,14 @@ function App() {
         />
         <Route
           path="/service/stock"
+          element={
+            <ProtectedRoute>
+              <StockMenuPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/service/stock/closing"
           element={
             <ProtectedRoute>
               <StockOnHandPage />
