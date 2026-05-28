@@ -5,6 +5,7 @@ import { useAuth } from '../lib/auth'
 import { useBookings, useProfiles, useUpdateBooking } from '../lib/queries'
 import { formatError } from '../lib/errors'
 import { formatMYR } from '../lib/format'
+import { supabase } from '../lib/supabase'
 import type { Booking, Profile } from '../lib/types'
 
 type BannerStyle = {
@@ -78,6 +79,26 @@ export function AdminDashboardPage() {
   const { data: bookings, error: bookingsErr } = useBookings()
   const approveMut = useUpdateBooking()
   const [approvalError, setApprovalError] = useState<string | null>(null)
+
+  // Manual sales-digest fire. Auto-cron fires Mon-Sat at 7pm KL; this
+  // button lets the ASM push the snapshot ad-hoc (e.g. mid-day update
+  // before a manager's call).
+  const [digestState, setDigestState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
+  const [digestError, setDigestError] = useState<string | null>(null)
+  async function sendDigestNow() {
+    setDigestState('sending')
+    setDigestError(null)
+    const { error } = await supabase.rpc('send_sales_digest_now')
+    if (error) {
+      setDigestError(formatError(error))
+      setDigestState('error')
+      return
+    }
+    setDigestState('sent')
+    // Reset the "sent" label after a few seconds so the button is
+    // usable again without a full page refresh.
+    setTimeout(() => setDigestState('idle'), 4000)
+  }
   const error =
     approvalError ??
     (profilesErr || bookingsErr
@@ -291,6 +312,45 @@ export function AdminDashboardPage() {
               />
               <StatCard label="Sales staff" value={stats.staff} />
             </div>
+          )}
+
+          {/* ---------- Sales digest: manual fire ---------- */}
+          {(isSalesManager || isSuperAdmin) && (
+            <section className="mb-6 rounded-2xl border border-gray-200 bg-white p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold text-gray-900">
+                    📊 Daily sales digest
+                  </div>
+                  <div className="mt-0.5 text-xs text-gray-500">
+                    Auto-sends to <span className="font-mono">@PROTON_SWL_MOTORS_SALES_bot</span> Mon–Sat at 7:00 PM. Fire an extra snapshot here if needed.
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {digestState === 'sent' && (
+                    <span className="text-xs font-medium text-green-700">
+                      ✓ Sent
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={sendDigestNow}
+                    disabled={digestState === 'sending'}
+                    className="rounded-md bg-gray-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {digestState === 'sending' ? 'Sending…' : 'Send now'}
+                  </button>
+                </div>
+              </div>
+              {digestError && (
+                <div
+                  role="alert"
+                  className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700"
+                >
+                  {digestError}
+                </div>
+              )}
+            </section>
           )}
 
           {/* ---------- Pending discount approvals (sales_manager queue) ---------- */}
