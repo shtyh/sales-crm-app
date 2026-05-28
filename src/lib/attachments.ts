@@ -1,7 +1,13 @@
 import { supabase } from './supabase'
+import { extractAttachmentInBackground } from './reconciliation'
 import type { Attachment, AttachmentKind } from './types'
 
 const BUCKET = 'booking-files'
+
+// Which attachment kinds should auto-fire Gemini extraction on upload.
+// LOU + bank-in feed the reconciliation queue; the rest are reference
+// material we don't read.
+const EXTRACT_ON_UPLOAD = new Set<AttachmentKind>(['lou', 'bank_transaction'])
 
 /** All attachments for a booking, newest first. */
 export async function listAttachments(bookingId: string) {
@@ -72,7 +78,16 @@ export async function uploadAttachment(
     await supabase.storage.from(BUCKET).remove([path])
     throw error
   }
-  return data as Attachment
+  const attachment = data as Attachment
+
+  // Fire Gemini extraction in the background for LOU + bank-in receipts.
+  // Failures don't block the upload — they show up as "missing extraction"
+  // in the reconciliation queue and the user can re-upload to retry.
+  if (EXTRACT_ON_UPLOAD.has(kind)) {
+    void extractAttachmentInBackground(attachment.id)
+  }
+
+  return attachment
 }
 
 /** Short-lived signed URL for viewing a private file. */

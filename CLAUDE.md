@@ -73,6 +73,10 @@ Current real users (`select id, full_name, role from public.profiles`):
 | storage bucket `booking-files` | matches `booking_attachments` ownership | private |
 | `attendance` | own row write/read; is_admin reads all; super_admin delete | one row per `(profile_id, work_date)`. check_in_* required at insert (lat/lng/distance_m + timestamp); check_out_* set later via UPDATE. **Lunch (2026-05-27)**: lunch_out_* and lunch_in_* (timestamptz + lat/lng/distance_m, all nullable). work_date is Asia/KL local YYYY-MM-DD, FE-supplied. |
 | `commission_verifications` | SA writes own; SM + super UPDATE any; super DELETE. SELECT visible to SA on own, SM/FA/super on all. | `booking_id` FK (set null on delete), `uploaded_by` FK→profiles, `image_path` (Storage path), `extracted_*` fields from the Gemini extraction, `matched` boolean, `discrepancy_notes`. Populated by the `/commission-verify` upload flow + `match_commission_verification(id)` RPC. |
+| `bank_statements` | FA + super_admin insert; super_admin delete; FA + SM + super_admin select. | `uploaded_by` FK→profiles, `file_path` (Storage), `period_start` / `period_end` filled by extractor. One row per uploaded statement PDF. |
+| `bank_statement_lines` | service-role insert only (extract-bank-statement); FA + SM + super_admin select. | `statement_id` FK (cascade), `line_date`, `amount`, `description`, `raw` jsonb. One row per **credit** line on the statement. Indexed on `(amount, line_date)` for the reconciliation join. |
+| `attachment_extractions` | service-role write (extract-document); admins + booking owner select. | One row per `booking_attachments` row (`UNIQUE attachment_id`), `doc_type` (lou / bank_transaction / cancellation_form / other), `extracted_amount` / `extracted_date` / `extracted_customer_name`. |
+| `booking_reconciliations` | service-role write via `reconcile_booking()`; admins + booking owner select. | One row per booking (`UNIQUE booking_id`), `status` (complete / discrepancy / missing), pointers to the four source docs, `details` jsonb (`{missing:[], diffs:[{field,doc,expected,got}]}`). |
 
 ## bookings.* column ownership matrix
 
@@ -152,6 +156,7 @@ Trigger `sync_car_status_from_booking` fires AFTER INSERT/UPDATE/DELETE on booki
 | `/attendance` | MyAttendancePage (own calendar + monthly summary) | any auth |
 | `/admin/attendance` | TeamAttendancePage (today + month-by-employee, **org-chart scoped**) | super_admin / sales_manager / service_manager only (others redirected to `/attendance`) |
 | `/commission-verify` | CommissionVerifyPage (upload All-In-One photo → Gemini extracts → auto-match to booking → discrepancy table) | sales_advisor / sales_manager / super_admin (nav link shown to SA+SM only) |
+| `/reconciliation` | ReconciliationPage (3-way reconciliation queue: bank statement + LOU + bank-in + All-In-One) | finance_admin / sales_manager / super_admin |
 
 Top nav layout (2026-05-26 cleanup):
 
@@ -394,6 +399,40 @@ Primary nav links by role:
   fallback for models without a preset palette accepts comma-separated
   values. BookingsPage colour filter flattens across rows; the row
   display joins multi-colour bookings with " / ".
+
+- **3-way reconciliation** (2026-05-29, migration
+  `20260529_reconciliation.sql` + edge functions
+  `extract-bank-statement` + `extract-document`). Cross-checks four
+  sources for every booking:
+  1. **Bank statement** — super_admin / finance_admin uploads the
+     monthly PDF on `/finance`. `extract-bank-statement` calls Gemini
+     2.5 Flash, parses the credit lines into `bank_statement_lines`
+     (date + amount + narration).
+  2. **LOU** — FA uploads via the existing `booking_attachments` flow
+     (`kind='lou'`). The FE auto-fires `extract-document` after upload
+     → `attachment_extractions` row.
+  3. **Bank-in receipt** — same path with `kind='bank_transaction'`.
+  4. **All-In-One** — SA uploads via `/commission-verify`, populates
+     `commission_verifications`.
+
+  AFTER-INSERT triggers on each of those three sources call
+  `reconcile_booking(booking_id)` (SECURITY DEFINER), which gathers
+  the most recent docs, runs the per-field comparisons, and upserts a
+  single row into `booking_reconciliations` with status ∈
+  `complete` / `discrepancy` / `missing`. Diff jsonb captures
+  per-field expected vs got.
+
+  Matching policy is **strict**: statement line ↔ bank-in receipt
+  must have the same amount AND the same `line_date`. Any drift is
+  flagged. (Tunable later by relaxing the join in `reconcile_booking`.)
+  LOU is auto-satisfied when `bookings.loan_bank = 'cash'`.
+
+  `/reconciliation` (FA + SM + super_admin) renders the queue with a
+  status pill per booking + a click-in detail panel showing the
+  missing docs and per-field diffs. Re-run button fires
+  `reconcile_booking` on demand. Storage policies for the new
+  `statements/{uid}/...` prefix on `booking-files` scope reads to
+  FA + super_admin and writes to the uid that owns the row.
 
 - **Commission verification — Gemini extraction** (2026-05-29, migration
   `20260529_commission_verifications.sql` + edge function
@@ -673,7 +712,8 @@ Files in `supabase/migrations/` (chronological):
 20260528_service_orders_shared_read.sql            can_read_service_order: every workshop role sees the full job-sheet queue (was scoped to service_advisor = caller)
 20260528_block_super_admin_booking_insert.sql      bookings_insert RLS: super_admin removed; only sales_advisor / sales_manager (with own owner_id) can author bookings (REVERTED later same day, see next)
 20260528_allow_super_admin_booking_insert.sql      Revert: bookings_insert RLS restored to is_super_admin() OR (sales_advisor / sales_manager AND owner_id = auth.uid())
-20260529_commission_verifications.sql              commission_verifications table + RLS + match_commission_verification RPC + storage policies for commission/{uid}/* prefix on booking-files. audit_log loosened (row_id nullable, ops now include 'CALL'/'ERROR') so the extract-allinone edge function can log events.
+20260529_commission_verifications.sql              commission_verifications table + RLS + match_commission_verification RPC + storage policies for commission/{uid}/* prefix on booking-files. audit_log loosened (row_id nullable, ops now include 'CALL'/'ERROR') so the extract-allinone edge function can log events. Includes the table GRANT to authenticated (was applied separately in prod via commission_verifications_grants migration and folded back into this file — without the GRANT every query 500s before RLS runs).
+20260529_reconciliation.sql                        4 tables: bank_statements + bank_statement_lines + attachment_extractions + booking_reconciliations. reconcile_booking(uuid) SECURITY DEFINER RPC. Triggers on commission_verifications + attachment_extractions + bank_statement_lines auto-fire reconciliation when any source doc changes. Storage policies for statements/{uid}/* prefix on booking-files.
 20260528_booking_vehicle_color_multi.sql           bookings.vehicle_color text → text[] (legacy single-colour rows become 1-element arrays). Multi-select pill picker in NewBookingPage + BookingDetailPage.
 20260528_hq_discount_dealer_support_approval.sql   commission_schedules + bookings get hq_discount + dealer_support; bookings +approval_notes; lookup_schedule_for() helper; guard rewrite to snapshot HQ+dealer + auto-flip approval_status on the discount-vs-commission rule (manager's decision sticks once set)
 ```

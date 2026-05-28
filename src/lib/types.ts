@@ -1002,3 +1002,79 @@ export type CommissionVerificationRow = CommissionVerification & {
   booking_commission: number | null
   uploader_name: string | null
 }
+
+// ----- 3-way reconciliation -----------------------------------------------
+//
+// Super admin uploads bank statement PDF → extract-bank-statement fills
+// bank_statement_lines. FA uploads LOU + bank-in receipts via
+// booking_attachments → extract-document fills attachment_extractions.
+// SA uploads All-In-One → commission_verifications. Triggers run
+// reconcile_booking() which upserts booking_reconciliations.
+
+export type BankStatement = {
+  id: string
+  uploaded_by: string
+  uploaded_at: string
+  file_path: string
+  period_start: string | null
+  period_end: string | null
+  notes: string | null
+}
+
+export type BankStatementLine = {
+  id: string
+  statement_id: string
+  line_date: string
+  amount: number
+  description: string | null
+  raw: unknown
+  created_at: string
+}
+
+export type AttachmentExtraction = {
+  id: string
+  attachment_id: string
+  doc_type: 'lou' | 'bank_transaction' | 'cancellation_form' | 'other'
+  extracted_amount: number | null
+  extracted_date: string | null
+  extracted_customer_name: string | null
+  raw: unknown
+  created_at: string
+}
+
+export type ReconciliationStatus = 'complete' | 'discrepancy' | 'missing'
+
+export type ReconciliationDiff = {
+  field: string
+  doc: 'all_in_one' | 'lou' | 'bank_in' | 'statement'
+  expected: number | string | null
+  got: number | string | null
+}
+
+export type BookingReconciliation = {
+  id: string
+  booking_id: string
+  status: ReconciliationStatus
+  all_in_one_id: string | null
+  lou_extraction_id: string | null
+  bankin_extraction_id: string | null
+  statement_line_id: string | null
+  details: {
+    missing?: string[]
+    diffs?: ReconciliationDiff[]
+  }
+  updated_at: string
+}
+
+/** Joined shape for the reconciliation queue — includes the booking
+ *  customer name + model + the totals from each source doc so we can
+ *  render a single row per booking without N+1 queries. */
+export type BookingReconciliationRow = BookingReconciliation & {
+  booking_code: string
+  customer_name: string
+  vehicle_model: string
+  booking_fee: number
+  loan_amount: number | null
+  commission_amount: number | null
+  otr_price: number
+}

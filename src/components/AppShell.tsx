@@ -108,6 +108,12 @@ export function AppShell({ children }: { children: ReactNode }) {
                   Finance
                 </NavLink>
               )}
+              {showSales &&
+                (isFinanceAdmin || role === 'sales_manager') && (
+                  <NavLink to="/reconciliation" className={navLinkClass}>
+                    Reconcile
+                  </NavLink>
+                )}
               {showSales && canApproveDiscount && (
                 <NavLink to="/commissions" className={navLinkClass}>
                   Commissions

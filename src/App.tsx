@@ -184,6 +184,11 @@ const CommissionVerifyPage = lazy(() =>
     default: m.CommissionVerifyPage,
   })),
 )
+const ReconciliationPage = lazy(() =>
+  import('./pages/ReconciliationPage').then((m) => ({
+    default: m.ReconciliationPage,
+  })),
+)
 
 function RouteFallback() {
   return (
@@ -496,6 +501,14 @@ function App() {
           element={
             <ProtectedRoute>
               <CommissionVerifyPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/reconciliation"
+          element={
+            <ProtectedRoute>
+              <ReconciliationPage />
             </ProtectedRoute>
           }
         />

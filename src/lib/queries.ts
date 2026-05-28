@@ -80,6 +80,13 @@ import {
   uploadAllInOneImage,
   type CreateVerificationInput,
 } from './commissionVerifications'
+import {
+  extractAttachment,
+  listReconciliations,
+  listStatements,
+  runReconcile,
+  uploadAndExtractStatement,
+} from './reconciliation'
 import type {
   Attachment,
   Attendance,
@@ -96,6 +103,8 @@ import type {
   CommissionPayoutInsert,
   CommissionSchedule,
   CommissionScheduleInsert,
+  BankStatement,
+  BookingReconciliationRow,
   CommissionVerification,
   CommissionVerificationRow,
   Customer,
@@ -161,6 +170,8 @@ export const qk = {
   availableSlots: (date: string) =>
     ['service-appointments', 'available-slots', date] as const,
   commissionVerifications: ['commission-verifications'] as const,
+  bankStatements: ['bank-statements'] as const,
+  reconciliations: ['reconciliations'] as const,
 }
 
 // ---------- Bookings -------------------------------------------------------
@@ -931,3 +942,53 @@ export function useRematchVerification() {
 // Re-export the type so the page can import everything from queries.ts and
 // not have to know about the lower-level module.
 export type { CommissionVerification }
+
+// ---------- Reconciliation ------------------------------------------------
+
+export function useBankStatements(enabled = true) {
+  return useQuery<BankStatement[]>({
+    queryKey: qk.bankStatements,
+    queryFn: listStatements,
+    enabled,
+  })
+}
+
+export function useUploadStatement() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ userId, file }: { userId: string; file: File }) =>
+      uploadAndExtractStatement(userId, file),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.bankStatements })
+      qc.invalidateQueries({ queryKey: qk.reconciliations })
+    },
+  })
+}
+
+export function useReconciliations(enabled = true) {
+  return useQuery<BookingReconciliationRow[]>({
+    queryKey: qk.reconciliations,
+    queryFn: listReconciliations,
+    enabled,
+  })
+}
+
+export function useRunReconcile() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (bookingId: string) => runReconcile(bookingId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.reconciliations })
+    },
+  })
+}
+
+export function useExtractAttachment() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (attachmentId: string) => extractAttachment(attachmentId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.reconciliations })
+    },
+  })
+}
