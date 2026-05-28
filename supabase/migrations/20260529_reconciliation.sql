@@ -53,7 +53,7 @@ drop policy if exists bank_statements_insert on public.bank_statements;
 create policy bank_statements_insert on public.bank_statements
   for insert to authenticated
   with check (
-    (public.is_super_admin() or public.current_app_role() = 'finance_admin')
+    public.is_super_admin()
     and uploaded_by = (select auth.uid())
   );
 
@@ -485,10 +485,7 @@ create policy bf_statements_insert on storage.objects
     bucket_id = 'booking-files'
     and split_part(storage.objects.name, '/', 1) = 'statements'
     and split_part(storage.objects.name, '/', 2) = (select auth.uid())::text
-    and (
-      public.is_super_admin()
-      or public.current_app_role() = 'finance_admin'
-    )
+    and public.is_super_admin()
   );
 
 drop policy if exists bf_statements_delete on storage.objects;

@@ -7,7 +7,7 @@
 //
 // Auth model mirrors extract-allinone:
 //   - JWT verified server-side.
-//   - Only super_admin / finance_admin allowed.
+//   - Only super_admin allowed (FA can read statements but not upload).
 //   - file_path must be under statements/{their_uid}/.
 //   - Per-user rate limit: 5 requests / 60s.
 //   - All errors → audit_log; caller sees only `{ error: '...' }`.
@@ -179,7 +179,7 @@ Deno.serve(async (req) => {
     .eq('id', user.id)
     .maybeSingle()
   const role = (profile?.role as string | undefined) ?? null
-  if (role !== 'super_admin' && role !== 'finance_admin') {
+  if (role !== 'super_admin') {
     await audit({ actorId: user.id, actorRole: role, operation: 'ERROR', detail: { stage: 'authz', role } })
     return generic(403, origin, 'Forbidden')
   }
@@ -221,7 +221,9 @@ Deno.serve(async (req) => {
   if (stmtErr || !stmtRow) {
     return generic(404, origin, 'Statement not found')
   }
-  if (stmtRow.uploaded_by !== user.id && role !== 'super_admin') {
+  // Role check above already guarantees super_admin; just verify the
+  // statement they're operating on belongs to them.
+  if (stmtRow.uploaded_by !== user.id) {
     await audit({ actorId: user.id, actorRole: role, operation: 'ERROR', detail: { stage: 'statement_ownership', statementId } })
     return generic(403, origin, 'Forbidden')
   }

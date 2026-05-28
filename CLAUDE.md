@@ -73,7 +73,7 @@ Current real users (`select id, full_name, role from public.profiles`):
 | storage bucket `booking-files` | matches `booking_attachments` ownership | private |
 | `attendance` | own row write/read; is_admin reads all; super_admin delete | one row per `(profile_id, work_date)`. check_in_* required at insert (lat/lng/distance_m + timestamp); check_out_* set later via UPDATE. **Lunch (2026-05-27)**: lunch_out_* and lunch_in_* (timestamptz + lat/lng/distance_m, all nullable). work_date is Asia/KL local YYYY-MM-DD, FE-supplied. |
 | `commission_verifications` | SA writes own; SM + super UPDATE any; super DELETE. SELECT visible to SA on own, SM/FA/super on all. | `booking_id` FK (set null on delete), `uploaded_by` FK→profiles, `image_path` (Storage path), `extracted_*` fields from the Gemini extraction, `matched` boolean, `discrepancy_notes`. Populated by the `/commission-verify` upload flow + `match_commission_verification(id)` RPC. |
-| `bank_statements` | FA + super_admin insert; super_admin delete; FA + SM + super_admin select. | `uploaded_by` FK→profiles, `file_path` (Storage), `period_start` / `period_end` filled by extractor. One row per uploaded statement PDF. |
+| `bank_statements` | **super_admin only** can insert (and the upload UI on `/finance` is gated to super_admin); super_admin delete; FA + SM + super_admin select. | `uploaded_by` FK→profiles, `file_path` (Storage), `period_start` / `period_end` filled by extractor. One row per uploaded statement PDF. |
 | `bank_statement_lines` | service-role insert only (extract-bank-statement); FA + SM + super_admin select. | `statement_id` FK (cascade), `line_date`, `amount`, `description`, `raw` jsonb. One row per **credit** line on the statement. Indexed on `(amount, line_date)` for the reconciliation join. |
 | `attachment_extractions` | service-role write (extract-document); admins + booking owner select. | One row per `booking_attachments` row (`UNIQUE attachment_id`), `doc_type` (lou / bank_transaction / cancellation_form / other), `extracted_amount` / `extracted_date` / `extracted_customer_name`. |
 | `booking_reconciliations` | service-role write via `reconcile_booking()`; admins + booking owner select. | One row per booking (`UNIQUE booking_id`), `status` (complete / discrepancy / missing), pointers to the four source docs, `details` jsonb (`{missing:[], diffs:[{field,doc,expected,got}]}`). |
@@ -404,8 +404,10 @@ Primary nav links by role:
   `20260529_reconciliation.sql` + edge functions
   `extract-bank-statement` + `extract-document`). Cross-checks four
   sources for every booking:
-  1. **Bank statement** — super_admin / finance_admin uploads the
-     monthly PDF on `/finance`. `extract-bank-statement` calls Gemini
+  1. **Bank statement** — **super_admin only** uploads the
+     monthly PDF on `/finance` (RLS + edge fn + FE all enforce this;
+     FA + SM can read the resulting lines for context).
+     `extract-bank-statement` calls Gemini
      2.5 Flash, parses the credit lines into `bank_statement_lines`
      (date + amount + narration).
   2. **LOU** — FA uploads via the existing `booking_attachments` flow

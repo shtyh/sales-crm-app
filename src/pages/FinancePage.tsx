@@ -48,7 +48,7 @@ function daysSince(anchor: string | null): number {
 }
 
 export function FinancePage() {
-  const { user, isFinanceAdmin, loading } = useAuth()
+  const { user, isFinanceAdmin, isSuperAdmin, loading } = useAuth()
 
   const { data: cars, error: carsErr } = useCars()
   const { data: bookings, error: bookingsErr } = useBookings()
@@ -639,7 +639,10 @@ export function FinancePage() {
         )}
       </Section>
 
-      {/* ───── Bank statement upload (for reconciliation) ───── */}
+      {/* ───── Bank statement upload (super_admin only) ───── */}
+      {/*  FA / SM can still read the list of uploaded statements for
+           reconciliation context, but only super_admin can upload new
+           ones — that matches the DB RLS + edge-function policy. */}
       <Section
         title="Bank statements"
         right={
@@ -651,34 +654,43 @@ export function FinancePage() {
           </Link>
         }
       >
-        <div className="flex flex-wrap items-center gap-3">
-          <label className="inline-flex cursor-pointer items-center rounded-lg bg-gray-900 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-gray-800">
-            {uploadStatement.isPending ? 'Uploading…' : 'Upload statement PDF'}
-            <input
-              type="file"
-              accept="application/pdf,.pdf"
-              onChange={handleStatementChange}
-              disabled={uploadStatement.isPending}
-              className="hidden"
-            />
-          </label>
-          <span className="text-xs text-gray-500">
-            PDF · max 20 MB · AI extracts each credit line for matching
-          </span>
-        </div>
-        {uploadStatement.isPending && (
-          <p className="mt-3 text-sm text-gray-600">
-            Reading statement — usually 10-30 seconds…
-          </p>
-        )}
-        {statementErr && (
-          <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-            {statementErr}
-          </p>
-        )}
-        {statementMsg && (
-          <p className="mt-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
-            {statementMsg}
+        {isSuperAdmin ? (
+          <>
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="inline-flex cursor-pointer items-center rounded-lg bg-gray-900 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-gray-800">
+                {uploadStatement.isPending ? 'Uploading…' : 'Upload statement PDF'}
+                <input
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  onChange={handleStatementChange}
+                  disabled={uploadStatement.isPending}
+                  className="hidden"
+                />
+              </label>
+              <span className="text-xs text-gray-500">
+                PDF · max 20 MB · AI extracts each credit line for matching
+              </span>
+            </div>
+            {uploadStatement.isPending && (
+              <p className="mt-3 text-sm text-gray-600">
+                Reading statement — usually 10-30 seconds…
+              </p>
+            )}
+            {statementErr && (
+              <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                {statementErr}
+              </p>
+            )}
+            {statementMsg && (
+              <p className="mt-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+                {statementMsg}
+              </p>
+            )}
+          </>
+        ) : (
+          <p className="text-xs text-gray-500">
+            Only super admins can upload bank statements. You'll see new ones
+            here once they're added.
           </p>
         )}
         {statements && statements.length > 0 && (
