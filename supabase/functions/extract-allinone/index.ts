@@ -1,7 +1,7 @@
 // SWL Motors CRM — extract-allinone Edge Function.
 //
 // Reads a Proton "All In One Preparation" form image from Supabase Storage
-// and asks Gemini 1.5 Flash to pull out the 12 fields we care about for
+// and asks Gemini 2.5 Flash to pull out the 12 fields we care about for
 // commission verification. The image is downloaded server-side via the
 // service-role client so the model call never sees the user's JWT and the
 // service-role key never leaves the Edge runtime.
@@ -337,7 +337,7 @@ Deno.serve(async (req) => {
   let geminiRes: Response
   try {
     geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
