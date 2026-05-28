@@ -133,15 +133,34 @@ export function AdminDashboardPage() {
     [bookings],
   )
 
+  // Per-row note input for the approval queue. Manager can leave a
+  // short reason (especially when rejecting) that gets persisted to
+  // bookings.approval_notes.
+  const [approvalNotes, setApprovalNotes] = useState<Record<string, string>>({})
+
   async function handleApprovalDecision(
     booking: Booking,
     decision: 'approved' | 'rejected',
   ) {
     setApprovalError(null)
+    const note = (approvalNotes[booking.id] ?? '').trim()
+    if (decision === 'rejected' && !note) {
+      setApprovalError(
+        'Add a short reason before rejecting — the SA needs to know why.',
+      )
+      return
+    }
     try {
       await approveMut.mutateAsync({
         id: booking.id,
-        patch: { approval_status: decision },
+        patch: {
+          approval_status: decision,
+          approval_notes: note || null,
+        },
+      })
+      setApprovalNotes((m) => {
+        const { [booking.id]: _, ...rest } = m
+        return rest
       })
     } catch (e) {
       setApprovalError(formatError(e))
@@ -368,54 +387,71 @@ export function AdminDashboardPage() {
                 {pendingApprovals.map((b) => {
                   const owner = profileById.get(b.owner_id)
                   const busy = approveMut.isPending && approveMut.variables?.id === b.id
+                  const note = approvalNotes[b.id] ?? ''
+                  const commission = Number(b.base_commission ?? 0)
+                  const over = Number(b.discount_amount ?? 0) - commission
                   return (
                     <li
                       key={b.id}
-                      className="flex flex-wrap items-center gap-3 py-3 first:pt-0 last:pb-0"
+                      className="py-3 first:pt-0 last:pb-0"
                     >
-                      <Link
-                        to={`/bookings/${b.id}`}
-                        className="min-w-0 flex-1 hover:underline"
-                      >
-                        <div className="truncate text-sm font-medium text-gray-900">
-                          {b.customer_name}{' '}
-                          <span className="font-mono text-xs text-gray-500">
-                            {b.code}
-                          </span>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <Link
+                          to={`/bookings/${b.id}`}
+                          className="min-w-0 flex-1 hover:underline"
+                        >
+                          <div className="truncate text-sm font-medium text-gray-900">
+                            {b.customer_name}{' '}
+                            <span className="font-mono text-xs text-gray-500">
+                              {b.code}
+                            </span>
+                          </div>
+                          <div className="truncate text-xs text-gray-500">
+                            {b.vehicle_model}
+                            {b.vehicle_variant ? ` · ${b.vehicle_variant}` : ''}
+                            {' · by '}
+                            <span className="font-medium">
+                              {owner?.full_name || owner?.email || '—'}
+                            </span>
+                          </div>
+                        </Link>
+                        <div className="shrink-0 text-right">
+                          <div className="text-xs text-gray-500">Discount</div>
+                          <div className="tabular-nums text-sm font-semibold text-rose-700">
+                            −{formatMYR(b.discount_amount)}
+                          </div>
+                          <div className="text-[10px] text-rose-700">
+                            {over > 0 ? `${formatMYR(over)} over commission` : 'within commission'}
+                          </div>
                         </div>
-                        <div className="truncate text-xs text-gray-500">
-                          {b.vehicle_model}
-                          {b.vehicle_variant ? ` · ${b.vehicle_variant}` : ''}
-                          {' · by '}
-                          <span className="font-medium">
-                            {owner?.full_name || owner?.email || '—'}
-                          </span>
-                        </div>
-                      </Link>
-                      <div className="shrink-0 text-right">
-                        <div className="text-xs text-gray-500">Discount</div>
-                        <div className="tabular-nums text-sm font-semibold text-rose-700">
-                          −{formatMYR(b.discount_amount)}
+                        <div className="flex shrink-0 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleApprovalDecision(b, 'approved')}
+                            disabled={busy}
+                            className="rounded-lg bg-green-600 px-3 py-1 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleApprovalDecision(b, 'rejected')}
+                            disabled={busy}
+                            className="rounded-lg bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                          >
+                            Reject
+                          </button>
                         </div>
                       </div>
-                      <div className="flex shrink-0 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleApprovalDecision(b, 'approved')}
-                          disabled={busy}
-                          className="rounded-lg bg-green-600 px-3 py-1 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
-                        >
-                          Approve
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleApprovalDecision(b, 'rejected')}
-                          disabled={busy}
-                          className="rounded-lg bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
-                        >
-                          Reject
-                        </button>
-                      </div>
+                      <input
+                        type="text"
+                        value={note}
+                        onChange={(e) =>
+                          setApprovalNotes((m) => ({ ...m, [b.id]: e.target.value }))
+                        }
+                        placeholder="Note for SA (required when rejecting)…"
+                        className="mt-2 w-full rounded-md border border-rose-200 bg-white px-2 py-1 text-xs outline-none focus:border-rose-700 focus:ring-2 focus:ring-rose-700/10"
+                      />
                     </li>
                   )
                 })}

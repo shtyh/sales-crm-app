@@ -874,6 +874,30 @@ export function BookingDetailPage() {
             </span>
           </div>
 
+          {/* Auto-applied HQ + Dealer support (read-only strip). These
+              come from the commission schedule at insert time. */}
+          {(Number(booking.hq_discount ?? 0) > 0 ||
+            Number(booking.dealer_support ?? 0) > 0) && (
+            <div className="mb-3 grid grid-cols-2 gap-3 text-sm sm:gap-4">
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                <div className="text-[10px] uppercase tracking-wider text-gray-500">
+                  HQ discount (auto)
+                </div>
+                <div className="mt-1 tabular-nums text-gray-900">
+                  {formatMYR(Number(booking.hq_discount ?? 0))}
+                </div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                <div className="text-[10px] uppercase tracking-wider text-gray-500">
+                  Dealer support (auto)
+                </div>
+                <div className="mt-1 tabular-nums text-gray-900">
+                  {formatMYR(Number(booking.dealer_support ?? 0))}
+                </div>
+              </div>
+            </div>
+          )}
+
           {booking.base_commission == null ? (
             <div className="rounded-lg border border-dashed border-gray-200 bg-white p-3 text-xs text-gray-500">
               No commission schedule set for{' '}

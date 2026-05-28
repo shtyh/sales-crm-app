@@ -3,11 +3,13 @@ import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
 import { useAuth } from '../lib/auth'
 import {
+  useCommissionSchedules,
   useCreateBooking,
   useCustomerByNric,
   useUpsertCustomerByNric,
 } from '../lib/queries'
 import { formatError } from '../lib/errors'
+import { formatMYR } from '../lib/format'
 import {
   PROTON_MODELS,
   coloursFor,
@@ -65,6 +67,27 @@ export function NewBookingPage() {
   const upsertCustomerMut = useUpsertCustomerByNric()
   const submitting = createMut.isPending || upsertCustomerMut.isPending
   const [error, setError] = useState<string | null>(null)
+
+  // Discount-approval breakdown: look up the matching commission row for
+  // the chosen model/variant so we can show HQ discount + dealer support
+  // (read-only) and gate the SA discount against the base commission.
+  const { data: schedules } = useCommissionSchedules(true)
+  const schedule = (() => {
+    if (!schedules) return undefined
+    // Prefer an exact (model, variant) match; fall back to a
+    // model + null-variant catch-all row.
+    const exact = schedules.find(
+      (s) => s.model === vehicleModel && s.variant === vehicleVariant,
+    )
+    if (exact) return exact
+    return schedules.find((s) => s.model === vehicleModel && s.variant === null)
+  })()
+  const hqDiscount = Number(schedule?.hq_discount ?? 0)
+  const dealerSupport = Number(schedule?.dealer_support ?? 0)
+  const saCommission = Number(schedule?.base_commission ?? 0)
+  const discountNum = Number(discountAmount) || 0
+  const exceedsCommission = discountNum > saCommission && saCommission > 0
+  const commissionAfter = saCommission - discountNum
 
   // Debounce NRIC input — after the SA stops typing for 400ms, hit the
   // customers table to see if this person already exists. We don't want a
@@ -451,7 +474,7 @@ export function NewBookingPage() {
               placeholder="OR-#####"
             />
           </Field>
-          <Field label="Discount (MYR)">
+          <Field label="SA discount (MYR)">
             <input
               type="number"
               min={0}
@@ -462,7 +485,83 @@ export function NewBookingPage() {
               placeholder="0"
               inputMode="decimal"
             />
+            <div className="mt-1 text-[10px] text-gray-500">
+              Cap: {formatMYR(saCommission)} (your commission). Beyond that
+              triggers manager approval.
+            </div>
           </Field>
+        </Section>
+
+        {/* ---------- Discount approval breakdown ---------- */}
+        <Section title="🧾 Discount breakdown (auto-applied)">
+          <Field label="HQ discount">
+            <input
+              type="text"
+              readOnly
+              value={formatMYR(hqDiscount)}
+              className={`${inputClass} bg-gray-50 text-gray-700`}
+            />
+            <div className="mt-1 text-[10px] text-gray-500">
+              Set by HQ for this model/variant. Not part of your commission.
+            </div>
+          </Field>
+          <Field label="Dealer support">
+            <input
+              type="text"
+              readOnly
+              value={formatMYR(dealerSupport)}
+              className={`${inputClass} bg-gray-50 text-gray-700`}
+            />
+            <div className="mt-1 text-[10px] text-gray-500">
+              Set by the dealership. Not part of your commission.
+            </div>
+          </Field>
+          <Field label="Your commission (before discount)">
+            <input
+              type="text"
+              readOnly
+              value={
+                schedule
+                  ? formatMYR(saCommission)
+                  : '— (no schedule for this model/variant)'
+              }
+              className={`${inputClass} bg-gray-50 text-gray-700`}
+            />
+          </Field>
+          <Field label="Your commission (after your discount)">
+            <input
+              type="text"
+              readOnly
+              value={schedule ? formatMYR(commissionAfter) : '—'}
+              className={`${inputClass} bg-gray-50 ${
+                commissionAfter < 0
+                  ? 'font-semibold text-rose-700'
+                  : 'text-gray-700'
+              }`}
+            />
+          </Field>
+          {exceedsCommission && (
+            <div className="sm:col-span-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              ⚠️ Your discount ({formatMYR(discountNum)}) is bigger than your
+              commission ({formatMYR(saCommission)}). The booking will be saved
+              with <strong>Pending</strong> approval status — your sales
+              manager has to approve before the discount applies.
+            </div>
+          )}
+          {!schedule && (
+            <div className="sm:col-span-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700">
+              No commission schedule found for{' '}
+              <span className="font-mono">{vehicleModel}</span>
+              {vehicleVariant ? (
+                <>
+                  {' '}/{' '}
+                  <span className="font-mono">{vehicleVariant}</span>
+                </>
+              ) : null}
+              . Booking will save with no auto commission/discount
+              breakdown; super admin can add the row in the schedule.
+            </div>
+          )}
         </Section>
 
         {/* ---------- Date ---------- */}

@@ -28,11 +28,21 @@ export function CommissionSchedulesPage() {
   const [newModel, setNewModel] = useState<string>(PROTON_MODELS[0])
   const [newVariant, setNewVariant] = useState<string>('')
   const [newAmount, setNewAmount] = useState<string>('')
+  const [newHq, setNewHq] = useState<string>('0')
+  const [newDealer, setNewDealer] = useState<string>('0')
   const [newNotes, setNewNotes] = useState<string>('')
 
   // Per-row inline edits.
   const [edits, setEdits] = useState<
-    Record<string, { base_commission: string; notes: string }>
+    Record<
+      string,
+      {
+        base_commission: string
+        hq_discount: string
+        dealer_support: string
+        notes: string
+      }
+    >
   >({})
 
   if (loading) {
@@ -50,8 +60,18 @@ export function CommissionSchedulesPage() {
     e.preventDefault()
     setError(null)
     const amt = Number(newAmount)
+    const hq = Number(newHq)
+    const dealer = Number(newDealer)
     if (!Number.isFinite(amt) || amt < 0) {
       setError('Base commission must be a non-negative number.')
+      return
+    }
+    if (!Number.isFinite(hq) || hq < 0) {
+      setError('HQ discount must be a non-negative number.')
+      return
+    }
+    if (!Number.isFinite(dealer) || dealer < 0) {
+      setError('Dealer support must be a non-negative number.')
       return
     }
     try {
@@ -59,10 +79,14 @@ export function CommissionSchedulesPage() {
         model: newModel,
         variant: newVariant.trim() || null,
         base_commission: amt,
+        hq_discount: hq,
+        dealer_support: dealer,
         notes: newNotes.trim() || null,
       })
       setNewVariant('')
       setNewAmount('')
+      setNewHq('0')
+      setNewDealer('0')
       setNewNotes('')
     } catch (e) {
       setError(formatError(e))
@@ -73,15 +97,30 @@ export function CommissionSchedulesPage() {
     const edit = edits[s.id]
     if (!edit) return
     const amt = Number(edit.base_commission)
+    const hq = Number(edit.hq_discount)
+    const dealer = Number(edit.dealer_support)
     if (!Number.isFinite(amt) || amt < 0) {
       setError(`Base commission for ${s.model} must be a non-negative number.`)
+      return
+    }
+    if (!Number.isFinite(hq) || hq < 0) {
+      setError(`HQ discount for ${s.model} must be a non-negative number.`)
+      return
+    }
+    if (!Number.isFinite(dealer) || dealer < 0) {
+      setError(`Dealer support for ${s.model} must be a non-negative number.`)
       return
     }
     setError(null)
     try {
       await updateMut.mutateAsync({
         id: s.id,
-        patch: { base_commission: amt, notes: edit.notes || null },
+        patch: {
+          base_commission: amt,
+          hq_discount: hq,
+          dealer_support: dealer,
+          notes: edit.notes || null,
+        },
       })
       setEdits((m) => {
         const { [s.id]: _, ...rest } = m
@@ -146,7 +185,7 @@ export function CommissionSchedulesPage() {
         className="mb-6 rounded-2xl border border-gray-200 bg-white p-5"
       >
         <h2 className="mb-3 text-sm font-semibold text-gray-900">+ Add row</h2>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-5">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-7">
           <label className="block text-sm sm:col-span-1">
             <span className="mb-1 block font-medium text-gray-700">Model</span>
             <select
@@ -198,6 +237,36 @@ export function CommissionSchedulesPage() {
             />
           </label>
           <label className="block text-sm sm:col-span-1">
+            <span className="mb-1 block font-medium text-gray-700">
+              HQ discount (MYR)
+            </span>
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              value={newHq}
+              onChange={(e) => setNewHq(e.target.value)}
+              className={inputClass}
+              inputMode="decimal"
+              placeholder="5000"
+            />
+          </label>
+          <label className="block text-sm sm:col-span-1">
+            <span className="mb-1 block font-medium text-gray-700">
+              Dealer support (MYR)
+            </span>
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              value={newDealer}
+              onChange={(e) => setNewDealer(e.target.value)}
+              className={inputClass}
+              inputMode="decimal"
+              placeholder="2000"
+            />
+          </label>
+          <label className="block text-sm sm:col-span-1">
             <span className="mb-1 block font-medium text-gray-700">Notes</span>
             <input
               type="text"
@@ -236,6 +305,12 @@ export function CommissionSchedulesPage() {
                 <th className="px-4 py-3 text-right font-medium">
                   Base commission
                 </th>
+                <th className="px-4 py-3 text-right font-medium">
+                  HQ discount
+                </th>
+                <th className="px-4 py-3 text-right font-medium">
+                  Dealer support
+                </th>
                 <th className="px-4 py-3 text-left font-medium">Notes</th>
                 <th className="px-4 py-3 text-right font-medium">Actions</th>
               </tr>
@@ -248,6 +323,8 @@ export function CommissionSchedulesPage() {
                     ...m,
                     [s.id]: {
                       base_commission: String(s.base_commission),
+                      hq_discount: String(s.hq_discount ?? 0),
+                      dealer_support: String(s.dealer_support ?? 0),
                       notes: s.notes ?? '',
                     },
                   }))
@@ -293,6 +370,52 @@ export function CommissionSchedulesPage() {
                         />
                       ) : (
                         formatMYR(Number(s.base_commission))
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      {editing ? (
+                        <input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          value={editing.hq_discount}
+                          onChange={(e) =>
+                            setEdits((m) => ({
+                              ...m,
+                              [s.id]: {
+                                ...editing,
+                                hq_discount: e.target.value,
+                              },
+                            }))
+                          }
+                          className="w-32 rounded border border-gray-300 px-2 py-1 text-right text-sm"
+                          inputMode="decimal"
+                        />
+                      ) : (
+                        formatMYR(Number(s.hq_discount ?? 0))
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      {editing ? (
+                        <input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          value={editing.dealer_support}
+                          onChange={(e) =>
+                            setEdits((m) => ({
+                              ...m,
+                              [s.id]: {
+                                ...editing,
+                                dealer_support: e.target.value,
+                              },
+                            }))
+                          }
+                          className="w-32 rounded border border-gray-300 px-2 py-1 text-right text-sm"
+                          inputMode="decimal"
+                        />
+                      ) : (
+                        formatMYR(Number(s.dealer_support ?? 0))
                       )}
                     </td>
                     <td className="px-4 py-3 text-gray-600">

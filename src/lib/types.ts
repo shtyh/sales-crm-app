@@ -53,6 +53,11 @@ export type CommissionSchedule = {
   model: string
   variant: string | null
   base_commission: number
+  /** Auto-applied HQ rebate for this model/variant. Cannot be changed
+   *  by the SA on the booking form; super_admin tunes it here. */
+  hq_discount: number
+  /** Auto-applied dealer support for this model/variant. Same gating. */
+  dealer_support: number
   notes: string | null
   created_at: string
   updated_at: string
@@ -62,6 +67,8 @@ export type CommissionScheduleInsert = {
   model: string
   variant?: string | null
   base_commission: number
+  hq_discount?: number
+  dealer_support?: number
   notes?: string | null
 }
 
@@ -759,7 +766,17 @@ export type Booking = {
   // Commission (auto-managed; manual fields gated by sales_manager)
   /** Snapshot of commission_schedules.base_commission at insert time. */
   base_commission: number | null
-  /** Auto = greatest(0, base_commission - discount_amount). */
+  /** Snapshot of commission_schedules.hq_discount at insert time.
+   *  Auto-applied, never counted toward SA commission. */
+  hq_discount: number
+  /** Snapshot of commission_schedules.dealer_support at insert time.
+   *  Auto-applied, never counted toward SA commission. */
+  dealer_support: number
+  /** Manager's note when approving / rejecting an over-commission
+   *  SA discount. */
+  approval_notes: string | null
+  /** Auto = base_commission - discount_amount + special_support
+   *  (can go negative). */
   commission_amount: number | null
   commission_status: CommissionStatus
   /** Set when SM groups this booking into a payout batch. */
@@ -873,6 +890,9 @@ export type BookingInsert = {
   // Update-only fields (defaults on DB; not meant for INSERT). Typed here
   // because we reuse this shape as Partial<BookingInsert> for PATCHes.
   approval_status?: ApprovalStatus
+  /** sales_manager note left when approving / rejecting an SA discount
+   *  that exceeds commission. */
+  approval_notes?: string | null
   deposit_status?: DepositStatus
   payment_status?: PaymentStatus
   /** general_admin JPJ tracking */
