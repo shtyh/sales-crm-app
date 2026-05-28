@@ -63,6 +63,9 @@ export function BookingsPage() {
   const [modelFilter, setModelFilter] = useState<string>('')
   const [variantFilter, setVariantFilter] = useState<string>('')
   const [colourFilter, setColourFilter] = useState<string>('')
+  /** Booking-date sort direction. Default = newest first (the most
+   *  common use). Click the Date column header to toggle. */
+  const [dateSort, setDateSort] = useState<'desc' | 'asc'>('desc')
 
   // Owner dropdown options — restrict to profiles that actually own a
   // booking in the visible set so the list doesn't bloat with every user.
@@ -167,6 +170,20 @@ export function BookingsPage() {
     variantFilter,
     colourFilter,
   ])
+
+  // Apply the user-chosen date sort on top of the filtered set.
+  // booking_date is YYYY-MM-DD so a string compare is correct.
+  const sortedBookings = useMemo(() => {
+    if (!filteredBookings) return filteredBookings
+    const copy = filteredBookings.slice()
+    copy.sort((a, b) => {
+      if (a.booking_date === b.booking_date) return 0
+      return dateSort === 'desc'
+        ? a.booking_date < b.booking_date ? 1 : -1
+        : a.booking_date < b.booking_date ? -1 : 1
+    })
+    return copy
+  }, [filteredBookings, dateSort])
 
   const filtersActive = !!(
     q ||
@@ -403,11 +420,26 @@ export function BookingsPage() {
                   {isAdmin && (
                     <th className="px-4 py-3 text-left font-medium">Owner</th>
                   )}
-                  <th className="px-4 py-3 text-left font-medium">Date</th>
+                  <th className="px-4 py-3 text-left font-medium">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setDateSort((d) => (d === 'desc' ? 'asc' : 'desc'))
+                      }
+                      title={
+                        dateSort === 'desc'
+                          ? 'Showing newest first — click to flip'
+                          : 'Showing oldest first — click to flip'
+                      }
+                      className="inline-flex items-center gap-1 uppercase tracking-wider hover:text-gray-900"
+                    >
+                      Date <span aria-hidden>{dateSort === 'desc' ? '↓' : '↑'}</span>
+                    </button>
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {filteredBookings.map((b) => (
+                {(sortedBookings ?? []).map((b) => (
                   <tr
                     key={b.id}
                     onClick={() => navigate(`/bookings/${b.id}`)}
@@ -457,8 +489,19 @@ export function BookingsPage() {
           </div>
 
           {/* Mobile cards */}
+          <div className="mb-2 flex justify-end sm:hidden">
+            <button
+              type="button"
+              onClick={() =>
+                setDateSort((d) => (d === 'desc' ? 'asc' : 'desc'))
+              }
+              className="rounded-full border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-700"
+            >
+              Date {dateSort === 'desc' ? '↓ newest' : '↑ oldest'} first
+            </button>
+          </div>
           <ul className="space-y-3 sm:hidden">
-            {filteredBookings.map((b) => (
+            {(sortedBookings ?? []).map((b) => (
               <li key={b.id}>
                 <Link
                   to={`/bookings/${b.id}`}
