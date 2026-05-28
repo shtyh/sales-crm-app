@@ -59,6 +59,13 @@ create index if not exists commission_verifications_booking_idx
 
 alter table public.commission_verifications enable row level security;
 
+-- Base table grants — RLS narrows what the authenticated role can read /
+-- write but only after Postgres has confirmed the role has the privilege at
+-- all. Without these grants every query 500s with `permission denied for
+-- table commission_verifications` before the policies even get a look in.
+grant select, insert, update, delete on public.commission_verifications to authenticated;
+grant select on public.commission_verifications to service_role;
+
 -- SELECT: SA sees own; SM / FA / super see all.
 drop policy if exists commission_verifications_select on public.commission_verifications;
 create policy commission_verifications_select on public.commission_verifications
