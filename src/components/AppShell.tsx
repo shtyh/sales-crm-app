@@ -49,6 +49,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   const online = useOnlineStatus()
   const navigate = useNavigate()
   const onServicePath = isServicePath(location.pathname)
+  // Both the brand logo and the Home nav link send the user to the
+  // dashboard for the side they're currently on, so clicking Home from
+  // /service/* doesn't bump them back into the Sales workspace.
+  const homePath = onServicePath ? '/service' : '/'
   const displayName =
     (user?.user_metadata?.full_name as string | undefined) ?? user?.email ?? ''
   const email = user?.email ?? ''
@@ -89,7 +93,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <header className="border-b border-gray-200 bg-white">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
           <div className="flex min-w-0 items-center gap-1 sm:gap-4">
-            <Link to="/" className="flex items-center gap-2">
+            <Link to={homePath} className="flex items-center gap-2">
               <span className="text-xl">🚗</span>
               <span className="hidden font-semibold text-gray-900 sm:inline">
                 SWL Motors
@@ -97,7 +101,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </Link>
             <nav className="ml-1 flex items-center gap-1 sm:ml-3">
               {!isFinanceAdmin && (
-                <NavLink to="/" end className={navLinkClass}>
+                <NavLink to={homePath} end className={navLinkClass}>
                   Home
                 </NavLink>
               )}
@@ -164,7 +168,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <SideSwitcher
                 onService={onServicePath}
                 onSwitch={(to) =>
-                  navigate(to === 'service' ? '/service/appointments' : '/')
+                  navigate(to === 'service' ? '/service' : '/')
                 }
               />
             )}
