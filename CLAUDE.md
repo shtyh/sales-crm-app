@@ -812,6 +812,256 @@ npm run build         # tsc + vite build; should be green
 - **`audit_log` reads only super_admin.** Trying to fetch for any other role returns `[]` silently (no error). `useAuditForRow(table, id, isSuperAdmin)` skips the call when false.
 - **`commission_schedules.variant` is nullable** as a catch-all; lookup uses `IS NOT DISTINCT FROM` so a booking with empty variant matches a NULL-variant schedule row.
 
+## Session log — 2026-05-29 (big one)
+
+A long session that built ~10 net-new features and ran several large data
+imports. Recovery shortlist of every decision + table + route landed,
+so a fresh session doesn't have to re-derive context.
+
+### Sales-side micro-fixes early in the session
+- **Booking creation reverted for super_admin** — the 2026-05-28 lockdown
+  was rolled back the same day. `bookings_insert` policy back to
+  `is_super_admin() OR (sales_advisor/sales_manager AND owner_id =
+  auth.uid())`. NewBookingPage + AppShell "+ New" both let super_admin
+  through again. Migrations: `20260528_block_super_admin_booking_insert`
+  → `20260528_allow_super_admin_booking_insert` (revert).
+- **Hide past time slots on `/book`** when today is selected — see
+  `klNow()` helper using `Intl.DateTimeFormat` with `timeZone='Asia/
+  Kuala_Lumpur'`.
+
+### Commission verification (`/commission-verify`)
+- New table `commission_verifications` + 12-field extraction via Gemini
+  2.5 Flash. Edge function `extract-allinone` (security: JWT verify, role
+  gate, path ownership, rate-limit 10/min, audit_log, generic-error
+  surface). RPC `match_commission_verification` auto-matches by
+  `customer_name ILIKE` + `model ILIKE`. Storage prefix
+  `commission/{uid}/` on `booking-files`. Required GRANTs landed via
+  `commission_verifications_grants` follow-up (table-level privileges
+  were missed the first pass and every query 500'd until added).
+- Gemini model: `gemini-2.5-flash` (was `gemini-1.5-flash` for one
+  ship; Google retired it the same day → 404 on v1beta).
+
+### 3-way reconciliation (`/reconciliation`)
+- 4 new tables: `bank_statements`, `bank_statement_lines`,
+  `attachment_extractions`, `booking_reconciliations`. RPC
+  `reconcile_booking(uuid)` SECURITY DEFINER aggregates the four source
+  docs (All-In-One verification + LOU + bank-in + statement line) into a
+  single per-booking row with status ∈ complete / discrepancy / missing
+  and a `details jsonb` of per-field diffs.
+- Edge functions: `extract-bank-statement` (PDF → line items),
+  `extract-document` (generic LOU / bank-in extractor, called from FE
+  after attachment upload).
+- AFTER-INSERT triggers on `commission_verifications`,
+  `attachment_extractions`, `bank_statement_lines` all call
+  `reconcile_booking()` so the queue updates as docs land. Matching is
+  **strict** (amount + date exact) — tunable later in the
+  `reconcile_booking()` SQL.
+- `/finance` gained an "Upload statement PDF" section, **super_admin
+  only** (DB + edge fn + FE all gated; FA can read existing statements
+  for context).
+
+### Workspace nav — multiple iterations to URL-driven
+- Tried merging Sales + Service nav for super_admin (one-row);
+  user pushed back ("the navi service only show service, sales only show
+  sales"). Landed on **URL-driven nav**: AppShell derives `onServicePath`
+  from `useLocation().pathname` and renders one side or the other.
+- SideSwitcher pill (super_admin only) navigates between sides; its
+  highlight is read from the URL, not from any persisted state.
+- `useWorkspace()` retired entirely; `RoleHome` no longer consults it
+  (stale state was sending super_admin to the workshop dashboard on
+  every `/` hit).
+- Brand 🚗 logo + Home link target either `/` or `/service` depending
+  on which side you're currently on, so Home doesn't yank super_admin
+  across sides.
+
+### Parts inventory — major rebuild
+- **Imported AUTFTP02.csv** (80,680 rows) → upserted into
+  `parts_inventory` (later trimmed back to 1,580 — see below).
+- **`parts_inventory_stats()` RPC** — server-aggregated stats for Stock
+  Menu (avoids the PostgREST 1000-row default cap).
+- **Editable Parts List** at `/service/stock/parts` (`PartsListPage`):
+  server-side search + 50-page pagination. Successive user requests
+  stripped down what was editable until the **final shape was
+  read-only with only 6 columns**: Part no · Name · Cat · Unit ·
+  Price · Qty. Brand, Cost, Reorder, Location, Active all removed
+  from the table. "Active only" filter also removed.
+- **Closing Stock XLSX sync** (`Closing_Stock_2026-05-28 claude.xlsx`):
+  - 1st pass: refreshed name + category + stock_qty for 1,615 rows.
+  - 2nd pass (deletion): user said "only follow the latest excel" —
+    deleted 79,107 rows not in the XLSX. parts_inventory dropped from
+    80,722 → 1,615.
+  - 3rd pass: synced `brand` (from XLSX `Group`) and `unit_cost`
+    (from `Amt On Hand / Qty Balance`) for the Closing Stock Report
+    Amt column to match the XLSX RM totals.
+  - 4th pass: dropped the 35 `*** DO NOT USE ***` rows → **1,580 rows
+    final**.
+- **`qty_received` + `qty_issued` numeric columns** added to
+  `parts_inventory` (NOT NULL DEFAULT 0, CHECK ≥ 0) — synced from the
+  Closing Stock XLSX. Surfaced as Recv / Issued columns on the
+  Closing Stock Report.
+- **Closing Stock Report polish** (`StockOnHandPage`):
+  - Trimmed 13 legacy columns down to 7: No · Group · Code ·
+    Description · Recv · Issued · Bal · Cost/Qty · Amt on Hand.
+  - 3 summary cards (OIL · PRT · Total) at the top, also visible in
+    print mode.
+  - **Excel export** button — UTF-8 CSV with BOM, subtotal + grand
+    total rows, opens cleanly in Excel-on-Windows.
+  - `listParts()` now `.range(0, 4999)` to bypass the 1000-row
+    PostgREST cap (silently missing ~580 rows before).
+
+### Stock Received module (`/service/stock/receive`)
+- New tables `suppliers` (23 rows from AUTFDV01.csv), `stock_receipts`
+  (bigserial `receipt_no`), `stock_receipt_items` (generated
+  `line_total`).
+- Two SECURITY DEFINER triggers:
+  - `trg_stock_receipt_item_apply` — bumps `parts_inventory.stock_qty`
+    + `qty_received` on each item INSERT.
+  - `trg_stock_receipt_rollup` — keeps `stock_receipts.total_qty +
+    total_cost` in sync.
+- **Two issue triggers** on `service_order_items`:
+  - `trg_service_order_item_stock` — symmetric subtract from
+    `stock_qty` + add to `qty_issued` on kind='part' line inserts
+    (handles UPDATE diff + DELETE revert + part_id swap + kind flip).
+- **QR / barcode scanner** (`QrScannerModal` lazy-loaded
+  ~370 KB chunk). Two modes:
+  - `mode='qr'` for DO codes: QR + Data Matrix + Aztec + PDF 417,
+    square viewfinder, fps=10, flip-detect on.
+  - `mode='barcode'` for part labels: CODE_128/93/39, CODABAR, ITF,
+    EAN, UPC, wide rectangular viewfinder (95% × 35% of frame),
+    fps=20, flip-detect off. Uses native `BarcodeDetector` API when
+    available (Chrome Android, Safari iOS 17+).
+- **Uniqueness rails on Stock Receive**:
+  - DB: partial UNIQUE INDEX on `stock_receipts.do_no WHERE do_no IS
+    NOT NULL` (`stock_receipts_do_no_unique`).
+  - FE: addLine blocks duplicate part within the same draft; save
+    handler intercepts the Postgres unique-violation and surfaces a
+    friendly DO-already-exists message.
+- Auto-fill unit cost: leaving the cost input blank uses the part
+  master's current `unit_cost`.
+
+### Inquiry hub (`/service/inquiry`)
+- New tile menu mirroring the legacy WMS Inquiry Form. Wired tiles:
+  Job Sheet/Billing History → `/service/ops`, Outstanding Payment
+  (same), Stock On Hand → closing report, Stock Purchase History (NEW
+  page), Client Account Master → **/service/customers** (workshop side),
+  Client Vehicle → `/vehicles`, **Vendor/Supplier** (NEW page),
+  **Vehicle Type** (NEW page), Parts → editable list, Lubricants →
+  same with `category=OIL`.
+- New sub-pages:
+  - **`/service/inquiry/suppliers`** (`SuppliersInquiryPage`) — list +
+    detail panel (address, contact, SST, TIN, MSIC, biz activity) +
+    inline **"+ New supplier"** form (SST format, NRIC-unique
+    handled). The legacy "GST No" was renamed to **SST No** everywhere
+    (DB column rename `suppliers.gst_no → sst_no` plus all FE labels).
+  - **`/service/inquiry/receipts`** (`StockPurchaseHistoryPage`) —
+    last 200 stock_receipts, search, expandable line items.
+  - **`/service/inquiry/vehicle-types`** (`VehicleTypesInquiryPage`)
+    — 86-row Proton model master imported from AUTFDV02.csv.
+    Includes "In shop" column counting workshop vehicles whose
+    `.model` matches (case-insensitive bidirectional substring).
+  - **`/service/customers`** (`ServiceCustomersPage`) — see service
+    customer split below.
+
+### Service customer split (Pass 2 — option B picked)
+- New `public.service_customers` table — 33-column mirror of
+  `customers` + `sales_customer_id` back-reference.
+- New nullable `service_customer_id` FK on **`vehicles`** and
+  **`service_orders`** (legacy `customer_id` kept for dual-write
+  during the transition).
+- **Backfill**: every customer referenced by an existing
+  vehicle/service_order cloned into `service_customers` and the new FK
+  populated. 0 orphans after.
+- **Auto-import trigger**: `trg_auto_import_service_on_delivery` AFTER
+  UPDATE OF status on `bookings`. When transitioning to `'delivered'`,
+  the function `auto_import_to_service_on_delivery()` clones the
+  customer (idempotent by `sales_customer_id` → `nric`), and creates
+  a `vehicles` row from the linked car's chassis + model (idempotent
+  by `chassis_no` UNIQUE). Errors swallowed via `RAISE WARNING` so a
+  malformed booking can never block its own status change.
+- `/vehicles` and `/vehicles/:id` queries prefer the
+  `service_customer` join, falling back to legacy `customer` only when
+  `service_customer_id` is null. Normalisation done in
+  `lib/vehicles.ts::normalise()` so `VehicleWithCustomer.customer`
+  stays a single field for the UI.
+
+### Vehicle type ↔ vehicle linkage
+- `vehicles.vehicle_type_id` FK added, ON DELETE SET NULL.
+- Backfill: case-insensitive bidirectional substring match between
+  `vehicles.model` and `vehicle_types.name`, shortest match wins.
+- Slate badge with `vehicle_types.code` shown next to the model on
+  the Vehicles list, full name on hover.
+- **Bulk-seeded 86 placeholder vehicles** from `vehicle_types` per
+  user request ("move all in. i will filter after that"):
+  `customer_id NOT NULL` constraint dropped, then one
+  `vehicles` row per type with `registration_no='TYPE-<code>'`,
+  `model=<full name>`, `variant=<profit_center>`, `vehicle_type_id`
+  back-linked. Easy filter: `WHERE registration_no LIKE 'TYPE-%'` or
+  `WHERE customer_id IS NULL`.
+
+### Telegram
+- **Appointment notifications already work** for `/book` submissions —
+  same trigger as 2026-05-28, fires on every `service_appointments`
+  INSERT regardless of source (public / staff / phone).
+- Group chat ID switched: vault.`telegram_service_chat_id` updated to
+  `-1003740722189` (14-char negative = group/supergroup). Bot must be
+  a member of the group.
+- `telegram_bot_token` (vault) + `TELEGRAM_BOT_TOKEN` (edge fn env)
+  both rotated to `8827323520:AAH…` and kept in sync. Note: the new
+  bot needs the same webhook re-set via `setWebhook` if you want the
+  `/inventory` `/help` command flow back.
+
+### Smaller fixes / decisions worth noting
+- `/finance` upload UI: bank statement upload is **super_admin only**
+  across all three layers (DB RLS, edge fn role check, FE conditional
+  render). FA still sees the historical list for context.
+- `+ New booking` was unwired for super_admin once during the session
+  (per a 2026-05-28 lockdown). The whole-session arc reverted that
+  decision back to permissive.
+- Several timing / lifecycle bugs in the QR scanner: facingMode wants
+  bare string (not `{ ideal: ... }`); useEffect deps were thrashing
+  on parent re-renders; surfaced as "Element with id qr-scanner-region
+  not found" → fixed by stashing onScan/onClose in refs + pinning the
+  start-effect to `[open, mode]`.
+
+### Data import in flight at session end — AUTFDJ02 / AUTFDB02
+
+User started a major service-history import (legacy WMS): owners +
+vehicles + service_orders + service_order_items. **Dry-run completed,
+user approved with "lets go with details"** but execution was
+interrupted before any writes landed.
+
+Plan when resuming:
+1. **Schema prep** (not yet applied):
+   - `ALTER TABLE public.service_orders ALTER COLUMN customer_id DROP NOT NULL`
+   - `ALTER TABLE public.service_order_items DISABLE TRIGGER trg_service_order_item_stock`
+     (otherwise the ~167k matched part lines will tank `parts_inventory.stock_qty`)
+2. **Layer 1 — owners**: 10,350 unique (name, phone) from `AUTFDJ02.csv`
+   → `public.service_customers`. Blank phones → `'0000000000'`. Idempotent
+   on (name, phone).
+3. **Layer 2 — vehicles**: 9,537 unique plates (latest jobdte wins for
+   mileage/owner). Chassis nulled when `chassis == plate` (~1,200 rows).
+   `vehicle_type_id` matched by name (~7.2% hit rate; 91/9537). Upsert
+   on `registration_no`. Existing 87 placeholders untouched (TYPE-*
+   prefix can't collide with real plates).
+4. **Layer 3 — service_orders**: 40,055 rows, no dedup. Status map
+   `CLOSED→collected, OPEN→open, DELETE→cancelled`. `customer_id=NULL`
+   (allowed after the ALTER above). `service_customer_id` looked up by
+   (name, phone). `vehicle_id` looked up by plate. Upsert on `order_no`.
+5. **Layer 4 — service_order_items**: 268,465 rows (32 orphans skipped).
+   TXNCAT map: `SRV` + `WRK` → labour; everything else (`PRT`, `OIL`,
+   `DCT`, `NSK`, `PCK`) → part. `part_id` matched by stkcde (~55.3% hit
+   rate; 1,382/2,500 distinct codes). For re-runs:
+   `DELETE FROM stock_receipt_items WHERE service_order_id IN (...)`
+   before re-insert.
+6. **Cleanup**: re-enable the stock trigger,
+   `ALTER TABLE service_order_items ENABLE TRIGGER trg_service_order_item_stock`.
+   Report row counts + match rates.
+
+Generated dry-run helpers in `/tmp/parts_import/dry/` —
+`order_nos.txt`, `makes.txt`, `codes.txt`, `q_makes.sql`, `q_codes.sql`.
+Source CSVs at `/Users/khorheeshin/Claude Fun/wms_data/AUTFDJ02.csv`
+and `AUTFDB02.csv` (latin-1 encoded).
+
 ## How to resume / hand off
 
 When you start a fresh Claude Code session in this repo, this file should appear automatically in context (Claude Code reads `CLAUDE.md` at session start). Re-read it before doing anything destructive. If a section above is out of date, fix it as you make the change — the file is the single source of truth for "what state is the system in right now."
