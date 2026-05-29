@@ -39,8 +39,9 @@ const TILES: Tile[] = [
   },
   {
     title: 'Inquiry',
-    subtitle: 'Search vehicles, jobs, and customers',
+    subtitle: 'Search vehicles, jobs, customers, suppliers, parts',
     icon: '🔍',
+    to: '/service/inquiry',
   },
   {
     title: 'Reporting',

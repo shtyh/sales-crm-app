@@ -159,6 +159,9 @@ Trigger `sync_car_status_from_booking` fires AFTER INSERT/UPDATE/DELETE on booki
 | `/reconciliation` | ReconciliationPage (3-way reconciliation queue: bank statement + LOU + bank-in + All-In-One) | finance_admin / sales_manager / super_admin |
 | `/service/stock/parts` | PartsListPage (browse + inline-edit the ~80k-row parts catalogue) | any workshop role + super_admin |
 | `/service/stock/receive` | StockReceivePage (book in a delivery — header + line items, QR-friendly DO No input) | any workshop role + super_admin |
+| `/service/inquiry` | InquiryHubPage (WMS-style tile menu for lookups) | any workshop role + super_admin |
+| `/service/inquiry/suppliers` | SuppliersInquiryPage (vendor directory + GST/TIN detail) | any workshop role + super_admin |
+| `/service/inquiry/receipts` | StockPurchaseHistoryPage (past stock receipts + items drilldown) | any workshop role + super_admin |
 
 Top nav layout (2026-05-26 cleanup):
 

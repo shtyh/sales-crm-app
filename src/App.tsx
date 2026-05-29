@@ -198,6 +198,19 @@ const StockReceivePage = lazy(() =>
     default: m.StockReceivePage,
   })),
 )
+const InquiryHubPage = lazy(() =>
+  import('./pages/InquiryHubPage').then((m) => ({ default: m.InquiryHubPage })),
+)
+const SuppliersInquiryPage = lazy(() =>
+  import('./pages/SuppliersInquiryPage').then((m) => ({
+    default: m.SuppliersInquiryPage,
+  })),
+)
+const StockPurchaseHistoryPage = lazy(() =>
+  import('./pages/StockPurchaseHistoryPage').then((m) => ({
+    default: m.StockPurchaseHistoryPage,
+  })),
+)
 
 function RouteFallback() {
   return (
@@ -531,6 +544,30 @@ function App() {
           element={
             <ProtectedRoute>
               <StockReceivePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/service/inquiry"
+          element={
+            <ProtectedRoute>
+              <InquiryHubPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/service/inquiry/suppliers"
+          element={
+            <ProtectedRoute>
+              <SuppliersInquiryPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/service/inquiry/receipts"
+          element={
+            <ProtectedRoute>
+              <StockPurchaseHistoryPage />
             </ProtectedRoute>
           }
         />
