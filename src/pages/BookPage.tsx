@@ -377,6 +377,15 @@ function SlotGrid({
     )
   }
 
+  // When the customer picks today, suppress hour slots whose start time has
+  // already passed in Asia/Kuala_Lumpur. Slot "09:00:00" → hour 9; if it's
+  // 14:30 KL time, hours <= 14 are past. We use Intl with timeZone='Asia/
+  // Kuala_Lumpur' so the comparison is correct regardless of where the
+  // visitor's browser thinks it is.
+  const kl = klNow()
+  const isToday = requestedDate === kl.dateYmd
+  const currentHourKL = kl.hour
+
   return (
     <>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -385,31 +394,40 @@ function SlotGrid({
           const taken = row?.taken ?? 0
           const capacity = row?.capacity ?? SLOT_CAPACITY
           const full = taken >= capacity
+          const slotHour = parseInt(t.slice(0, 2), 10)
+          const past = isToday && slotHour <= currentHourKL
           const selected = value === t
+          const unavailable = full || past
           return (
             <button
               key={t}
               type="button"
-              disabled={full}
+              disabled={unavailable}
               onClick={() => onChange(t)}
               className={`group relative flex flex-col items-start rounded-md border px-3 py-2 text-left transition ${
                 selected
                   ? 'border-gray-900 bg-gray-900 text-white'
-                  : full
+                  : unavailable
                     ? 'cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400'
                     : 'border-gray-300 bg-white text-gray-700 hover:border-gray-900 hover:bg-gray-50'
               }`}
               title={
-                full
-                  ? 'This slot is fully booked'
-                  : `${capacity - taken} of ${capacity} spots remaining`
+                past
+                  ? 'This time has already passed'
+                  : full
+                    ? 'This slot is fully booked'
+                    : `${capacity - taken} of ${capacity} spots remaining`
               }
             >
               <span className="text-sm font-semibold">{SLOT_LABEL[t]}</span>
               <span
                 className={`mt-0.5 text-[10px] ${selected ? 'text-gray-200' : 'text-gray-500'}`}
               >
-                {full ? 'Full' : `${capacity - taken} of ${capacity} open`}
+                {past
+                  ? 'Past'
+                  : full
+                    ? 'Full'
+                    : `${capacity - taken} of ${capacity} open`}
               </span>
             </button>
           )
@@ -420,6 +438,25 @@ function SlotGrid({
       </p>
     </>
   )
+}
+
+/** "Now" in Asia/Kuala_Lumpur as a YYYY-MM-DD string + the local hour
+ *  (0–23). Used so the slot grid can hide past times without trusting
+ *  the visitor's browser clock / timezone. */
+function klNow(): { dateYmd: string; hour: number } {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kuala_Lumpur',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(new Date())
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '00'
+  const dateYmd = `${get('year')}-${get('month')}-${get('day')}`
+  const hour = parseInt(get('hour'), 10)
+  return { dateYmd, hour }
 }
 
 function normaliseSlot(raw: string): string {

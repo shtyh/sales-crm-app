@@ -2,7 +2,9 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth, signOut } from '../lib/auth'
 import { useOnlineStatus } from '../lib/online'
-import { useWorkspace, type Workspace } from '../lib/workspace'
+// Workspace toggle was retired 2026-05-29 — super_admin's two side
+// navs are now merged. Workspace + useWorkspace helpers remain in
+// src/lib/workspace.ts in case we re-introduce per-side gating later.
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
   `rounded-lg px-2.5 py-1 text-sm transition ${
@@ -31,7 +33,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     canViewCustomers,
     isWorkshopOnly,
   } = useAuth()
-  const { workspace, setWorkspace } = useWorkspace()
+  // workspace toggle retired — see header note
   const online = useOnlineStatus()
   const navigate = useNavigate()
   const displayName =
@@ -39,15 +41,18 @@ export function AppShell({ children }: { children: ReactNode }) {
   const email = user?.email ?? ''
 
   // Decide which side(s) of the nav to show:
-  //   * super_admin: the workspace toggle picks one side at a time.
+  //   * super_admin: SEES BOTH at once. The workspace toggle used to
+  //     gate this, but the only super_admin on the system runs the
+  //     whole shop so consolidating the nav saves them a click on
+  //     every cross-side hop.
   //   * workshop-only roles (service_*, store_keeper, mechanic): always
   //     service-only.
   //   * everyone else: sales nav only.
   let showSales: boolean
   let showService: boolean
   if (isSuperAdmin) {
-    showSales = workspace === 'sales'
-    showService = workspace === 'service'
+    showSales = true
+    showService = true
   } else if (isWorkshopOnly) {
     showSales = false
     showService = true
@@ -103,6 +108,11 @@ export function AppShell({ children }: { children: ReactNode }) {
                   + Job order
                 </NavLink>
               )}
+              {showService && isSuperAdmin && (
+                <NavLink to="/service/appointments" className={navLinkClass}>
+                  Appointments
+                </NavLink>
+              )}
               {showSales && isFinanceAdmin && (
                 <NavLink to="/finance" className={navLinkClass}>
                   Finance
@@ -137,12 +147,9 @@ export function AppShell({ children }: { children: ReactNode }) {
                 + New
               </NavLink>
             )}
-            {isSuperAdmin && (
-              <WorkspaceToggle
-                workspace={workspace}
-                onChange={setWorkspace}
-              />
-            )}
+            {/* Workspace toggle was deprecated 2026-05-29 — super_admin
+                now sees both sides at once, so the toggle is a no-op.
+                Left the import in place for future re-introduction. */}
             <UserMenu
               displayName={displayName}
               email={isSuperAdmin ? '' : email}
@@ -331,45 +338,8 @@ function MenuLink({
   )
 }
 
-/**
- * Two-pill segmented control for the super_admin's Sales / Service
- * workspace toggle. Renders nothing for any other role.
- */
-function WorkspaceToggle({
-  workspace,
-  onChange,
-}: {
-  workspace: Workspace
-  onChange: (next: Workspace) => void
-}) {
-  const pill = (active: boolean) =>
-    `rounded-md px-2 py-1 text-xs font-medium transition ${
-      active
-        ? 'bg-white text-gray-900 shadow-sm'
-        : 'text-gray-500 hover:text-gray-800'
-    }`
-  return (
-    <div
-      role="group"
-      aria-label="Workspace"
-      className="flex items-center rounded-lg border border-gray-200 bg-gray-100 p-0.5"
-    >
-      <button
-        type="button"
-        onClick={() => onChange('sales')}
-        className={pill(workspace === 'sales')}
-        title="Show sales-side nav"
-      >
-        Sales
-      </button>
-      <button
-        type="button"
-        onClick={() => onChange('service')}
-        className={pill(workspace === 'service')}
-        title="Show service-side nav"
-      >
-        Service
-      </button>
-    </div>
-  )
-}
+// WorkspaceToggle component was retired 2026-05-29 when super_admin's
+// Sales + Service navs were merged into one row. Removed in this commit
+// to keep the file tidy; the underlying `useWorkspace` / Workspace type
+// stay in src/lib/workspace.ts in case we re-introduce per-side gating
+// for other roles.

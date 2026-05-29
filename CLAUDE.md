@@ -166,7 +166,7 @@ Top nav layout (2026-05-26 cleanup):
 
 * **+ New** is rendered as a primary pill on the right (not inside the nav list). Shown only when `canCreateBooking` (sales_advisor / sales_manager / super_admin).
 * **Avatar dropdown** consolidates: name / email / online dot, `/account`, super_admin shortcuts (Manage users → `/admin/users`, Commission rates → `/admin/commissions`), and Logout. Initials are derived from full_name or email; the avatar is rose-tinted for super_admin and gray for everyone else. **The email line is hidden for super_admin** (their email is intentionally not surfaced in the UI).
-* **Workspace toggle** (super_admin only) sits between + New and the avatar.
+* **Workspace toggle** RETIRED 2026-05-29. super_admin now sees the full union of Sales + Service nav in one row; the toggle was removed (and the `WorkspaceToggle` component deleted) so super_admin doesn't have to switch contexts to cross sides. `lib/workspace.ts` still exports `useWorkspace` / `Workspace` in case we re-introduce per-side gating for other roles.
 
 Primary nav links by role:
 
@@ -176,8 +176,7 @@ Primary nav links by role:
 | sales_manager | Home · Bookings · Customers · Inventory · Commissions · Verify Commission |
 | general_admin | Home · Bookings · Customers · Inventory |
 | finance_admin | Bookings · Inventory · Finance (Home link hidden — Finance is the landing) |
-| super_admin (Sales workspace) | Home · Bookings · Customers · Inventory · Commissions · + New |
-| super_admin (Service workspace) | Home · + Job order (Vehicles reached via Housekeeping tile) |
+| super_admin | Home · Bookings · Customers · Inventory · Finance · Reconcile · Commissions · + Job order · Appointments · + New (no workspace toggle — sees the full union of both sides 2026-05-29) |
 | workshop roles | Home · + Job order (Vehicles reached via Housekeeping tile) |
 
 (super_admin's `Rates` link moved into the avatar dropdown; the old "★ Super Admin" pill is gone — its destination lives in the dropdown's Manage users entry.)
@@ -541,7 +540,12 @@ Primary nav links by role:
   Routes (split into public + staff):
   - `/book` (public, **no login**) — standalone form using
     `useAvailableSlots(date)` to render the slot grid; customer picks
-    one of the 8 hour slots (full ones disabled) and submits.
+    one of the 8 hour slots (full ones disabled) and submits. When the
+    picked date is today (Asia/Kuala_Lumpur), any slot whose start
+    hour has already passed renders as "Past" and is disabled — see
+    `klNow()` helper in BookPage.tsx (uses `Intl.DateTimeFormat` with
+    `timeZone='Asia/Kuala_Lumpur'` so the comparison is correct
+    regardless of the visitor's browser tz).
   - `/book/:token` (public) — confirmation read-back. Pending shows
     amber, confirmed shows green with "Confirmed for <date> at <time>"
     and the booking summary in read-only mode (the "slot lock").
