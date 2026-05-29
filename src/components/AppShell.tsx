@@ -1,10 +1,22 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Link, NavLink, useNavigate } from 'react-router-dom'
+import {
+  Link,
+  NavLink,
+  useLocation,
+  useNavigate,
+} from 'react-router-dom'
 import { useAuth, signOut } from '../lib/auth'
 import { useOnlineStatus } from '../lib/online'
-// Workspace toggle was retired 2026-05-29 — super_admin's two side
-// navs are now merged. Workspace + useWorkspace helpers remain in
-// src/lib/workspace.ts in case we re-introduce per-side gating later.
+
+/** URL prefixes that mean "we're on the workshop / service side." Used to
+ *  flip the nav into Service mode without needing a separate workspace
+ *  state — the current route IS the workspace. */
+const SERVICE_PREFIXES = ['/service', '/service-orders', '/vehicles']
+function isServicePath(pathname: string): boolean {
+  return SERVICE_PREFIXES.some(
+    (p) => pathname === p || pathname.startsWith(p + '/') || pathname.startsWith(p + '?'),
+  )
+}
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
   `rounded-lg px-2.5 py-1 text-sm transition ${
@@ -33,27 +45,28 @@ export function AppShell({ children }: { children: ReactNode }) {
     canViewCustomers,
     isWorkshopOnly,
   } = useAuth()
-  // workspace toggle retired — see header note
+  const location = useLocation()
   const online = useOnlineStatus()
   const navigate = useNavigate()
+  const onServicePath = isServicePath(location.pathname)
   const displayName =
     (user?.user_metadata?.full_name as string | undefined) ?? user?.email ?? ''
   const email = user?.email ?? ''
 
-  // Decide which side(s) of the nav to show:
-  //   * super_admin: SEES BOTH at once. The workspace toggle used to
-  //     gate this, but the only super_admin on the system runs the
-  //     whole shop so consolidating the nav saves them a click on
-  //     every cross-side hop.
-  //   * workshop-only roles (service_*, store_keeper, mechanic): always
-  //     service-only.
-  //   * everyone else: sales nav only.
+  // Decide which side of the nav to show. Driven by the current URL so
+  // the workshop nav only shows up on workshop pages, and vice-versa.
+  //   * workshop-only roles: always service.
+  //   * super_admin + any other admin on a /service* URL: service nav.
+  //   * everyone else: sales nav.
+  // For super_admin the SideSwitcher pill (rendered near the avatar)
+  // lets them hop between sides explicitly; for other roles the route
+  // guards already gate them out of the wrong side.
   let showSales: boolean
   let showService: boolean
-  if (isSuperAdmin) {
-    showSales = true
+  if (isWorkshopOnly) {
+    showSales = false
     showService = true
-  } else if (isWorkshopOnly) {
+  } else if (onServicePath) {
     showSales = false
     showService = true
   } else {
@@ -147,9 +160,14 @@ export function AppShell({ children }: { children: ReactNode }) {
                 + New
               </NavLink>
             )}
-            {/* Workspace toggle was deprecated 2026-05-29 — super_admin
-                now sees both sides at once, so the toggle is a no-op.
-                Left the import in place for future re-introduction. */}
+            {isSuperAdmin && (
+              <SideSwitcher
+                onService={onServicePath}
+                onSwitch={(to) =>
+                  navigate(to === 'service' ? '/service/appointments' : '/')
+                }
+              />
+            )}
             <UserMenu
               displayName={displayName}
               email={isSuperAdmin ? '' : email}
@@ -338,8 +356,49 @@ function MenuLink({
   )
 }
 
-// WorkspaceToggle component was retired 2026-05-29 when super_admin's
-// Sales + Service navs were merged into one row. Removed in this commit
-// to keep the file tidy; the underlying `useWorkspace` / Workspace type
-// stay in src/lib/workspace.ts in case we re-introduce per-side gating
-// for other roles.
+/**
+ * Two-pill segmented control for super_admin to hop between the Sales
+ * landing (`/`) and the Service appointments view (`/service/appointments`).
+ * The nav itself derives its side from the URL (`onServicePath`), so this
+ * pill is purely a *navigation* action — not a state toggle. Re-introduced
+ * 2026-05-29 after the URL-driven nav split shipped, so super_admin still
+ * has a one-click way to cross sides.
+ */
+function SideSwitcher({
+  onService,
+  onSwitch,
+}: {
+  onService: boolean
+  onSwitch: (to: 'sales' | 'service') => void
+}) {
+  const pill = (active: boolean) =>
+    `rounded-md px-2 py-1 text-xs font-medium transition ${
+      active
+        ? 'bg-white text-gray-900 shadow-sm'
+        : 'text-gray-500 hover:text-gray-800'
+    }`
+  return (
+    <div
+      role="group"
+      aria-label="Workspace"
+      className="flex items-center rounded-lg border border-gray-200 bg-gray-100 p-0.5"
+    >
+      <button
+        type="button"
+        onClick={() => onSwitch('sales')}
+        className={pill(!onService)}
+        title="Go to Sales home"
+      >
+        Sales
+      </button>
+      <button
+        type="button"
+        onClick={() => onSwitch('service')}
+        className={pill(onService)}
+        title="Go to Service appointments"
+      >
+        Service
+      </button>
+    </div>
+  )
+}

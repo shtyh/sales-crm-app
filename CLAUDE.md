@@ -167,7 +167,8 @@ Top nav layout (2026-05-26 cleanup):
 
 * **+ New** is rendered as a primary pill on the right (not inside the nav list). Shown only when `canCreateBooking` (sales_advisor / sales_manager / super_admin).
 * **Avatar dropdown** consolidates: name / email / online dot, `/account`, super_admin shortcuts (Manage users → `/admin/users`, Commission rates → `/admin/commissions`), and Logout. Initials are derived from full_name or email; the avatar is rose-tinted for super_admin and gray for everyone else. **The email line is hidden for super_admin** (their email is intentionally not surfaced in the UI).
-* **Workspace toggle** RETIRED 2026-05-29. super_admin now sees the full union of Sales + Service nav in one row; the toggle was removed (and the `WorkspaceToggle` component deleted) so super_admin doesn't have to switch contexts to cross sides. `lib/workspace.ts` still exports `useWorkspace` / `Workspace` in case we re-introduce per-side gating for other roles.
+* **Nav is URL-driven** (2026-05-29). The visible nav links flip between Sales and Service based on the current `useLocation().pathname`. Service prefixes: `/service*`, `/service-orders*`, `/vehicles*`. Everything else is Sales. So a super_admin standing on `/service/appointments` only sees Service links; one click to `/bookings` puts them back on the Sales nav. Workshop-only roles are always pinned to Service via the existing route guards.
+* **SideSwitcher pill** (super_admin only) — re-introduced near the avatar after the union-nav experiment. Two pills "Sales / Service"; clicking each navigates to that side's landing (`/` for Sales, `/service/appointments` for Service). It's purely a navigation action — the active state is derived from the URL, not from stored workspace state.
 
 Primary nav links by role:
 
@@ -177,7 +178,8 @@ Primary nav links by role:
 | sales_manager | Home · Bookings · Customers · Inventory · Commissions · Verify Commission |
 | general_admin | Home · Bookings · Customers · Inventory |
 | finance_admin | Bookings · Inventory · Finance (Home link hidden — Finance is the landing) |
-| super_admin | Home · Bookings · Customers · Inventory · Finance · Reconcile · Commissions · + Job order · Appointments · + New (no workspace toggle — sees the full union of both sides 2026-05-29) |
+| super_admin (Sales URL) | Home · Bookings · Customers · Inventory · Finance · Reconcile · Commissions · + New |
+| super_admin (Service URL) | Home · + Job order · Appointments |
 | workshop roles | Home · + Job order (Vehicles reached via Housekeeping tile) |
 
 (super_admin's `Rates` link moved into the avatar dropdown; the old "★ Super Admin" pill is gone — its destination lives in the dropdown's Manage users entry.)
