@@ -126,6 +126,14 @@ export function StockReceivePage() {
         setLineError(`No part found with code "${code}".`)
         return
       }
+      // Block duplicate part_no within the same receipt — the operator
+      // should bump the existing line's qty instead.
+      if (lines.some((l) => l.part.id === part.id)) {
+        setLineError(
+          `Part ${part.part_no} is already on this receipt. Adjust the existing line instead.`,
+        )
+        return
+      }
       // Default the unit cost to the part master's current value when the
       // operator leaves the field blank. Any explicitly typed value wins
       // (including 0, for free items / samples). Negative values are
@@ -202,7 +210,22 @@ export function StockReceivePage() {
       })
       codeInputRef.current?.focus()
     } catch (err) {
-      setSubmitErr(formatError(err))
+      // Postgres unique-violation on stock_receipts_do_no_unique surfaces
+      // as supabase code 23505 with the constraint name in the message.
+      // Repackage it as a one-line, operator-friendly explanation.
+      const raw =
+        err && typeof err === 'object'
+          ? ((err as { code?: string; message?: string }).code ?? '') +
+            ' ' +
+            ((err as { message?: string }).message ?? '')
+          : ''
+      if (raw.includes('stock_receipts_do_no_unique')) {
+        setSubmitErr(
+          `DO number "${draft.do_no}" has already been received on another receipt. Each DO can only be booked in once.`,
+        )
+      } else {
+        setSubmitErr(formatError(err))
+      }
     }
   }
 
