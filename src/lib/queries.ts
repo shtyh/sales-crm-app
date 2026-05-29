@@ -59,7 +59,15 @@ import {
   rejectAppointment,
   submitAppointment,
 } from './serviceAppointments'
-import { listParts } from './parts'
+import {
+  PARTS_PAGE_SIZE,
+  getPartsStats,
+  listParts,
+  searchParts,
+  updatePart,
+  type PartPatch,
+  type PartsStats,
+} from './parts'
 import { listTechnicians } from './technicians'
 import { listPayments } from './payments'
 import { listInvoices } from './invoices'
@@ -156,6 +164,8 @@ export const qk = {
   serviceOrderItems: (orderId: string) =>
     ['service-orders', orderId, 'items'] as const,
   parts: ['parts'] as const,
+  partsSearch: (q: string, page: number, cat: string, activeOnly: boolean) =>
+    ['parts', 'search', { q, page, cat, activeOnly }] as const,
   technicians: ['technicians'] as const,
   payments: ['payments'] as const,
   invoices: ['invoices'] as const,
@@ -942,6 +952,55 @@ export function useRematchVerification() {
 // Re-export the type so the page can import everything from queries.ts and
 // not have to know about the lower-level module.
 export type { CommissionVerification }
+
+// ---------- Parts inventory: search + edit -------------------------------
+
+export { PARTS_PAGE_SIZE }
+export type { PartPatch, PartsStats }
+
+export function usePartsStats(enabled = true) {
+  return useQuery<PartsStats>({
+    queryKey: ['parts', 'stats'],
+    queryFn: getPartsStats,
+    enabled,
+    staleTime: 30_000,
+  })
+}
+
+export function usePartsSearch(params: {
+  q: string
+  page: number
+  category?: 'OIL' | 'PRT' | ''
+  activeOnly?: boolean
+}) {
+  const cat = params.category ?? ''
+  const activeOnly = params.activeOnly ?? false
+  return useQuery({
+    queryKey: qk.partsSearch(params.q, params.page, cat, activeOnly),
+    queryFn: () =>
+      searchParts({
+        q: params.q,
+        page: params.page,
+        category: params.category,
+        activeOnly: params.activeOnly,
+      }),
+    // 80k rows table — keep results around so paginating back doesn't refetch.
+    staleTime: 30_000,
+  })
+}
+
+export function useUpdatePart() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: PartPatch }) =>
+      updatePart(id, patch),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.parts })
+      qc.invalidateQueries({ queryKey: ['parts', 'search'] })
+      qc.invalidateQueries({ queryKey: ['parts', 'stats'] })
+    },
+  })
+}
 
 // ---------- Reconciliation ------------------------------------------------
 

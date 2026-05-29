@@ -1,7 +1,7 @@
 import { Link, Navigate } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
 import { useAuth } from '../lib/auth'
-import { useParts } from '../lib/queries'
+import { usePartsStats } from '../lib/queries'
 
 type Tile = {
   title: string
@@ -29,24 +29,17 @@ export function StockMenuPage() {
   const { canAccessService } = useAuth()
   if (canAccessService === false) return <Navigate to="/" replace />
 
-  // Quick stats sourced from parts_inventory so the page has something
-  // useful at-a-glance while the rest of the tiles are still placeholders.
-  const { data: parts } = useParts()
-  const totals = (() => {
-    let total = 0
-    let active = 0
-    let valueRm = 0
-    let lowStock = 0
-    for (const p of parts ?? []) {
-      total++
-      if (p.is_active) active++
-      const cost = Number(p.unit_cost) || 0
-      const qty = Number(p.stock_qty) || 0
-      valueRm += qty * cost
-      if (p.is_active && qty <= (Number(p.reorder_level) || 0)) lowStock++
-    }
-    return { total, active, valueRm, lowStock }
-  })()
+  // Server-aggregated stats. parts_inventory is ~80k rows after the
+  // AUTFTP02 import — fetching the catalogue just to count it would blow
+  // the PostgREST 1000-row cap and silently misreport. SQL aggregate via
+  // parts_inventory_stats() RPC instead.
+  const { data: stats } = usePartsStats()
+  const totals = {
+    total: stats?.total ?? 0,
+    active: stats?.active ?? 0,
+    valueRm: stats?.value_rm ?? 0,
+    lowStock: stats?.low_stock ?? 0,
+  }
 
   const tiles: Tile[] = [
     {
@@ -59,7 +52,7 @@ export function StockMenuPage() {
       title: 'Parts List',
       subtitle: 'Browse + edit the part catalogue',
       icon: '📋',
-      to: '/service/stock/closing',
+      to: '/service/stock/parts',
     },
     {
       title: 'Purchase Order',

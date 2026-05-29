@@ -157,6 +157,7 @@ Trigger `sync_car_status_from_booking` fires AFTER INSERT/UPDATE/DELETE on booki
 | `/admin/attendance` | TeamAttendancePage (today + month-by-employee, **org-chart scoped**) | super_admin / sales_manager / service_manager only (others redirected to `/attendance`) |
 | `/commission-verify` | CommissionVerifyPage (upload All-In-One photo → Gemini extracts → auto-match to booking → discrepancy table) | sales_advisor / sales_manager / super_admin (nav link shown to SA+SM only) |
 | `/reconciliation` | ReconciliationPage (3-way reconciliation queue: bank statement + LOU + bank-in + All-In-One) | finance_admin / sales_manager / super_admin |
+| `/service/stock/parts` | PartsListPage (browse + inline-edit the ~80k-row parts catalogue) | any workshop role + super_admin |
 
 Top nav layout (2026-05-26 cleanup):
 
@@ -501,7 +502,31 @@ Primary nav links by role:
   the Closing Stock report. The legacy stock XLS (`restk-closingstk
   .xls`, 1,615 rows) was imported via batched upserts into
   `parts_inventory` so the Inventory Search modal on the Billing
-  screen has a working catalogue.
+  screen has a working catalogue. **Superseded on 2026-05-29 by the
+  full AUTFTP02 catalogue import — now ~80k rows.**
+
+- **Full WMS parts catalogue + editable Parts List** (2026-05-29) —
+  imported `AUTFTP02.csv` (80,680 rows) into `parts_inventory` via
+  41 batched upserts (`supabase db query --linked -f batch_NNNN.sql`,
+  build script at `/tmp/parts_import/build.py`). Mapping:
+  `P02_SPART → part_no`, `P02_NAME → name`, `P02_PGROUP → brand`,
+  `P02_UOM → unit` (default 'PC'), `P02_CPRICE → unit_cost`,
+  `P02_LPRICE1 → unit_price`, `StockOnHand → stock_qty`,
+  `P02_ReOrder → reorder_level`, `P02_Location + P02_Bin → location`.
+  Category defaults to 'PRT'; names matching OIL / LUBE / GREASE /
+  COOLANT / ATF / DEXRON auto-flip to 'OIL' (2,122 rows).
+  - New page `/service/stock/parts` (`PartsListPage`) with
+    server-side search (part_no OR name, debounced 250ms),
+    category + active-only filters, 50/page pagination, and
+    **inline cell editing**: click any field, blur to save. Hooks:
+    `searchParts` + `updatePart` + `usePartsStats` in
+    `src/lib/parts.ts`. Non-SA roles can edit (matches
+    `parts_inventory` RLS).
+  - `parts_inventory_stats()` SECURITY DEFINER RPC backs the Stock
+    Menu's headline counters — server-side aggregate so we don't
+    blow the PostgREST 1000-row default cap. Authenticated execute.
+  - StockMenu "Parts List" tile now points at the new page (was
+    aliased to the Closing Stock report).
 
 - **Telegram service-team notifications** (2026-05-28) — every new
   `service_appointments` row fires a Telegram `sendMessage` via
