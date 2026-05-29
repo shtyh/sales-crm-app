@@ -130,15 +130,15 @@ export function PartsListPage() {
         <div className="overflow-x-auto rounded-2xl border border-gray-200 bg-white shadow-sm">
           <table className="min-w-full divide-y divide-gray-200 text-sm">
             <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+              {/* Column lockdown (2026-05-29): name / cat / price / qty
+                  are display-only; brand + cost dropped from the table. */}
               <tr>
                 <Th>Part no</Th>
                 <Th>Name</Th>
-                <Th>Brand</Th>
                 <Th>Cat</Th>
                 <Th>Unit</Th>
-                <Th right>Cost</Th>
                 <Th right>Price</Th>
-                <Th right>On hand</Th>
+                <Th right>Qty</Th>
                 <Th right>Reorder</Th>
                 <Th>Location</Th>
                 <Th>Active</Th>
@@ -147,14 +147,14 @@ export function PartsListPage() {
             <tbody className="divide-y divide-gray-100">
               {isLoading && (
                 <tr>
-                  <td colSpan={11} className="px-3 py-6 text-center text-xs text-gray-500">
+                  <td colSpan={9} className="px-3 py-6 text-center text-xs text-gray-500">
                     Loading…
                   </td>
                 </tr>
               )}
               {!isLoading && data && data.rows.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="px-3 py-6 text-center text-xs text-gray-500">
+                  <td colSpan={9} className="px-3 py-6 text-center text-xs text-gray-500">
                     No parts match the current filter.
                   </td>
                 </tr>
@@ -210,50 +210,27 @@ function PartRow({ part, disabled }: { part: Part; disabled: boolean }) {
     )
   }
 
+  // Editable cells: Unit, Reorder, Location, Active.
+  // Read-only (display): Part no, Name, Cat, Price, Qty (was On hand).
+  // Removed columns (per 2026-05-29 lockdown): Brand, Cost.
   return (
     <tr className="hover:bg-gray-50/60">
       <td className="whitespace-nowrap px-2 py-1 font-mono text-[11px] text-gray-700">
         {part.part_no}
       </td>
-      <Cell
-        value={part.name}
-        disabled={disabled}
-        onSave={(v) => save({ name: v })}
-        className="min-w-[14rem]"
-      />
-      <Cell
-        value={part.brand ?? ''}
-        disabled={disabled}
-        onSave={(v) => save({ brand: v || null })}
-      />
-      <SelectCell
-        value={part.category}
-        disabled={disabled}
-        options={['PRT', 'OIL']}
-        onSave={(v) => save({ category: v as 'OIL' | 'PRT' })}
-      />
+      <td className="min-w-[14rem] px-2 py-1 text-gray-900">{part.name}</td>
+      <td className="px-2 py-1 text-gray-700">{part.category}</td>
       <Cell
         value={part.unit}
         disabled={disabled}
         onSave={(v) => save({ unit: v || 'PC' })}
       />
-      <NumberCell
-        value={part.unit_cost}
-        disabled={disabled}
-        onSave={(v) => save({ unit_cost: v })}
-        money
-      />
-      <NumberCell
-        value={part.unit_price}
-        disabled={disabled}
-        onSave={(v) => save({ unit_price: v })}
-        money
-      />
-      <NumberCell
-        value={part.stock_qty}
-        disabled={disabled}
-        onSave={(v) => save({ stock_qty: v })}
-      />
+      <td className="whitespace-nowrap px-2 py-1 text-right tabular-nums text-gray-700">
+        {formatMoney(part.unit_price)}
+      </td>
+      <td className="whitespace-nowrap px-2 py-1 text-right tabular-nums text-gray-700">
+        {formatQty(part.stock_qty)}
+      </td>
       <NumberCell
         value={part.reorder_level}
         disabled={disabled}
@@ -273,12 +250,24 @@ function PartRow({ part, disabled }: { part: Part; disabled: boolean }) {
         />
       </td>
       {error && (
-        <td colSpan={11} className="px-2 py-1 text-[10px] text-rose-700">
+        <td colSpan={9} className="px-2 py-1 text-[10px] text-rose-700">
           {error}
         </td>
       )}
     </tr>
   )
+}
+
+function formatMoney(n: number): string {
+  return n.toLocaleString('en-MY', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+}
+
+function formatQty(n: number): string {
+  // Quantity is whole units in practice; trim trailing zeros.
+  return Number.isInteger(n) ? n.toString() : n.toString()
 }
 
 // ─── Editable cells ────────────────────────────────────────────────────────
@@ -363,34 +352,8 @@ function NumberCell({
   )
 }
 
-function SelectCell({
-  value,
-  disabled,
-  options,
-  onSave,
-}: {
-  value: string
-  disabled: boolean
-  options: string[]
-  onSave: (v: string) => void
-}) {
-  return (
-    <td className="px-2 py-1">
-      <select
-        value={value}
-        disabled={disabled}
-        onChange={(e) => onSave(e.target.value)}
-        className={inputClass}
-      >
-        {options.map((o) => (
-          <option key={o} value={o}>
-            {o}
-          </option>
-        ))}
-      </select>
-    </td>
-  )
-}
+// SelectCell removed 2026-05-29 when category became read-only. Keep the
+// pattern in git history if we ever re-introduce inline-edit dropdowns.
 
 function Th({
   children,
