@@ -130,8 +130,9 @@ export function PartsListPage() {
         <div className="overflow-x-auto rounded-2xl border border-gray-200 bg-white shadow-sm">
           <table className="min-w-full divide-y divide-gray-200 text-sm">
             <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
-              {/* Column lockdown (2026-05-29): name / cat / price / qty
-                  are display-only; brand + cost dropped from the table. */}
+              {/* Column lockdown (2026-05-29): Unit is the only
+                  editable cell. Reorder / Location / Active were
+                  dropped from the table view at the same pass. */}
               <tr>
                 <Th>Part no</Th>
                 <Th>Name</Th>
@@ -139,22 +140,19 @@ export function PartsListPage() {
                 <Th>Unit</Th>
                 <Th right>Price</Th>
                 <Th right>Qty</Th>
-                <Th right>Reorder</Th>
-                <Th>Location</Th>
-                <Th>Active</Th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {isLoading && (
                 <tr>
-                  <td colSpan={9} className="px-3 py-6 text-center text-xs text-gray-500">
+                  <td colSpan={6} className="px-3 py-6 text-center text-xs text-gray-500">
                     Loading…
                   </td>
                 </tr>
               )}
               {!isLoading && data && data.rows.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="px-3 py-6 text-center text-xs text-gray-500">
+                  <td colSpan={6} className="px-3 py-6 text-center text-xs text-gray-500">
                     No parts match the current filter.
                   </td>
                 </tr>
@@ -210,9 +208,10 @@ function PartRow({ part, disabled }: { part: Part; disabled: boolean }) {
     )
   }
 
-  // Editable cells: Unit, Reorder, Location, Active.
-  // Read-only (display): Part no, Name, Cat, Price, Qty (was On hand).
-  // Removed columns (per 2026-05-29 lockdown): Brand, Cost.
+  // Editable cells: Unit.
+  // Read-only (display): Part no, Name, Cat, Price, Qty.
+  // Removed columns (2026-05-29 lockdown): Brand, Cost, Reorder,
+  // Location, Active.
   return (
     <tr className="hover:bg-gray-50/60">
       <td className="whitespace-nowrap px-2 py-1 font-mono text-[11px] text-gray-700">
@@ -231,26 +230,8 @@ function PartRow({ part, disabled }: { part: Part; disabled: boolean }) {
       <td className="whitespace-nowrap px-2 py-1 text-right tabular-nums text-gray-700">
         {formatQty(part.stock_qty)}
       </td>
-      <NumberCell
-        value={part.reorder_level}
-        disabled={disabled}
-        onSave={(v) => save({ reorder_level: v })}
-      />
-      <Cell
-        value={part.location ?? ''}
-        disabled={disabled}
-        onSave={(v) => save({ location: v || null })}
-      />
-      <td className="whitespace-nowrap px-2 py-1 text-center">
-        <input
-          type="checkbox"
-          checked={part.is_active}
-          disabled={disabled}
-          onChange={(e) => save({ is_active: e.target.checked })}
-        />
-      </td>
       {error && (
-        <td colSpan={9} className="px-2 py-1 text-[10px] text-rose-700">
+        <td colSpan={6} className="px-2 py-1 text-[10px] text-rose-700">
           {error}
         </td>
       )}
@@ -309,51 +290,10 @@ function Cell({
   )
 }
 
-function NumberCell({
-  value,
-  disabled,
-  onSave,
-  money,
-}: {
-  value: number
-  disabled: boolean
-  onSave: (v: number) => void
-  money?: boolean
-}) {
-  const [v, setV] = useState(String(value))
-  const initial = useRef(value)
-  useEffect(() => {
-    setV(String(value))
-    initial.current = value
-  }, [value])
-
-  return (
-    <td className="px-2 py-1 text-right tabular-nums">
-      <input
-        type="number"
-        inputMode="decimal"
-        step={money ? '0.01' : '1'}
-        min={0}
-        value={v}
-        disabled={disabled}
-        onChange={(e) => setV(e.target.value)}
-        onBlur={() => {
-          const n = Number(v)
-          if (Number.isFinite(n) && n >= 0 && n !== initial.current) {
-            initial.current = n
-            onSave(n)
-          } else if (!Number.isFinite(n) || n < 0) {
-            setV(String(initial.current))
-          }
-        }}
-        className={inputClass + ' w-20 text-right'}
-      />
-    </td>
-  )
-}
-
-// SelectCell removed 2026-05-29 when category became read-only. Keep the
-// pattern in git history if we ever re-introduce inline-edit dropdowns.
+// NumberCell + SelectCell removed 2026-05-29 with the final column
+// lockdown — only Unit (text) is editable in the table view now.
+// Both patterns are preserved in git history if we re-introduce
+// inline-edit numerics / dropdowns later.
 
 function Th({
   children,
