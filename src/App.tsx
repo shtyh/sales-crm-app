@@ -2,7 +2,8 @@ import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { useAuth } from './lib/auth'
-import { useWorkspace } from './lib/workspace'
+// useWorkspace retired 2026-05-29 — nav is URL-driven now; the helper
+// stays in src/lib/workspace.ts in case we re-introduce per-side gating.
 import './App.css'
 
 // Workshop roles get the service dashboard as their home. super_admin
@@ -216,19 +217,16 @@ function RouteFallback() {
  */
 function RoleHome() {
   const { role, isAdmin } = useAuth()
-  const { workspace } = useWorkspace()
-
-  // Every workshop role — service_advisor, service_manager, store_keeper,
-  // mechanic — lands on the WMS-style tile menu so they all see the
-  // same home. The advisor's own queue is one click into Job Sheet /
-  // Billing from there.
+  // Workspace state was retired 2026-05-29 in favour of URL-driven nav.
+  // RoleHome only fires at `/`, which we treat as the Sales-side home; if
+  // super_admin wants the workshop dashboard they navigate to `/service`
+  // (the explicit ServiceDashboardPage route in App.tsx). Reading
+  // useWorkspace() here was leaving stale state from the deprecated
+  // toggle, so users coming back to / kept seeing the Service tiles.
   if (
     role &&
     (WORKSHOP_ROLES as readonly string[]).includes(role)
   ) {
-    return <ServiceDashboardPage />
-  }
-  if (role === 'super_admin' && workspace === 'service') {
     return <ServiceDashboardPage />
   }
   if (role === 'finance_admin') return <Navigate to="/finance" replace />
