@@ -211,6 +211,11 @@ const StockPurchaseHistoryPage = lazy(() =>
     default: m.StockPurchaseHistoryPage,
   })),
 )
+const VehicleTypesInquiryPage = lazy(() =>
+  import('./pages/VehicleTypesInquiryPage').then((m) => ({
+    default: m.VehicleTypesInquiryPage,
+  })),
+)
 
 function RouteFallback() {
   return (
@@ -568,6 +573,14 @@ function App() {
           element={
             <ProtectedRoute>
               <StockPurchaseHistoryPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/service/inquiry/vehicle-types"
+          element={
+            <ProtectedRoute>
+              <VehicleTypesInquiryPage />
             </ProtectedRoute>
           }
         />

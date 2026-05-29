@@ -162,6 +162,7 @@ Trigger `sync_car_status_from_booking` fires AFTER INSERT/UPDATE/DELETE on booki
 | `/service/inquiry` | InquiryHubPage (WMS-style tile menu for lookups) | any workshop role + super_admin |
 | `/service/inquiry/suppliers` | SuppliersInquiryPage (vendor directory + SST/TIN detail, "+ New supplier" form) | any workshop role + super_admin |
 | `/service/inquiry/receipts` | StockPurchaseHistoryPage (past stock receipts + items drilldown) | any workshop role + super_admin |
+| `/service/inquiry/vehicle-types` | VehicleTypesInquiryPage (Proton model master from AUTFDV02 · 86 variants) | any workshop role + super_admin |
 
 Top nav layout (2026-05-26 cleanup):
 

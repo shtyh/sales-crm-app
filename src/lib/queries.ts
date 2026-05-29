@@ -105,6 +105,11 @@ import {
   searchPartsForCode,
   type NewSupplier,
 } from './stockReceive'
+import {
+  createVehicleType,
+  listVehicleTypes,
+  type NewVehicleType,
+} from './vehicleTypes'
 import type {
   Attachment,
   Attendance,
@@ -129,6 +134,8 @@ import type {
   StockReceipt,
   StockReceiptRow,
   Supplier,
+  VehicleType,
+  VehicleTypeWithCount,
   Customer,
   CustomerInsert,
   ExtractedAllInOne,
@@ -1033,6 +1040,28 @@ export function useCreateSupplier() {
     mutationFn: (input: NewSupplier) => createSupplier(input),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['suppliers'] })
+    },
+  })
+}
+
+// ---------- Vehicle Types -------------------------------------------------
+
+export function useVehicleTypes(enabled = true) {
+  return useQuery<VehicleTypeWithCount[]>({
+    queryKey: ['vehicle-types'],
+    queryFn: listVehicleTypes,
+    enabled,
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+export function useCreateVehicleType() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: NewVehicleType) => createVehicleType(input),
+    onSuccess: (created: VehicleType) => {
+      qc.invalidateQueries({ queryKey: ['vehicle-types'] })
+      return created
     },
   })
 }

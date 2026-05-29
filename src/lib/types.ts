@@ -446,6 +446,26 @@ export const PART_CATEGORY_LABEL: Record<PartCategory, string> = {
   PRT: 'PRT',
 }
 
+// ----- Vehicle Types master ----------------------------------------------
+
+export type VehicleType = {
+  id: string
+  code: string
+  name: string
+  profit_center: string | null
+  legacy_modified: string | null
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export type VehicleTypeWithCount = VehicleType & {
+  /** How many workshop `vehicles` rows have a `model` matching this type's
+   *  name (case-insensitive substring). Lets the inquiry page surface a
+   *  rough "how many of these are in our shop" count without a schema FK. */
+  vehicle_count: number
+}
+
 // ----- Stock Receive module -----------------------------------------------
 
 export type Supplier = {

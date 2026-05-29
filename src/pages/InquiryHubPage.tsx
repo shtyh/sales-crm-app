@@ -88,6 +88,12 @@ const SECTIONS: Section[] = [
         to: '/vehicles',
       },
       {
+        title: 'Vehicle Type',
+        subtitle: 'Proton model master · 86 variants',
+        icon: '🏷️',
+        to: '/service/inquiry/vehicle-types',
+      },
+      {
         title: 'Vendor / Supplier',
         subtitle: 'Supplier master · address, contact, SST',
         icon: '🏭',
