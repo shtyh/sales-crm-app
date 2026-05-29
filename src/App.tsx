@@ -216,6 +216,11 @@ const VehicleTypesInquiryPage = lazy(() =>
     default: m.VehicleTypesInquiryPage,
   })),
 )
+const ServiceCustomersPage = lazy(() =>
+  import('./pages/ServiceCustomersPage').then((m) => ({
+    default: m.ServiceCustomersPage,
+  })),
+)
 
 function RouteFallback() {
   return (
@@ -581,6 +586,14 @@ function App() {
           element={
             <ProtectedRoute>
               <VehicleTypesInquiryPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/service/customers"
+          element={
+            <ProtectedRoute>
+              <ServiceCustomersPage />
             </ProtectedRoute>
           }
         />

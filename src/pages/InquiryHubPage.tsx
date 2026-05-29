@@ -77,9 +77,10 @@ const SECTIONS: Section[] = [
     tiles: [
       {
         title: 'Client Account Master',
-        subtitle: 'Customers — search by name / IC / phone',
+        subtitle:
+          'Service customers — auto-cloned on delivery + manual entry',
         icon: '👤',
-        to: '/customers',
+        to: '/service/customers',
       },
       {
         title: 'Client Vehicle',

@@ -446,6 +446,44 @@ export const PART_CATEGORY_LABEL: Record<PartCategory, string> = {
   PRT: 'PRT',
 }
 
+// ----- Service customers --------------------------------------------------
+//
+// Workshop-side mirror of the sales customers table. Populated by the
+// auto-import trigger on bookings.status='delivered', plus manual inserts
+// via /service/customers. NEVER reference public.customers from workshop
+// queries — go through service_customers.
+
+export type ServiceCustomer = {
+  id: string
+  sales_customer_id: string | null
+  name: string
+  nric: string | null
+  phone: string
+  email: string | null
+  address: string | null
+  city: string | null
+  state: string | null
+  post_code: string | null
+  phone2: string | null
+  fax_no: string | null
+  tin_no: string | null
+  tax_no: string | null
+  sex: string | null
+  race: string | null
+  marital_status: string | null
+  birthday: string | null
+  sales_dealer: string | null
+  status: string
+  customer_type: string
+  created_at: string
+  updated_at: string
+}
+
+export type ServiceCustomerWithCounts = ServiceCustomer & {
+  vehicle_count: number
+  job_count: number
+}
+
 // ----- Vehicle Types master ----------------------------------------------
 
 export type VehicleType = {

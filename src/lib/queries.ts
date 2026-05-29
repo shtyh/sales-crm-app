@@ -110,6 +110,11 @@ import {
   listVehicleTypes,
   type NewVehicleType,
 } from './vehicleTypes'
+import {
+  createServiceCustomer,
+  listServiceCustomers,
+  type NewServiceCustomer,
+} from './serviceCustomers'
 import type {
   Attachment,
   Attendance,
@@ -133,6 +138,8 @@ import type {
   NewStockReceipt,
   StockReceipt,
   StockReceiptRow,
+  ServiceCustomer,
+  ServiceCustomerWithCounts,
   Supplier,
   VehicleType,
   VehicleTypeWithCount,
@@ -1061,6 +1068,28 @@ export function useCreateVehicleType() {
     mutationFn: (input: NewVehicleType) => createVehicleType(input),
     onSuccess: (created: VehicleType) => {
       qc.invalidateQueries({ queryKey: ['vehicle-types'] })
+      return created
+    },
+  })
+}
+
+// ---------- Service customers ---------------------------------------------
+
+export function useServiceCustomers(enabled = true) {
+  return useQuery<ServiceCustomerWithCounts[]>({
+    queryKey: ['service-customers'],
+    queryFn: listServiceCustomers,
+    enabled,
+    staleTime: 60_000,
+  })
+}
+
+export function useCreateServiceCustomer() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: NewServiceCustomer) => createServiceCustomer(input),
+    onSuccess: (created: ServiceCustomer) => {
+      qc.invalidateQueries({ queryKey: ['service-customers'] })
       return created
     },
   })
