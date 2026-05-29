@@ -1,0 +1,174 @@
+import { useEffect, useRef, useState } from 'react'
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode'
+
+// Modal wrapper around html5-qrcode's camera scanner. Lives in its own
+// file so any page that wants a "scan this code" button can drop it in
+// with one prop. We pick the **environment-facing** camera by default
+// (the back camera on phones, the only camera on most workshop PCs).
+//
+// Behaviour:
+//   - Opens with `open=true`. On mount it asks the browser for camera
+//     access, then attaches the live preview into the inner div.
+//   - On a successful decode → calls onScan(text) once and dismisses
+//     itself. We dedupe rapid duplicate decodes within a 1s window so
+//     the QR symbol staying in frame doesn't fire 30 callbacks/sec.
+//   - On close (X / Escape / outside-click) the scanner is stopped
+//     before unmount so the camera light goes off immediately.
+//   - If the user denies camera access we surface a friendly message
+//     with the fallback (paste / USB scanner instructions).
+
+const SCANNER_ELEMENT_ID = 'qr-scanner-region'
+
+export function QrScannerModal({
+  open,
+  title,
+  onScan,
+  onClose,
+}: {
+  open: boolean
+  title: string
+  onScan: (text: string) => void
+  onClose: () => void
+}) {
+  const [error, setError] = useState<string | null>(null)
+  const scannerRef = useRef<Html5Qrcode | null>(null)
+  const lastDecodeRef = useRef<{ text: string; at: number }>({
+    text: '',
+    at: 0,
+  })
+
+  useEffect(() => {
+    if (!open) return
+
+    let cancelled = false
+    let scanner: Html5Qrcode | null = null
+    setError(null)
+
+    async function start() {
+      try {
+        scanner = new Html5Qrcode(SCANNER_ELEMENT_ID, {
+          formatsToSupport: [
+            Html5QrcodeSupportedFormats.QR_CODE,
+            Html5QrcodeSupportedFormats.CODE_128,
+            Html5QrcodeSupportedFormats.CODE_39,
+            Html5QrcodeSupportedFormats.EAN_13,
+            Html5QrcodeSupportedFormats.EAN_8,
+            Html5QrcodeSupportedFormats.UPC_A,
+          ],
+          verbose: false,
+        })
+        scannerRef.current = scanner
+
+        await scanner.start(
+          // Prefer the rear-facing camera on phones; on a webcam-only
+          // workshop PC this falls back to whatever is available.
+          { facingMode: { ideal: 'environment' } },
+          {
+            fps: 10,
+            qrbox: { width: 240, height: 240 },
+            aspectRatio: 1.0,
+          },
+          (decoded) => {
+            // Dedupe — html5-qrcode fires per-frame; same code in 1s = skip.
+            const now = Date.now()
+            const last = lastDecodeRef.current
+            if (last.text === decoded && now - last.at < 1500) return
+            lastDecodeRef.current = { text: decoded, at: now }
+            onScan(decoded)
+            // Tiny vibration as feedback on phones that support it.
+            if (typeof navigator.vibrate === 'function') {
+              navigator.vibrate(60)
+            }
+            onClose()
+          },
+          // Per-frame failure is normal (no code visible). Ignore.
+          undefined,
+        )
+        if (cancelled) {
+          await scanner.stop().catch(() => {})
+        }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err)
+        const friendly = /denied|NotAllowed/i.test(msg)
+          ? 'Camera access was blocked. Allow it in browser settings, then try again.'
+          : /NotFound/i.test(msg)
+            ? 'No camera found on this device. Use the USB scanner or paste the code instead.'
+            : msg
+        setError(friendly)
+      }
+    }
+    void start()
+
+    return () => {
+      cancelled = true
+      const s = scannerRef.current
+      scannerRef.current = null
+      if (s && s.isScanning) {
+        s.stop()
+          .then(() => s.clear())
+          .catch(() => {})
+      }
+    }
+  }, [open, onScan, onClose])
+
+  useEffect(() => {
+    if (!open) return
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [open, onClose])
+
+  if (!open) return null
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose()
+      }}
+    >
+      <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-xl">
+        <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
+          <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+            aria-label="Close"
+          >
+            ✕
+          </button>
+        </div>
+        <div className="p-4">
+          {error ? (
+            <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+              {error}
+            </div>
+          ) : (
+            <>
+              <div
+                id={SCANNER_ELEMENT_ID}
+                className="aspect-square w-full overflow-hidden rounded-xl bg-black"
+              />
+              <p className="mt-3 text-xs text-gray-500">
+                Hold the QR or barcode steady inside the frame. The scanner
+                auto-detects and closes when it reads a code.
+              </p>
+            </>
+          )}
+        </div>
+        <div className="flex justify-end border-t border-gray-100 bg-gray-50 px-4 py-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-100"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}

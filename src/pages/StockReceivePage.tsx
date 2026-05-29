@@ -1,6 +1,14 @@
-import { useMemo, useRef, useState, type FormEvent } from 'react'
+import { lazy, Suspense, useMemo, useRef, useState, type FormEvent } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
+
+// html5-qrcode is ~370 KB minified — split into its own chunk so it only
+// hits the wire when the user actually clicks Scan.
+const QrScannerModal = lazy(() =>
+  import('../components/QrScannerModal').then((m) => ({
+    default: m.QrScannerModal,
+  })),
+)
 import { useAuth } from '../lib/auth'
 import {
   useCreateStockReceipt,
@@ -83,6 +91,8 @@ export function StockReceivePage() {
   const [submitMsg, setSubmitMsg] = useState<string | null>(null)
   const [submitErr, setSubmitErr] = useState<string | null>(null)
   const codeInputRef = useRef<HTMLInputElement | null>(null)
+  // Which field is the QR scanner targeting? `null` when closed.
+  const [qrTarget, setQrTarget] = useState<'do_no' | 'part_code' | null>(null)
 
   const totals = useMemo(() => {
     let qty = 0
@@ -261,20 +271,27 @@ export function StockReceivePage() {
                   className={inputClass + ' w-full'}
                 />
               </Field>
-              <Field
-                label="DO No (scan QR or paste)"
-                className="sm:col-span-3"
-              >
-                <input
-                  type="text"
-                  value={draft.do_no}
-                  onChange={(e) => setF('do_no', e.target.value)}
-                  placeholder="Focus here, then scan the QR with a barcode reader or paste from phone…"
-                  className={
-                    inputClass +
-                    ' w-full font-mono tracking-wider placeholder:font-sans placeholder:tracking-normal'
-                  }
-                />
+              <Field label="DO No" className="sm:col-span-3">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={draft.do_no}
+                    onChange={(e) => setF('do_no', e.target.value)}
+                    placeholder="Type, paste, scan with USB reader, or use 📷 →"
+                    className={
+                      inputClass +
+                      ' w-full font-mono tracking-wider placeholder:font-sans placeholder:tracking-normal'
+                    }
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setQrTarget('do_no')}
+                    className="shrink-0 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+                    title="Scan DO QR code with the camera"
+                  >
+                    📷 Scan
+                  </button>
+                </div>
               </Field>
               <Field label="Remarks" className="sm:col-span-3">
                 <textarea
@@ -298,20 +315,30 @@ export function StockReceivePage() {
               <div className="grid grid-cols-12 gap-2">
                 <div className="col-span-12 sm:col-span-6">
                   <label className={labelClass}>Part code</label>
-                  <input
-                    ref={codeInputRef}
-                    type="text"
-                    value={partCode}
-                    onChange={(e) => setPartCode(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
-                        void addLine()
-                      }
-                    }}
-                    placeholder="Scan or type part_no, then press Enter"
-                    className={inputClass + ' mt-1 w-full font-mono'}
-                  />
+                  <div className="mt-1 flex gap-2">
+                    <input
+                      ref={codeInputRef}
+                      type="text"
+                      value={partCode}
+                      onChange={(e) => setPartCode(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          void addLine()
+                        }
+                      }}
+                      placeholder="Scan or type part_no, then press Enter"
+                      className={inputClass + ' w-full font-mono'}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setQrTarget('part_code')}
+                      className="shrink-0 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+                      title="Scan a barcode / QR for the part code"
+                    >
+                      📷
+                    </button>
+                  </div>
                 </div>
                 <div className="col-span-4 sm:col-span-2">
                   <label className={labelClass}>Qty</label>
@@ -563,6 +590,26 @@ export function StockReceivePage() {
           </div>
         </section>
       </div>
+
+      <Suspense fallback={null}>
+        <QrScannerModal
+          open={qrTarget !== null}
+          title={
+            qrTarget === 'do_no'
+              ? 'Scan delivery-order QR'
+              : 'Scan part barcode / QR'
+          }
+          onScan={(text) => {
+            if (qrTarget === 'do_no') {
+              setF('do_no', text)
+            } else if (qrTarget === 'part_code') {
+              setPartCode(text)
+              codeInputRef.current?.focus()
+            }
+          }}
+          onClose={() => setQrTarget(null)}
+        />
+      </Suspense>
     </AppShell>
   )
 }
