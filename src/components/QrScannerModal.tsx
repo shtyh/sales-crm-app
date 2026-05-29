@@ -67,14 +67,32 @@ export function QrScannerModal({
 
       try {
         scanner = new Html5Qrcode(SCANNER_ELEMENT_ID, {
+          // Cover everything Proton parts labels + DO QRs throw at us:
+          // QR + Data Matrix + the common 1D linear families. The
+          // workshop labels in particular are usually Code 128, Code 93
+          // or ITF — narrow vertical bars that the ZXing scanner used
+          // to miss when crammed inside the square 240px viewfinder.
           formatsToSupport: [
             Html5QrcodeSupportedFormats.QR_CODE,
+            Html5QrcodeSupportedFormats.DATA_MATRIX,
+            Html5QrcodeSupportedFormats.AZTEC,
+            Html5QrcodeSupportedFormats.PDF_417,
             Html5QrcodeSupportedFormats.CODE_128,
+            Html5QrcodeSupportedFormats.CODE_93,
             Html5QrcodeSupportedFormats.CODE_39,
+            Html5QrcodeSupportedFormats.CODABAR,
+            Html5QrcodeSupportedFormats.ITF,
             Html5QrcodeSupportedFormats.EAN_13,
             Html5QrcodeSupportedFormats.EAN_8,
             Html5QrcodeSupportedFormats.UPC_A,
+            Html5QrcodeSupportedFormats.UPC_E,
           ],
+          // Native BarcodeDetector API where available (Chrome on
+          // Android, Safari iOS 17+) — orders of magnitude faster and
+          // more accurate on 1D barcodes than the JS-side ZXing
+          // fallback. Falls through to ZXing automatically when not
+          // supported (older browsers, desktop Safari pre-17).
+          experimentalFeatures: { useBarCodeDetectorIfSupported: true },
           verbose: false,
         })
         scannerRef.current = scanner
@@ -86,8 +104,21 @@ export function QrScannerModal({
           // (falls back to whatever camera exists on a workshop PC).
           { facingMode: 'environment' },
           {
-            fps: 10,
-            qrbox: { width: 240, height: 240 },
+            // Higher fps gives 1D codes more decode attempts per second
+            // (the QR scanner doesn't need this but 1D scans are
+            // angle-sensitive so more attempts = better catch rate).
+            fps: 15,
+            // Wide rectangle suits 1D barcodes — they're horizontal
+            // strips. QR + Data Matrix still fit comfortably. Sized
+            // responsively from the video frame so we don't crop too
+            // tight on small phones.
+            qrbox: (vw, vh) => {
+              const minEdge = Math.min(vw, vh)
+              return {
+                width: Math.floor(minEdge * 0.92),
+                height: Math.floor(minEdge * 0.55),
+              }
+            },
             aspectRatio: 1.0,
           },
           (decoded) => {
@@ -173,8 +204,10 @@ export function QrScannerModal({
                 className="aspect-square w-full overflow-hidden rounded-xl bg-black"
               />
               <p className="mt-3 text-xs text-gray-500">
-                Hold the QR or barcode steady inside the frame. The scanner
-                auto-detects and closes when it reads a code.
+                Hold the QR or barcode steady inside the frame. For long
+                striped barcodes, line the bars up horizontally and fill
+                most of the width. The scanner auto-detects and closes
+                when it reads a code.
               </p>
             </>
           )}
