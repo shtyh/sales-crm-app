@@ -270,6 +270,13 @@ export type Vehicle = {
   year_make: number | null
   registration_date: string | null
   warranty_date: string | null
+  /** Workshop side links to the AUTFDV02 model master (2026-05-29).
+   *  Free-text `model` stays as the human label; this FK is for
+   *  reporting + future autocomplete. */
+  vehicle_type_id: string | null
+  /** Workshop-side customer pool (2026-05-29 Pass 2). New rows write
+   *  to this; legacy customer_id stays for back-compat. */
+  service_customer_id: string | null
   created_at: string
   updated_at: string
 }
@@ -278,6 +285,8 @@ export type Vehicle = {
  *  on list / detail views. */
 export type VehicleWithCustomer = Vehicle & {
   customer: Pick<Customer, 'id' | 'name' | 'nric' | 'phone'> | null
+  /** Joined vehicle_type, when one is linked via vehicle_type_id. */
+  vehicle_type: { id: string; code: string; name: string } | null
 }
 
 export type VehicleInsert = {

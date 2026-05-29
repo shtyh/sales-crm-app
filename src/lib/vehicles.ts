@@ -10,10 +10,12 @@ import type {
 // nested row is the preferred source (since 2026-05-29 the workshop side
 // owns its own customer pool); we keep `customer` joined as a fallback for
 // any vehicle whose service_customer_id hasn't been backfilled yet.
+// `vehicle_type` joins the AUTFDV02 model master via vehicle_type_id.
 const JOIN =
   '*,' +
   'customer:customers!vehicles_customer_id_fkey(id, name, nric, phone),' +
-  'service_customer:service_customers!vehicles_service_customer_id_fkey(id, name, nric, phone)'
+  'service_customer:service_customers!vehicles_service_customer_id_fkey(id, name, nric, phone),' +
+  'vehicle_type:vehicle_types!vehicles_vehicle_type_id_fkey(id, code, name)'
 
 type RawJoined = Vehicle & {
   customer: {
@@ -28,17 +30,19 @@ type RawJoined = Vehicle & {
     nric: string | null
     phone: string
   } | null
+  vehicle_type: { id: string; code: string; name: string } | null
 }
 
 /** Collapse the dual customer joins into the single `customer` field the
  *  UI expects. Prefer the workshop-side service_customer; fall back to
- *  the legacy customers row. */
+ *  the legacy customers row. Pass `vehicle_type` through untouched. */
 function normalise(row: RawJoined): VehicleWithCustomer {
   const sc = row.service_customer
   const c = row.customer
+  const vt = row.vehicle_type
   // Strip the raw fields so the returned object matches VehicleWithCustomer.
-  const { customer: _c, service_customer: _sc, ...rest } = row
-  void _c; void _sc
+  const { customer: _c, service_customer: _sc, vehicle_type: _vt, ...rest } = row
+  void _c; void _sc; void _vt
   return {
     ...rest,
     customer: sc
@@ -46,6 +50,7 @@ function normalise(row: RawJoined): VehicleWithCustomer {
       : c
         ? { id: c.id, name: c.name, nric: c.nric, phone: c.phone }
         : null,
+    vehicle_type: vt,
   } as VehicleWithCustomer
 }
 

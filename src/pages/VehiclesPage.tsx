@@ -132,7 +132,17 @@ export function VehiclesPage() {
                       {v.registration_no}
                     </td>
                     <td className="px-4 py-3">
-                      <div className="text-gray-900">{v.model}</div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-gray-900">{v.model}</span>
+                        {v.vehicle_type && (
+                          <span
+                            className="rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-medium text-slate-700"
+                            title={v.vehicle_type.name}
+                          >
+                            {v.vehicle_type.code}
+                          </span>
+                        )}
+                      </div>
                       {(v.variant || v.color) && (
                         <div className="text-xs text-gray-500">
                           {v.variant}
