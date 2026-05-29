@@ -2,21 +2,22 @@ import { supabase } from './supabase'
 import type { Part } from './types'
 
 /**
- * Every part in the inventory master, sorted by part_no. Workshop
- * dashboard filters this client-side for the low-stock alert
- * (`stock_qty <= reorder_level AND is_active`) because PostgREST
- * doesn't expose column-to-column comparisons in its filter syntax.
+ * Every part in the inventory master, sorted by part_no. Used by the
+ * Closing Stock Report and the workshop low-stock alert.
  *
- * NB: parts_inventory is ~80k rows after the AUTFTP02 import. Don't
- * call this from a hot path — use `searchParts` instead. Kept around
- * for the existing low-stock alert which fetches everything once on
- * dashboard mount and caches.
+ * After the 2026-05-29 closing-stock trim, parts_inventory holds
+ * ~1,580 rows. PostgREST defaults max-rows to 1000 — explicitly
+ * setting `.range(0, 4999)` here pushes the ceiling to 5000 so the
+ * report doesn't silently miss the back half of the catalogue. If
+ * the inventory grows back into the 5k+ range, switch this caller
+ * over to `searchParts` (which paginates server-side).
  */
 export async function listParts(): Promise<Part[]> {
   const { data, error } = await supabase
     .from('parts_inventory')
     .select('*')
     .order('part_no', { ascending: true })
+    .range(0, 4999)
 
   if (error) throw error
   return (data ?? []) as Part[]
