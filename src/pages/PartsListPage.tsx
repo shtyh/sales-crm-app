@@ -30,7 +30,6 @@ export function PartsListPage() {
   const [qInput, setQInput] = useState('')
   const [q, setQ] = useState('')
   const [category, setCategory] = useState<'' | 'OIL' | 'PRT'>('')
-  const [activeOnly, setActiveOnly] = useState(false)
   const [page, setPage] = useState(0)
 
   // Debounce typing so we don't spam Supabase on every keystroke.
@@ -46,7 +45,6 @@ export function PartsListPage() {
     q,
     page,
     category,
-    activeOnly,
   })
   const totalPages = data
     ? Math.max(1, Math.ceil(data.total / PARTS_PAGE_SIZE))
@@ -100,17 +98,6 @@ export function PartsListPage() {
             <option value="PRT">PRT — Parts</option>
             <option value="OIL">OIL — Oils &amp; fluids</option>
           </select>
-          <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 shadow-sm">
-            <input
-              type="checkbox"
-              checked={activeOnly}
-              onChange={(e) => {
-                setActiveOnly(e.target.checked)
-                setPage(0)
-              }}
-            />
-            Active only
-          </label>
         </div>
 
         {error && (
