@@ -1,31 +1,22 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
 import { useAuth } from '../lib/auth'
-import {
-  PARTS_PAGE_SIZE,
-  usePartsSearch,
-  useUpdatePart,
-  type PartPatch,
-} from '../lib/queries'
+import { PARTS_PAGE_SIZE, usePartsSearch } from '../lib/queries'
 import { formatError } from '../lib/errors'
-import type { Part } from '../lib/types'
 
-// ─── Inline editable Parts List ─────────────────────────────────────────────
+// ─── Parts List (read-only browser) ─────────────────────────────────────────
 //
-// 80k+ rows in `parts_inventory` after the AUTFTP02 import. The page does
-// server-side search (part_no OR name) + 50/page pagination + cell-level
-// inline editing. Every cell save invalidates the cache so totals on the
-// Stock Menu stay accurate.
-
-const inputClass =
-  'rounded border border-gray-300 bg-white px-2 py-1 text-xs outline-none focus:border-gray-900 focus:ring-1 focus:ring-gray-900/20'
+// parts_inventory is ~80k rows after the AUTFTP02 import. This page is a
+// reference browser: server-side search (part_no OR name), category +
+// active-only filters, 50/page pagination. Editing was rolled back on
+// 2026-05-29 — every field shown here is sourced from the principal's
+// catalogue and shouldn't drift from it.
 
 export function PartsListPage() {
-  const { role, isAdmin, loading, canAccessService } = useAuth()
-  // Workshop staff (non-SA) can write per parts_inventory RLS.
+  const { role, loading, canAccessService } = useAuth()
+  // Workshop staff (and super_admin) can read; SA bounces.
   if (canAccessService === false) return <Navigate to="/" replace />
-  // Sales-only roles bounce.
   if (role && role === 'sales_advisor') return <Navigate to="/" replace />
   if (loading && role == null) {
     return (
@@ -57,25 +48,27 @@ export function PartsListPage() {
     category,
     activeOnly,
   })
-  const totalPages = data ? Math.max(1, Math.ceil(data.total / PARTS_PAGE_SIZE)) : 1
+  const totalPages = data
+    ? Math.max(1, Math.ceil(data.total / PARTS_PAGE_SIZE))
+    : 1
 
   return (
     <AppShell>
-      <div className="space-y-4">
+      <div className="space-y-5">
+        {/* Header */}
         <header className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h1 className="text-xl font-semibold text-gray-900">Parts List</h1>
             <p className="mt-0.5 text-sm text-gray-500">
-              Browse and edit the inventory master. Click any cell to update;
-              changes save when the cell loses focus.
-              {data && (
+              {data ? (
                 <>
-                  {' '}
-                  <span className="text-gray-700">
-                    {data.total.toLocaleString('en-MY')} parts
+                  <span className="font-medium text-gray-700">
+                    {data.total.toLocaleString('en-MY')}
                   </span>{' '}
-                  matching the current filter.
+                  parts in catalogue
                 </>
+              ) : (
+                'Loading the inventory master…'
               )}
             </p>
           </div>
@@ -93,7 +86,7 @@ export function PartsListPage() {
             placeholder="Search by part no or name…"
             value={qInput}
             onChange={(e) => setQInput(e.target.value)}
-            className="min-w-[18rem] flex-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm outline-none focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10"
+            className="min-w-[18rem] flex-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm shadow-sm outline-none focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10"
           />
           <select
             value={category}
@@ -101,13 +94,13 @@ export function PartsListPage() {
               setCategory(e.target.value as '' | 'OIL' | 'PRT')
               setPage(0)
             }}
-            className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm"
+            className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm shadow-sm"
           >
             <option value="">All categories</option>
-            <option value="PRT">PRT</option>
-            <option value="OIL">OIL</option>
+            <option value="PRT">PRT — Parts</option>
+            <option value="OIL">OIL — Oils &amp; fluids</option>
           </select>
-          <label className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700">
+          <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 shadow-sm">
             <input
               type="checkbox"
               checked={activeOnly}
@@ -128,114 +121,128 @@ export function PartsListPage() {
 
         {/* Table */}
         <div className="overflow-x-auto rounded-2xl border border-gray-200 bg-white shadow-sm">
-          <table className="min-w-full divide-y divide-gray-200 text-sm">
-            <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
-              {/* Column lockdown (2026-05-29): Unit is the only
-                  editable cell. Reorder / Location / Active were
-                  dropped from the table view at the same pass. */}
-              <tr>
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr className="text-[11px] uppercase tracking-wider text-gray-500">
                 <Th>Part no</Th>
                 <Th>Name</Th>
-                <Th>Cat</Th>
-                <Th>Unit</Th>
-                <Th right>Price</Th>
+                <Th center>Cat</Th>
+                <Th center>Unit</Th>
+                <Th right>Price (RM)</Th>
                 <Th right>Qty</Th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-gray-100 text-sm">
               {isLoading && (
                 <tr>
-                  <td colSpan={6} className="px-3 py-6 text-center text-xs text-gray-500">
+                  <td
+                    colSpan={6}
+                    className="px-3 py-6 text-center text-sm text-gray-500"
+                  >
                     Loading…
                   </td>
                 </tr>
               )}
               {!isLoading && data && data.rows.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-3 py-6 text-center text-xs text-gray-500">
+                  <td
+                    colSpan={6}
+                    className="px-3 py-6 text-center text-sm text-gray-500"
+                  >
                     No parts match the current filter.
                   </td>
                 </tr>
               )}
               {!isLoading &&
-                data?.rows.map((p) => (
-                  <PartRow key={p.id} part={p} disabled={!isAdmin} />
+                data?.rows.map((p, i) => (
+                  <tr
+                    key={p.id}
+                    className={
+                      (i % 2 === 0 ? 'bg-white' : 'bg-gray-50/40') +
+                      ' transition hover:bg-gray-100/60'
+                    }
+                  >
+                    <td className="whitespace-nowrap px-3 py-2 font-mono text-[12px] text-gray-700">
+                      {p.part_no}
+                    </td>
+                    <td className="px-3 py-2 text-gray-900">{p.name}</td>
+                    <td className="whitespace-nowrap px-3 py-2 text-center">
+                      <CategoryBadge category={p.category} />
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2 text-center text-gray-700">
+                      {p.unit}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-gray-700">
+                      {formatMoney(p.unit_price)}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-gray-700">
+                      {formatQty(p.stock_qty)}
+                    </td>
+                  </tr>
                 ))}
             </tbody>
           </table>
         </div>
 
         {/* Pagination */}
-        <div className="flex items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={() => setPage((p) => Math.max(0, p - 1))}
-            disabled={page === 0}
-            className="rounded-lg border border-gray-300 bg-white px-3 py-1 text-xs disabled:opacity-50"
-          >
-            ← Prev
-          </button>
-          <span className="text-xs text-gray-500">
-            Page {page + 1} of {totalPages}
-          </span>
-          <button
-            type="button"
-            onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-            disabled={page >= totalPages - 1}
-            className="rounded-lg border border-gray-300 bg-white px-3 py-1 text-xs disabled:opacity-50"
-          >
-            Next →
-          </button>
-        </div>
+        {data && data.total > 0 && (
+          <div className="flex items-center justify-between gap-3 text-sm">
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              disabled={page === 0}
+              className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              ← Prev
+            </button>
+            <span className="text-xs text-gray-500">
+              Page <span className="font-medium text-gray-700">{page + 1}</span>{' '}
+              of{' '}
+              <span className="font-medium text-gray-700">{totalPages}</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+              disabled={page >= totalPages - 1}
+              className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Next →
+            </button>
+          </div>
+        )}
       </div>
     </AppShell>
   )
 }
 
-// ─── Row component ─────────────────────────────────────────────────────────
+// ─── Bits ──────────────────────────────────────────────────────────────────
 
-function PartRow({ part, disabled }: { part: Part; disabled: boolean }) {
-  const update = useUpdatePart()
-  const [error, setError] = useState<string | null>(null)
-
-  function save(patch: PartPatch) {
-    setError(null)
-    update.mutate(
-      { id: part.id, patch },
-      {
-        onError: (err) => setError(formatError(err)),
-      },
-    )
-  }
-
-  // Editable cells: Unit.
-  // Read-only (display): Part no, Name, Cat, Price, Qty.
-  // Removed columns (2026-05-29 lockdown): Brand, Cost, Reorder,
-  // Location, Active.
+function Th({
+  children,
+  right,
+  center,
+}: {
+  children: React.ReactNode
+  right?: boolean
+  center?: boolean
+}) {
+  const align = right ? 'text-right' : center ? 'text-center' : 'text-left'
   return (
-    <tr className="hover:bg-gray-50/60">
-      <td className="whitespace-nowrap px-2 py-1 font-mono text-[11px] text-gray-700">
-        {part.part_no}
-      </td>
-      <td className="min-w-[14rem] px-2 py-1 text-gray-900">{part.name}</td>
-      <td className="px-2 py-1 text-gray-700">{part.category}</td>
-      <Cell
-        value={part.unit}
-        disabled={disabled}
-        onSave={(v) => save({ unit: v || 'PC' })}
-      />
-      <td className="whitespace-nowrap px-2 py-1 text-right tabular-nums text-gray-700">
-        {formatMoney(part.unit_price)}
-      </td>
-      <td className="whitespace-nowrap px-2 py-1 text-right tabular-nums text-gray-700">
-        {formatQty(part.stock_qty)}
-      </td>
-      {error && (
-        <td colSpan={6} className="px-2 py-1 text-[10px] text-rose-700">
-          {error}
-        </td>
-      )}
-    </tr>
+    <th className={`px-3 py-2.5 font-medium ${align}`}>{children}</th>
+  )
+}
+
+function CategoryBadge({ category }: { category: 'OIL' | 'PRT' }) {
+  const cls =
+    category === 'OIL'
+      ? 'bg-amber-100 text-amber-800'
+      : 'bg-slate-100 text-slate-700'
+  return (
+    <span
+      className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium ${cls}`}
+    >
+      {category}
+    </span>
   )
 }
 
@@ -247,67 +254,5 @@ function formatMoney(n: number): string {
 }
 
 function formatQty(n: number): string {
-  // Quantity is whole units in practice; trim trailing zeros.
-  return Number.isInteger(n) ? n.toString() : n.toString()
+  return Number.isInteger(n) ? n.toString() : n.toLocaleString('en-MY')
 }
-
-// ─── Editable cells ────────────────────────────────────────────────────────
-
-function Cell({
-  value,
-  disabled,
-  onSave,
-  className,
-}: {
-  value: string
-  disabled: boolean
-  onSave: (v: string) => void
-  className?: string
-}) {
-  const [v, setV] = useState(value)
-  const initial = useRef(value)
-  useEffect(() => {
-    setV(value)
-    initial.current = value
-  }, [value])
-
-  return (
-    <td className={`px-2 py-1 ${className ?? ''}`}>
-      <input
-        type="text"
-        value={v}
-        disabled={disabled}
-        onChange={(e) => setV(e.target.value)}
-        onBlur={() => {
-          if (v !== initial.current) {
-            initial.current = v
-            onSave(v)
-          }
-        }}
-        className={inputClass + ' w-full'}
-      />
-    </td>
-  )
-}
-
-// NumberCell + SelectCell removed 2026-05-29 with the final column
-// lockdown — only Unit (text) is editable in the table view now.
-// Both patterns are preserved in git history if we re-introduce
-// inline-edit numerics / dropdowns later.
-
-function Th({
-  children,
-  right,
-}: {
-  children: React.ReactNode
-  right?: boolean
-}) {
-  return (
-    <th
-      className={`px-2 py-2 ${right ? 'text-right' : 'text-left'} font-medium`}
-    >
-      {children}
-    </th>
-  )
-}
-
