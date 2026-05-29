@@ -89,7 +89,7 @@ const SECTIONS: Section[] = [
       },
       {
         title: 'Vendor / Supplier',
-        subtitle: 'Supplier master · address, contact, GST',
+        subtitle: 'Supplier master · address, contact, SST',
         icon: '🏭',
         to: '/service/inquiry/suppliers',
       },

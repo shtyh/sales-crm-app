@@ -177,7 +177,7 @@ function DetailRow({ supplier: s }: { supplier: Supplier }) {
           <KV label="Email">{s.email ?? '—'}</KV>
           <KV label="Phone 2">{s.phone2 ?? '—'}</KV>
           <KV label="Fax">{s.fax ?? '—'}</KV>
-          <KV label="GST No">{s.gst_no ?? '—'}</KV>
+          <KV label="SST No">{s.sst_no ?? '—'}</KV>
           <KV label="TIN No">{s.tin_no ?? '—'}</KV>
           <KV label="MSIC Code">{s.msic_code ?? '—'}</KV>
           <KV label="Activity">{s.biz_activity ?? '—'}</KV>
@@ -217,7 +217,7 @@ type SupplierDraft = {
   address_line2: string
   address_line3: string
   postcode: string
-  gst_no: string
+  sst_no: string
   tin_no: string
   biz_activity: string
   msic_code: string
@@ -235,7 +235,7 @@ const BLANK_DRAFT: SupplierDraft = {
   address_line2: '',
   address_line3: '',
   postcode: '',
-  gst_no: '',
+  sst_no: '',
   tin_no: '',
   biz_activity: '',
   msic_code: '',
@@ -398,10 +398,10 @@ function AddSupplierForm({
         </div>
 
         <div>
-          <label className={labelClass}>GST No</label>
+          <label className={labelClass}>SST No</label>
           <input
-            value={d.gst_no}
-            onChange={(e) => set('gst_no', e.target.value)}
+            value={d.sst_no}
+            onChange={(e) => set('sst_no', e.target.value)}
             className={inputClass + ' mt-1'}
           />
         </div>

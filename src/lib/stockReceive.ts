@@ -28,7 +28,7 @@ export type NewSupplier = {
   address_line2?: string | null
   address_line3?: string | null
   postcode?: string | null
-  gst_no?: string | null
+  sst_no?: string | null
   tin_no?: string | null
   biz_activity?: string | null
   msic_code?: string | null
