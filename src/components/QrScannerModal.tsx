@@ -36,6 +36,17 @@ export function QrScannerModal({
     text: '',
     at: 0,
   })
+  // Keep the latest callbacks in refs so the start-effect can call into
+  // them without listing them as deps — otherwise inline arrow props
+  // (recreated on every parent render) would tear the scanner down +
+  // re-start it on every keystroke in the parent form, racing with the
+  // conditional error-UI render and surfacing "Element not found".
+  const onScanRef = useRef(onScan)
+  const onCloseRef = useRef(onClose)
+  useEffect(() => {
+    onScanRef.current = onScan
+    onCloseRef.current = onClose
+  })
 
   useEffect(() => {
     if (!open) return
@@ -45,6 +56,15 @@ export function QrScannerModal({
     setError(null)
 
     async function start() {
+      // Give React one frame to paint the scanner region <div> before
+      // html5-qrcode calls document.getElementById on the id.
+      await new Promise<void>((r) => requestAnimationFrame(() => r()))
+      if (cancelled) return
+      if (!document.getElementById(SCANNER_ELEMENT_ID)) {
+        setError('Could not initialise the scanner region. Close and retry.')
+        return
+      }
+
       try {
         scanner = new Html5Qrcode(SCANNER_ELEMENT_ID, {
           formatsToSupport: [
@@ -60,28 +80,28 @@ export function QrScannerModal({
         scannerRef.current = scanner
 
         await scanner.start(
-          // Prefer the rear-facing camera on phones; on a webcam-only
-          // workshop PC this falls back to whatever is available.
-          { facingMode: { ideal: 'environment' } },
+          // html5-qrcode rejects the standard MediaTrackConstraints
+          // { ideal: ... } shape; it wants a bare string or { exact: ... }.
+          // Plain string asks for the rear camera with a soft preference
+          // (falls back to whatever camera exists on a workshop PC).
+          { facingMode: 'environment' },
           {
             fps: 10,
             qrbox: { width: 240, height: 240 },
             aspectRatio: 1.0,
           },
           (decoded) => {
-            // Dedupe — html5-qrcode fires per-frame; same code in 1s = skip.
+            // Dedupe — html5-qrcode fires per-frame; same code in 1.5s = skip.
             const now = Date.now()
             const last = lastDecodeRef.current
             if (last.text === decoded && now - last.at < 1500) return
             lastDecodeRef.current = { text: decoded, at: now }
-            onScan(decoded)
-            // Tiny vibration as feedback on phones that support it.
+            onScanRef.current(decoded)
             if (typeof navigator.vibrate === 'function') {
               navigator.vibrate(60)
             }
-            onClose()
+            onCloseRef.current()
           },
-          // Per-frame failure is normal (no code visible). Ignore.
           undefined,
         )
         if (cancelled) {
@@ -109,16 +129,16 @@ export function QrScannerModal({
           .catch(() => {})
       }
     }
-  }, [open, onScan, onClose])
+  }, [open])
 
   useEffect(() => {
     if (!open) return
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') onCloseRef.current()
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [open, onClose])
+  }, [open])
 
   if (!open) return null
 
