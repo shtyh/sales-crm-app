@@ -25,6 +25,10 @@ import {
  *
  * Per-category subtotals + a grand total at the bottom. "Print mode"
  * hides the AppShell so the page sends straight to a printer.
+ *
+ * Export: an "Excel" button downloads the current filtered view as
+ * UTF-8 CSV with a BOM, so it opens cleanly in Excel-on-Windows /
+ * Numbers / Google Sheets without garbled MYR digits.
  */
 export function StockOnHandPage() {
   const { canAccessService } = useAuth()
@@ -101,6 +105,18 @@ export function StockOnHandPage() {
         <div className="flex gap-2">
           <button
             type="button"
+            onClick={() =>
+              downloadCsv(
+                buildCsv(grouped, totals, todayLocal),
+                `closing-stock-${csvDateStamp()}.csv`,
+              )
+            }
+            className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-800 shadow-sm hover:bg-emerald-100"
+          >
+            📊 Export Excel
+          </button>
+          <button
+            type="button"
             onClick={() => setPrintMode((v) => !v)}
             className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50"
           >
@@ -111,7 +127,7 @@ export function StockOnHandPage() {
             onClick={() => window.print()}
             className="rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-gray-800"
           >
-            🖨 Print
+            🖨 Print / PDF
           </button>
         </div>
       </div>
@@ -176,6 +192,9 @@ export function StockOnHandPage() {
                 </th>
                 <th className="px-3 py-2.5 text-right font-medium">Qty</th>
                 <th className="px-3 py-2.5 text-right font-medium">
+                  Cost / Qty
+                </th>
+                <th className="px-3 py-2.5 text-right font-medium">
                   Amt on Hand (RM)
                 </th>
               </tr>
@@ -184,7 +203,7 @@ export function StockOnHandPage() {
               {!parts && !error && (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={7}
                     className="px-3 py-8 text-center text-sm text-gray-500"
                   >
                     Loading…
@@ -194,7 +213,7 @@ export function StockOnHandPage() {
               {parts && filtered.length === 0 && (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={7}
                     className="px-3 py-8 text-center text-sm text-gray-500"
                   >
                     No parts match the current filter.
@@ -207,7 +226,7 @@ export function StockOnHandPage() {
                 const head = (
                   <tr key={`head-${cat}`} className="bg-gray-100/80">
                     <td
-                      colSpan={6}
+                      colSpan={7}
                       className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-700"
                     >
                       {PART_CATEGORY_LABEL[cat]}{' '}
@@ -245,6 +264,9 @@ export function StockOnHandPage() {
                       <td className="whitespace-nowrap px-3 py-1.5 text-right tabular-nums text-gray-900">
                         {qty}
                       </td>
+                      <td className="whitespace-nowrap px-3 py-1.5 text-right tabular-nums text-gray-700">
+                        {cost > 0 ? formatMYR(cost) : <span className="text-gray-300">—</span>}
+                      </td>
                       <td className="whitespace-nowrap px-3 py-1.5 text-right tabular-nums text-gray-900">
                         {formatMYR(hand)}
                       </td>
@@ -266,6 +288,7 @@ export function StockOnHandPage() {
                     <td className="whitespace-nowrap px-3 py-1.5 text-right tabular-nums font-semibold text-gray-900">
                       {sub.qtyBal}
                     </td>
+                    <td className="px-3" />
                     <td className="whitespace-nowrap px-3 py-1.5 text-right tabular-nums font-semibold text-gray-900">
                       {formatMYR(sub.amtOnHand)}
                     </td>
@@ -284,6 +307,7 @@ export function StockOnHandPage() {
                   <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-sm font-bold text-gray-900">
                     {totals.qtyBal}
                   </td>
+                  <td className="px-3" />
                   <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-sm font-bold text-gray-900">
                     {formatMYR(totals.amtOnHand)}
                   </td>
@@ -303,6 +327,102 @@ export function StockOnHandPage() {
 }
 
 // ─── Bits ──────────────────────────────────────────────────────────────────
+
+// ─── CSV export ────────────────────────────────────────────────────────────
+
+/** Quote a field for RFC 4180 CSV: wrap in double quotes only if the value
+ *  contains a comma, quote, or newline — and escape inner quotes by doubling
+ *  them. Keeps numeric cells unquoted so Excel auto-types them. */
+function csvField(v: string | number | null | undefined): string {
+  if (v === null || v === undefined) return ''
+  const s = typeof v === 'number' ? String(v) : String(v)
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+}
+
+function buildCsv(
+  grouped: Record<PartCategory, Part[]>,
+  totals: {
+    qtyBal: number
+    amtOnHand: number
+    perCat: Record<PartCategory, { qtyBal: number; amtOnHand: number }>
+  },
+  stockAsOf: string,
+): string {
+  const lines: string[] = []
+  lines.push(`Closing Stock Report,${csvField('Stock As Of: ' + stockAsOf)}`)
+  lines.push('')
+  lines.push(['No', 'Category', 'Group', 'Code', 'Description', 'Qty', 'Cost / Qty', 'Amt on Hand (RM)'].map(csvField).join(','))
+
+  let runningNo = 0
+  for (const cat of ['OIL', 'PRT'] as PartCategory[]) {
+    const rows = grouped[cat]
+    if (rows.length === 0) continue
+    for (const p of rows) {
+      runningNo++
+      const cost = Number(p.unit_cost) || 0
+      const qty = Number(p.stock_qty) || 0
+      const hand = qty * cost
+      lines.push(
+        [
+          runningNo,
+          cat,
+          p.brand ?? '',
+          p.part_no,
+          p.name,
+          qty,
+          cost.toFixed(2),
+          hand.toFixed(2),
+        ]
+          .map(csvField)
+          .join(','),
+      )
+    }
+    const sub = totals.perCat[cat]
+    lines.push(
+      [
+        '',
+        cat,
+        '',
+        '',
+        `Subtotal · ${cat}`,
+        sub.qtyBal,
+        '',
+        sub.amtOnHand.toFixed(2),
+      ]
+        .map(csvField)
+        .join(','),
+    )
+  }
+  lines.push(
+    ['', '', '', '', 'Grand Total', totals.qtyBal, '', totals.amtOnHand.toFixed(2)]
+      .map(csvField)
+      .join(','),
+  )
+  return lines.join('\r\n')
+}
+
+/** Trigger a browser download for the given CSV text. Prepends a UTF-8 BOM
+ *  so Excel-on-Windows reads non-ASCII characters correctly. */
+function downloadCsv(csv: string, filename: string): void {
+  const BOM = '﻿'
+  const blob = new Blob([BOM + csv], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+function csvDateStamp(): string {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
 
 function SummaryCard({
   label,
