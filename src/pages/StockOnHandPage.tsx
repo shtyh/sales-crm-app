@@ -68,19 +68,30 @@ export function StockOnHandPage() {
 
   const totals = useMemo(() => {
     let qtyBal = 0
+    let qtyRecv = 0
+    let qtyIss = 0
     let amtOnHand = 0
-    const perCat: Record<PartCategory, { qtyBal: number; amtOnHand: number }> =
-      { OIL: { qtyBal: 0, amtOnHand: 0 }, PRT: { qtyBal: 0, amtOnHand: 0 } }
+    const blank = () => ({ qtyBal: 0, qtyRecv: 0, qtyIss: 0, amtOnHand: 0 })
+    const perCat: Record<PartCategory, ReturnType<typeof blank>> = {
+      OIL: blank(),
+      PRT: blank(),
+    }
     for (const p of filtered) {
       const cost = Number(p.unit_cost) || 0
       const qty = Number(p.stock_qty) || 0
+      const recv = Number(p.qty_received) || 0
+      const iss = Number(p.qty_issued) || 0
       const hand = qty * cost
       qtyBal += qty
+      qtyRecv += recv
+      qtyIss += iss
       amtOnHand += hand
       perCat[p.category].qtyBal += qty
+      perCat[p.category].qtyRecv += recv
+      perCat[p.category].qtyIss += iss
       perCat[p.category].amtOnHand += hand
     }
-    return { qtyBal, amtOnHand, perCat }
+    return { qtyBal, qtyRecv, qtyIss, amtOnHand, perCat }
   }, [filtered])
 
   const today = new Date()
@@ -190,7 +201,9 @@ export function StockOnHandPage() {
                 <th className="px-3 py-2.5 text-left font-medium">
                   Description
                 </th>
-                <th className="px-3 py-2.5 text-right font-medium">Qty</th>
+                <th className="px-3 py-2.5 text-right font-medium">Recv</th>
+                <th className="px-3 py-2.5 text-right font-medium">Issued</th>
+                <th className="px-3 py-2.5 text-right font-medium">Bal</th>
                 <th className="px-3 py-2.5 text-right font-medium">
                   Cost / Qty
                 </th>
@@ -203,7 +216,7 @@ export function StockOnHandPage() {
               {!parts && !error && (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={9}
                     className="px-3 py-8 text-center text-sm text-gray-500"
                   >
                     Loading…
@@ -213,7 +226,7 @@ export function StockOnHandPage() {
               {parts && filtered.length === 0 && (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={9}
                     className="px-3 py-8 text-center text-sm text-gray-500"
                   >
                     No parts match the current filter.
@@ -226,7 +239,7 @@ export function StockOnHandPage() {
                 const head = (
                   <tr key={`head-${cat}`} className="bg-gray-100/80">
                     <td
-                      colSpan={7}
+                      colSpan={9}
                       className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-700"
                     >
                       {PART_CATEGORY_LABEL[cat]}{' '}
@@ -261,7 +274,13 @@ export function StockOnHandPage() {
                         {p.part_no}
                       </td>
                       <td className="px-3 py-1.5 text-gray-900">{p.name}</td>
-                      <td className="whitespace-nowrap px-3 py-1.5 text-right tabular-nums text-gray-900">
+                      <td className="whitespace-nowrap px-3 py-1.5 text-right tabular-nums text-gray-600">
+                        {p.qty_received || <span className="text-gray-300">—</span>}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-1.5 text-right tabular-nums text-gray-600">
+                        {p.qty_issued || <span className="text-gray-300">—</span>}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-1.5 text-right tabular-nums font-medium text-gray-900">
                         {qty}
                       </td>
                       <td className="whitespace-nowrap px-3 py-1.5 text-right tabular-nums text-gray-700">
@@ -285,6 +304,12 @@ export function StockOnHandPage() {
                     >
                       Subtotal · {PART_CATEGORY_LABEL[cat]}
                     </td>
+                    <td className="whitespace-nowrap px-3 py-1.5 text-right tabular-nums font-semibold text-gray-700">
+                      {sub.qtyRecv}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-1.5 text-right tabular-nums font-semibold text-gray-700">
+                      {sub.qtyIss}
+                    </td>
                     <td className="whitespace-nowrap px-3 py-1.5 text-right tabular-nums font-semibold text-gray-900">
                       {sub.qtyBal}
                     </td>
@@ -303,6 +328,12 @@ export function StockOnHandPage() {
                     className="px-3 py-2 text-right text-xs font-bold uppercase tracking-wider text-gray-900"
                   >
                     Grand Total
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-sm font-bold text-gray-700">
+                    {totals.qtyRecv}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-sm font-bold text-gray-700">
+                    {totals.qtyIss}
                   </td>
                   <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-sm font-bold text-gray-900">
                     {totals.qtyBal}
@@ -339,19 +370,39 @@ function csvField(v: string | number | null | undefined): string {
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
 }
 
+type CatTotal = { qtyBal: number; qtyRecv: number; qtyIss: number; amtOnHand: number }
+type Totals = {
+  qtyBal: number
+  qtyRecv: number
+  qtyIss: number
+  amtOnHand: number
+  perCat: Record<PartCategory, CatTotal>
+}
+
 function buildCsv(
   grouped: Record<PartCategory, Part[]>,
-  totals: {
-    qtyBal: number
-    amtOnHand: number
-    perCat: Record<PartCategory, { qtyBal: number; amtOnHand: number }>
-  },
+  totals: Totals,
   stockAsOf: string,
 ): string {
   const lines: string[] = []
   lines.push(`Closing Stock Report,${csvField('Stock As Of: ' + stockAsOf)}`)
   lines.push('')
-  lines.push(['No', 'Category', 'Group', 'Code', 'Description', 'Qty', 'Cost / Qty', 'Amt on Hand (RM)'].map(csvField).join(','))
+  lines.push(
+    [
+      'No',
+      'Category',
+      'Group',
+      'Code',
+      'Description',
+      'Qty Received',
+      'Qty Issued',
+      'Qty Balance',
+      'Cost / Qty',
+      'Amt on Hand (RM)',
+    ]
+      .map(csvField)
+      .join(','),
+  )
 
   let runningNo = 0
   for (const cat of ['OIL', 'PRT'] as PartCategory[]) {
@@ -361,6 +412,8 @@ function buildCsv(
       runningNo++
       const cost = Number(p.unit_cost) || 0
       const qty = Number(p.stock_qty) || 0
+      const recv = Number(p.qty_received) || 0
+      const iss = Number(p.qty_issued) || 0
       const hand = qty * cost
       lines.push(
         [
@@ -369,6 +422,8 @@ function buildCsv(
           p.brand ?? '',
           p.part_no,
           p.name,
+          recv,
+          iss,
           qty,
           cost.toFixed(2),
           hand.toFixed(2),
@@ -385,6 +440,8 @@ function buildCsv(
         '',
         '',
         `Subtotal · ${cat}`,
+        sub.qtyRecv,
+        sub.qtyIss,
         sub.qtyBal,
         '',
         sub.amtOnHand.toFixed(2),
@@ -394,7 +451,18 @@ function buildCsv(
     )
   }
   lines.push(
-    ['', '', '', '', 'Grand Total', totals.qtyBal, '', totals.amtOnHand.toFixed(2)]
+    [
+      '',
+      '',
+      '',
+      '',
+      'Grand Total',
+      totals.qtyRecv,
+      totals.qtyIss,
+      totals.qtyBal,
+      '',
+      totals.amtOnHand.toFixed(2),
+    ]
       .map(csvField)
       .join(','),
   )

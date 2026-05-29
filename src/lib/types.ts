@@ -456,6 +456,11 @@ export type Part = {
   unit_cost: number
   unit_price: number
   stock_qty: number
+  /** Period Qty Received from the closing-stock XLSX. Synced manually
+   *  per stock period; defaults to 0. */
+  qty_received: number
+  /** Period Qty Issued from the closing-stock XLSX. */
+  qty_issued: number
   reorder_level: number
   location: string | null
   is_active: boolean
