@@ -97,11 +97,13 @@ import {
 } from './reconciliation'
 import {
   createStockReceipt,
+  createSupplier,
   findPartByCodeExact,
   listReceiptItems,
   listStockReceipts,
   listSuppliers,
   searchPartsForCode,
+  type NewSupplier,
 } from './stockReceive'
 import type {
   Attachment,
@@ -1022,6 +1024,16 @@ export function useSuppliers(enabled = true) {
     queryFn: listSuppliers,
     enabled,
     staleTime: 5 * 60 * 1000, // suppliers change rarely
+  })
+}
+
+export function useCreateSupplier() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: NewSupplier) => createSupplier(input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['suppliers'] })
+    },
   })
 }
 

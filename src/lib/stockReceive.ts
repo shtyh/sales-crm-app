@@ -16,6 +16,45 @@ import type {
   Supplier,
 } from './types'
 
+export type NewSupplier = {
+  code: string
+  name: string
+  person?: string | null
+  phone?: string | null
+  phone2?: string | null
+  fax?: string | null
+  email?: string | null
+  address_line1?: string | null
+  address_line2?: string | null
+  address_line3?: string | null
+  postcode?: string | null
+  gst_no?: string | null
+  tin_no?: string | null
+  biz_activity?: string | null
+  msic_code?: string | null
+}
+
+export async function createSupplier(input: NewSupplier): Promise<Supplier> {
+  // Trim everything; convert empty strings to null so the optional columns
+  // store NULL rather than '' (cleaner for downstream queries + dedup).
+  const row = Object.fromEntries(
+    Object.entries(input).map(([k, v]) => {
+      if (typeof v === 'string') {
+        const t = v.trim()
+        return [k, t === '' ? null : t]
+      }
+      return [k, v]
+    }),
+  )
+  const { data, error } = await supabase
+    .from('suppliers')
+    .insert(row)
+    .select('*')
+    .single()
+  if (error) throw error
+  return data as Supplier
+}
+
 export async function listSuppliers(): Promise<Supplier[]> {
   const { data, error } = await supabase
     .from('suppliers')
