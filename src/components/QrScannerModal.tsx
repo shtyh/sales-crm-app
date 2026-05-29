@@ -19,14 +19,41 @@ import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode'
 
 const SCANNER_ELEMENT_ID = 'qr-scanner-region'
 
+export type ScannerMode = 'qr' | 'barcode'
+
+// Narrow the format set per use case — feeding fewer candidate symbologies
+// to the decoder both speeds it up and cuts false-positives. The DO scanner
+// only needs 2D codes (QR + the other 2D families just in case); the part
+// scanner only needs 1D linear codes.
+const QR_FORMATS = [
+  Html5QrcodeSupportedFormats.QR_CODE,
+  Html5QrcodeSupportedFormats.DATA_MATRIX,
+  Html5QrcodeSupportedFormats.AZTEC,
+  Html5QrcodeSupportedFormats.PDF_417,
+]
+
+const BARCODE_FORMATS = [
+  Html5QrcodeSupportedFormats.CODE_128,
+  Html5QrcodeSupportedFormats.CODE_93,
+  Html5QrcodeSupportedFormats.CODE_39,
+  Html5QrcodeSupportedFormats.CODABAR,
+  Html5QrcodeSupportedFormats.ITF,
+  Html5QrcodeSupportedFormats.EAN_13,
+  Html5QrcodeSupportedFormats.EAN_8,
+  Html5QrcodeSupportedFormats.UPC_A,
+  Html5QrcodeSupportedFormats.UPC_E,
+]
+
 export function QrScannerModal({
   open,
   title,
+  mode = 'qr',
   onScan,
   onClose,
 }: {
   open: boolean
   title: string
+  mode?: ScannerMode
   onScan: (text: string) => void
   onClose: () => void
 }) {
@@ -67,31 +94,13 @@ export function QrScannerModal({
 
       try {
         scanner = new Html5Qrcode(SCANNER_ELEMENT_ID, {
-          // Cover everything Proton parts labels + DO QRs throw at us:
-          // QR + Data Matrix + the common 1D linear families. The
-          // workshop labels in particular are usually Code 128, Code 93
-          // or ITF — narrow vertical bars that the ZXing scanner used
-          // to miss when crammed inside the square 240px viewfinder.
-          formatsToSupport: [
-            Html5QrcodeSupportedFormats.QR_CODE,
-            Html5QrcodeSupportedFormats.DATA_MATRIX,
-            Html5QrcodeSupportedFormats.AZTEC,
-            Html5QrcodeSupportedFormats.PDF_417,
-            Html5QrcodeSupportedFormats.CODE_128,
-            Html5QrcodeSupportedFormats.CODE_93,
-            Html5QrcodeSupportedFormats.CODE_39,
-            Html5QrcodeSupportedFormats.CODABAR,
-            Html5QrcodeSupportedFormats.ITF,
-            Html5QrcodeSupportedFormats.EAN_13,
-            Html5QrcodeSupportedFormats.EAN_8,
-            Html5QrcodeSupportedFormats.UPC_A,
-            Html5QrcodeSupportedFormats.UPC_E,
-          ],
+          formatsToSupport:
+            mode === 'barcode' ? BARCODE_FORMATS : QR_FORMATS,
           // Native BarcodeDetector API where available (Chrome on
-          // Android, Safari iOS 17+) — orders of magnitude faster and
-          // more accurate on 1D barcodes than the JS-side ZXing
-          // fallback. Falls through to ZXing automatically when not
-          // supported (older browsers, desktop Safari pre-17).
+          // Android, Safari iOS 17+) — orders of magnitude faster +
+          // more accurate than the JS-side ZXing fallback, especially
+          // on 1D linear barcodes. Falls through automatically on
+          // older browsers.
           experimentalFeatures: { useBarCodeDetectorIfSupported: true },
           verbose: false,
         })
@@ -104,22 +113,31 @@ export function QrScannerModal({
           // (falls back to whatever camera exists on a workshop PC).
           { facingMode: 'environment' },
           {
-            // Higher fps gives 1D codes more decode attempts per second
-            // (the QR scanner doesn't need this but 1D scans are
-            // angle-sensitive so more attempts = better catch rate).
-            fps: 15,
-            // Wide rectangle suits 1D barcodes — they're horizontal
-            // strips. QR + Data Matrix still fit comfortably. Sized
-            // responsively from the video frame so we don't crop too
-            // tight on small phones.
+            // Bump fps for barcode mode — 1D scans are angle-sensitive
+            // so more decode attempts per second = better catch rate.
+            // QR mode doesn't need it (a steady QR decodes in 1-2
+            // frames).
+            fps: mode === 'barcode' ? 20 : 10,
+            // QR mode → near-square viewfinder; barcode mode → very
+            // wide so a horizontal label fills almost the whole frame
+            // width. Sized responsively from the camera feed.
             qrbox: (vw, vh) => {
-              const minEdge = Math.min(vw, vh)
+              const w = Math.min(vw, vh)
+              if (mode === 'barcode') {
+                return {
+                  width: Math.floor(w * 0.95),
+                  height: Math.floor(w * 0.35),
+                }
+              }
               return {
-                width: Math.floor(minEdge * 0.92),
-                height: Math.floor(minEdge * 0.55),
+                width: Math.floor(w * 0.8),
+                height: Math.floor(w * 0.8),
               }
             },
             aspectRatio: 1.0,
+            // 1D barcodes look the same flipped — skip the extra
+            // mirror-image pass html5-qrcode does by default.
+            disableFlip: mode === 'barcode',
           },
           (decoded) => {
             // Dedupe — html5-qrcode fires per-frame; same code in 1.5s = skip.
@@ -160,7 +178,7 @@ export function QrScannerModal({
           .catch(() => {})
       }
     }
-  }, [open])
+  }, [open, mode])
 
   useEffect(() => {
     if (!open) return
@@ -204,10 +222,9 @@ export function QrScannerModal({
                 className="aspect-square w-full overflow-hidden rounded-xl bg-black"
               />
               <p className="mt-3 text-xs text-gray-500">
-                Hold the QR or barcode steady inside the frame. For long
-                striped barcodes, line the bars up horizontally and fill
-                most of the width. The scanner auto-detects and closes
-                when it reads a code.
+                {mode === 'barcode'
+                  ? 'Hold the barcode horizontally inside the wide frame so it fills most of the width. The scanner auto-detects when the lines are sharp and steady.'
+                  : 'Hold the QR code steady inside the square frame. The scanner auto-detects and closes when it reads a code.'}
               </p>
             </>
           )}

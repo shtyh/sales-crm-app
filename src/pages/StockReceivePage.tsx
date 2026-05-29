@@ -594,10 +594,11 @@ export function StockReceivePage() {
       <Suspense fallback={null}>
         <QrScannerModal
           open={qrTarget !== null}
+          mode={qrTarget === 'part_code' ? 'barcode' : 'qr'}
           title={
             qrTarget === 'do_no'
               ? 'Scan delivery-order QR'
-              : 'Scan part barcode / QR'
+              : 'Scan part barcode'
           }
           onScan={(text) => {
             if (qrTarget === 'do_no') {
