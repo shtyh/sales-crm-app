@@ -6,6 +6,49 @@ import type {
   VehicleWithCustomer,
 } from './types'
 
+// Joined customer fields the list/detail views need. The `service_customer`
+// nested row is the preferred source (since 2026-05-29 the workshop side
+// owns its own customer pool); we keep `customer` joined as a fallback for
+// any vehicle whose service_customer_id hasn't been backfilled yet.
+const JOIN =
+  '*,' +
+  'customer:customers!vehicles_customer_id_fkey(id, name, nric, phone),' +
+  'service_customer:service_customers!vehicles_service_customer_id_fkey(id, name, nric, phone)'
+
+type RawJoined = Vehicle & {
+  customer: {
+    id: string
+    name: string
+    nric: string | null
+    phone: string
+  } | null
+  service_customer: {
+    id: string
+    name: string
+    nric: string | null
+    phone: string
+  } | null
+}
+
+/** Collapse the dual customer joins into the single `customer` field the
+ *  UI expects. Prefer the workshop-side service_customer; fall back to
+ *  the legacy customers row. */
+function normalise(row: RawJoined): VehicleWithCustomer {
+  const sc = row.service_customer
+  const c = row.customer
+  // Strip the raw fields so the returned object matches VehicleWithCustomer.
+  const { customer: _c, service_customer: _sc, ...rest } = row
+  void _c; void _sc
+  return {
+    ...rest,
+    customer: sc
+      ? { id: sc.id, name: sc.name, nric: sc.nric, phone: sc.phone }
+      : c
+        ? { id: c.id, name: c.name, nric: c.nric, phone: c.phone }
+        : null,
+  } as VehicleWithCustomer
+}
+
 /**
  * All vehicles, with the linked customer joined in for the list view.
  * RLS is open SELECT to any authenticated user on this Phase-1 build.
@@ -13,13 +56,11 @@ import type {
 export async function listVehicles(): Promise<VehicleWithCustomer[]> {
   const { data, error } = await supabase
     .from('vehicles')
-    .select(
-      '*, customer:customers!vehicles_customer_id_fkey(id, name, nric, phone)',
-    )
+    .select(JOIN)
     .order('registration_no', { ascending: true })
 
   if (error) throw error
-  return (data ?? []) as unknown as VehicleWithCustomer[]
+  return ((data ?? []) as unknown as RawJoined[]).map(normalise)
 }
 
 /** Single vehicle by id, with the linked customer joined in. */
@@ -28,14 +69,12 @@ export async function getVehicle(
 ): Promise<VehicleWithCustomer | null> {
   const { data, error } = await supabase
     .from('vehicles')
-    .select(
-      '*, customer:customers!vehicles_customer_id_fkey(id, name, nric, phone)',
-    )
+    .select(JOIN)
     .eq('id', id)
     .maybeSingle()
 
   if (error) throw error
-  return (data as unknown as VehicleWithCustomer | null) ?? null
+  return data ? normalise(data as unknown as RawJoined) : null
 }
 
 export async function createVehicle(input: VehicleInsert): Promise<Vehicle> {
