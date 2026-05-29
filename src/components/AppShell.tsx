@@ -83,6 +83,28 @@ export function AppShell({ children }: { children: ReactNode }) {
     role === 'sales_manager' ||
     role === 'super_admin'
 
+  // Single source of truth for the primary nav links, shared by the
+  // desktop inline nav and the mobile hamburger drawer so the two can't
+  // drift. Visibility mirrors the role/side gating used inline before.
+  const navItems: { to: string; label: string; end?: boolean }[] = []
+  if (!isFinanceAdmin) navItems.push({ to: homePath, label: 'Home', end: true })
+  if (showSales) navItems.push({ to: '/bookings', label: 'Bookings' })
+  if (showSales && canViewCustomers)
+    navItems.push({ to: '/customers', label: 'Customers' })
+  if (showSales && isAdmin) navItems.push({ to: '/cars', label: 'Inventory' })
+  if (showService && isAdmin)
+    navItems.push({ to: '/service-orders/new', label: '+ Job order' })
+  if (showService && isSuperAdmin)
+    navItems.push({ to: '/service/appointments', label: 'Appointments' })
+  if (showSales && isFinanceAdmin)
+    navItems.push({ to: '/finance', label: 'Finance' })
+  if (showSales && (isFinanceAdmin || role === 'sales_manager'))
+    navItems.push({ to: '/reconciliation', label: 'Reconcile' })
+  if (showSales && canApproveDiscount)
+    navItems.push({ to: '/commissions', label: 'Commissions' })
+  if (showSales && (role === 'sales_advisor' || role === 'sales_manager'))
+    navItems.push({ to: '/commission-verify', label: 'Verify Commission' })
+
   async function handleSignOut() {
     await signOut()
     navigate('/login', { replace: true })
@@ -99,59 +121,25 @@ export function AppShell({ children }: { children: ReactNode }) {
                 SWL Motors
               </span>
             </Link>
-            <nav className="ml-1 flex items-center gap-1 sm:ml-3">
-              {!isFinanceAdmin && (
-                <NavLink to={homePath} end className={navLinkClass}>
-                  Home
+            {/* Phone: collapse the links into a hamburger drawer. */}
+            <MobileNav
+              navItems={navItems}
+              isSuperAdmin={isSuperAdmin}
+              onService={onServicePath}
+              onSwitch={(to) => navigate(to === 'service' ? '/service' : '/')}
+            />
+            {/* sm+: the full inline nav. */}
+            <nav className="ml-1 hidden items-center gap-1 sm:ml-3 sm:flex">
+              {navItems.map((item) => (
+                <NavLink
+                  key={item.label}
+                  to={item.to}
+                  end={item.end}
+                  className={navLinkClass}
+                >
+                  {item.label}
                 </NavLink>
-              )}
-              {showSales && (
-                <NavLink to="/bookings" className={navLinkClass}>
-                  Bookings
-                </NavLink>
-              )}
-              {showSales && canViewCustomers && (
-                <NavLink to="/customers" className={navLinkClass}>
-                  Customers
-                </NavLink>
-              )}
-              {showSales && isAdmin && (
-                <NavLink to="/cars" className={navLinkClass}>
-                  Inventory
-                </NavLink>
-              )}
-              {showService && isAdmin && (
-                <NavLink to="/service-orders/new" className={navLinkClass}>
-                  + Job order
-                </NavLink>
-              )}
-              {showService && isSuperAdmin && (
-                <NavLink to="/service/appointments" className={navLinkClass}>
-                  Appointments
-                </NavLink>
-              )}
-              {showSales && isFinanceAdmin && (
-                <NavLink to="/finance" className={navLinkClass}>
-                  Finance
-                </NavLink>
-              )}
-              {showSales &&
-                (isFinanceAdmin || role === 'sales_manager') && (
-                  <NavLink to="/reconciliation" className={navLinkClass}>
-                    Reconcile
-                  </NavLink>
-                )}
-              {showSales && canApproveDiscount && (
-                <NavLink to="/commissions" className={navLinkClass}>
-                  Commissions
-                </NavLink>
-              )}
-              {showSales &&
-                (role === 'sales_advisor' || role === 'sales_manager') && (
-                  <NavLink to="/commission-verify" className={navLinkClass}>
-                    Verify Commission
-                  </NavLink>
-                )}
+              ))}
             </nav>
           </div>
 
@@ -165,12 +153,14 @@ export function AppShell({ children }: { children: ReactNode }) {
               </NavLink>
             )}
             {isSuperAdmin && (
-              <SideSwitcher
-                onService={onServicePath}
-                onSwitch={(to) =>
-                  navigate(to === 'service' ? '/service' : '/')
-                }
-              />
+              <div className="hidden sm:block">
+                <SideSwitcher
+                  onService={onServicePath}
+                  onSwitch={(to) =>
+                    navigate(to === 'service' ? '/service' : '/')
+                  }
+                />
+              </div>
             )}
             <UserMenu
               displayName={displayName}
@@ -357,6 +347,123 @@ function MenuLink({
     >
       {children}
     </Link>
+  )
+}
+
+/**
+ * Phone-only hamburger that collapses the primary nav links — and, for
+ * super_admin, the Sales/Service switcher — into a dropdown drawer, so the
+ * top bar stays tidy instead of overflowing into truncated links and a
+ * clipped avatar. Hidden at `sm` and up, where the inline nav takes over.
+ * Closes on outside click, Escape, link tap, or any route change.
+ */
+function MobileNav({
+  navItems,
+  isSuperAdmin,
+  onService,
+  onSwitch,
+}: {
+  navItems: { to: string; label: string; end?: boolean }[]
+  isSuperAdmin: boolean
+  onService: boolean
+  onSwitch: (to: 'sales' | 'service') => void
+}) {
+  const [open, setOpen] = useState(false)
+  const wrapRef = useRef<HTMLDivElement | null>(null)
+  const location = useLocation()
+
+  useEffect(() => {
+    if (!open) return
+    function onDown(e: MouseEvent) {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false)
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    window.addEventListener('mousedown', onDown)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('mousedown', onDown)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  // Collapse on any navigation — covers both link taps and the
+  // Sales/Service switch navigating to the other side's landing.
+  useEffect(() => {
+    setOpen(false)
+  }, [location.pathname])
+
+  return (
+    <div className="relative sm:hidden" ref={wrapRef}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label="Navigation menu"
+        className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-700 transition hover:bg-gray-100"
+      >
+        <svg
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          aria-hidden="true"
+        >
+          {open ? (
+            <>
+              <line x1="6" y1="6" x2="18" y2="18" />
+              <line x1="6" y1="18" x2="18" y2="6" />
+            </>
+          ) : (
+            <>
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <line x1="3" y1="12" x2="21" y2="12" />
+              <line x1="3" y1="18" x2="21" y2="18" />
+            </>
+          )}
+        </svg>
+      </button>
+
+      {open && (
+        <div
+          role="menu"
+          className="absolute left-0 z-20 mt-2 w-56 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg"
+        >
+          <nav className="py-1">
+            {navItems.map((item) => (
+              <NavLink
+                key={item.label}
+                to={item.to}
+                end={item.end}
+                onClick={() => setOpen(false)}
+                className={({ isActive }) =>
+                  `block px-4 py-2 text-sm transition ${
+                    isActive
+                      ? 'bg-gray-900 text-white'
+                      : 'text-gray-700 hover:bg-gray-50'
+                  }`
+                }
+              >
+                {item.label}
+              </NavLink>
+            ))}
+          </nav>
+          {isSuperAdmin && (
+            <div className="border-t border-gray-100 px-4 py-3">
+              <div className="mb-1.5 text-xs font-medium uppercase tracking-wide text-gray-400">
+                Workspace
+              </div>
+              <SideSwitcher onService={onService} onSwitch={onSwitch} />
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   )
 }
 
