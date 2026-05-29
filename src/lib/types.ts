@@ -250,7 +250,9 @@ export type CustomerInsert = {
 
 export type Vehicle = {
   id: string
-  customer_id: string
+  /** Nullable since 2026-05-29 — workshop seed rows imported from the
+   *  vehicle_types master sit unassigned until a real car comes in. */
+  customer_id: string | null
   /** Optional bridge to a SWL inventory cars row (when the workshop is
    *  servicing a car SWL originally sold). */
   car_id: string | null
