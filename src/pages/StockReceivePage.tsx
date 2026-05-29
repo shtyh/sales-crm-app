@@ -112,7 +112,6 @@ export function StockReceivePage() {
     setLineError(null)
     const code = partCode.trim()
     const qty = Number(qtyInput)
-    const cost = Number(costInput)
     if (!code) {
       setLineError('Enter a part code.')
       return
@@ -121,19 +120,30 @@ export function StockReceivePage() {
       setLineError('Quantity must be > 0.')
       return
     }
-    if (!Number.isFinite(cost) || cost < 0) {
-      setLineError('Unit cost must be ≥ 0.')
-      return
-    }
     try {
       const part = await lookupMut.mutateAsync(code)
       if (!part) {
         setLineError(`No part found with code "${code}".`)
         return
       }
+      // Default the unit cost to the part master's current value when the
+      // operator leaves the field blank. Any explicitly typed value wins
+      // (including 0, for free items / samples). Negative values are
+      // rejected outright.
+      const explicit = costInput.trim()
+      let resolvedCost: number
+      if (explicit === '') {
+        resolvedCost = Number(part.unit_cost) || 0
+      } else {
+        resolvedCost = Number(explicit)
+      }
+      if (!Number.isFinite(resolvedCost) || resolvedCost < 0) {
+        setLineError('Unit cost must be ≥ 0.')
+        return
+      }
       setLines((prev) => [
         ...prev,
-        { key: crypto.randomUUID(), part, qty, unit_cost: cost },
+        { key: crypto.randomUUID(), part, qty, unit_cost: resolvedCost },
       ])
       setPartCode('')
       setQtyInput('1')
@@ -359,7 +369,8 @@ export function StockReceivePage() {
                     step="0.01"
                     value={costInput}
                     onChange={(e) => setCostInput(e.target.value)}
-                    placeholder="0.00"
+                    placeholder="auto"
+                    title="Leave blank to use the part master's current cost"
                     className={inputClass + ' mt-1 w-full text-right'}
                   />
                 </div>
