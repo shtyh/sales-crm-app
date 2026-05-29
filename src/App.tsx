@@ -192,6 +192,11 @@ const ReconciliationPage = lazy(() =>
 const PartsListPage = lazy(() =>
   import('./pages/PartsListPage').then((m) => ({ default: m.PartsListPage })),
 )
+const StockReceivePage = lazy(() =>
+  import('./pages/StockReceivePage').then((m) => ({
+    default: m.StockReceivePage,
+  })),
+)
 
 function RouteFallback() {
   return (
@@ -520,6 +525,14 @@ function App() {
           element={
             <ProtectedRoute>
               <PartsListPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/service/stock/receive"
+          element={
+            <ProtectedRoute>
+              <StockReceivePage />
             </ProtectedRoute>
           }
         />

@@ -158,6 +158,7 @@ Trigger `sync_car_status_from_booking` fires AFTER INSERT/UPDATE/DELETE on booki
 | `/commission-verify` | CommissionVerifyPage (upload All-In-One photo → Gemini extracts → auto-match to booking → discrepancy table) | sales_advisor / sales_manager / super_admin (nav link shown to SA+SM only) |
 | `/reconciliation` | ReconciliationPage (3-way reconciliation queue: bank statement + LOU + bank-in + All-In-One) | finance_admin / sales_manager / super_admin |
 | `/service/stock/parts` | PartsListPage (browse + inline-edit the ~80k-row parts catalogue) | any workshop role + super_admin |
+| `/service/stock/receive` | StockReceivePage (book in a delivery — header + line items, QR-friendly DO No input) | any workshop role + super_admin |
 
 Top nav layout (2026-05-26 cleanup):
 

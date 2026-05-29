@@ -446,6 +446,77 @@ export const PART_CATEGORY_LABEL: Record<PartCategory, string> = {
   PRT: 'PRT',
 }
 
+// ----- Stock Receive module -----------------------------------------------
+
+export type Supplier = {
+  id: string
+  code: string
+  name: string
+  person: string | null
+  phone: string | null
+  phone2: string | null
+  fax: string | null
+  email: string | null
+  address_line1: string | null
+  address_line2: string | null
+  address_line3: string | null
+  postcode: string | null
+  gst_no: string | null
+  tin_no: string | null
+  biz_activity: string | null
+  msic_code: string | null
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export type StockReceipt = {
+  id: string
+  receipt_no: number
+  receipt_date: string
+  supplier_id: string | null
+  invoice_no: string | null
+  invoice_date: string | null
+  do_no: string | null
+  po_no: string | null
+  remarks: string | null
+  total_qty: number
+  total_cost: number
+  created_by: string | null
+  created_at: string
+}
+
+export type StockReceiptItem = {
+  id: string
+  receipt_id: string
+  part_id: string
+  qty: number
+  unit_cost: number
+  line_total: number
+  created_at: string
+}
+
+export type NewStockReceipt = {
+  receipt_date: string
+  supplier_id: string | null
+  invoice_no: string | null
+  invoice_date: string | null
+  do_no: string | null
+  po_no: string | null
+  remarks: string | null
+  items: Array<{
+    part_id: string
+    qty: number
+    unit_cost: number
+  }>
+}
+
+export type StockReceiptRow = StockReceipt & {
+  supplier_name: string | null
+  supplier_code: string | null
+  item_count: number
+}
+
 export type Part = {
   id: string
   part_no: string

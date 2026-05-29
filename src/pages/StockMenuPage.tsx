@@ -64,7 +64,7 @@ export function StockMenuPage() {
       title: 'Stock Received',
       subtitle: 'Book in items from a supplier delivery',
       icon: '📥',
-      badge: 'Coming soon',
+      to: '/service/stock/receive',
     },
     {
       title: 'Stock Issued',

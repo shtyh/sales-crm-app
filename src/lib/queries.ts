@@ -95,6 +95,14 @@ import {
   runReconcile,
   uploadAndExtractStatement,
 } from './reconciliation'
+import {
+  createStockReceipt,
+  findPartByCodeExact,
+  listReceiptItems,
+  listStockReceipts,
+  listSuppliers,
+  searchPartsForCode,
+} from './stockReceive'
 import type {
   Attachment,
   Attendance,
@@ -115,6 +123,10 @@ import type {
   BookingReconciliationRow,
   CommissionVerification,
   CommissionVerificationRow,
+  NewStockReceipt,
+  StockReceipt,
+  StockReceiptRow,
+  Supplier,
   Customer,
   CustomerInsert,
   ExtractedAllInOne,
@@ -998,6 +1010,70 @@ export function useUpdatePart() {
       qc.invalidateQueries({ queryKey: qk.parts })
       qc.invalidateQueries({ queryKey: ['parts', 'search'] })
       qc.invalidateQueries({ queryKey: ['parts', 'stats'] })
+    },
+  })
+}
+
+// ---------- Stock Receive -------------------------------------------------
+
+export function useSuppliers(enabled = true) {
+  return useQuery<Supplier[]>({
+    queryKey: ['suppliers'],
+    queryFn: listSuppliers,
+    enabled,
+    staleTime: 5 * 60 * 1000, // suppliers change rarely
+  })
+}
+
+export function useStockReceipts(limit = 20) {
+  return useQuery<StockReceiptRow[]>({
+    queryKey: ['stock-receipts', limit],
+    queryFn: () => listStockReceipts(limit),
+  })
+}
+
+export function useReceiptItems(receiptId: string | null) {
+  return useQuery({
+    queryKey: ['stock-receipts', 'items', receiptId],
+    queryFn: () => (receiptId ? listReceiptItems(receiptId) : Promise.resolve([])),
+    enabled: !!receiptId,
+  })
+}
+
+/** Triggered on Enter / blur on the part_no entry input. */
+export function useLookupPartByCode() {
+  return useMutation({
+    mutationFn: (code: string) => findPartByCodeExact(code),
+  })
+}
+
+export function usePartCodeAutocomplete(prefix: string) {
+  return useQuery({
+    queryKey: ['parts', 'autocomplete', prefix],
+    queryFn: () => searchPartsForCode(prefix),
+    enabled: prefix.trim().length >= 2,
+    staleTime: 30_000,
+  })
+}
+
+export function useCreateStockReceipt() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      input,
+      createdBy,
+    }: {
+      input: NewStockReceipt
+      createdBy: string
+    }) => createStockReceipt(input, createdBy),
+    onSuccess: (created: StockReceipt) => {
+      qc.invalidateQueries({ queryKey: ['stock-receipts'] })
+      qc.invalidateQueries({ queryKey: qk.parts })
+      qc.invalidateQueries({ queryKey: ['parts', 'stats'] })
+      qc.invalidateQueries({ queryKey: ['parts', 'search'] })
+      // Invalidating ['parts','autocomplete'] is overkill — the autocomplete
+      // query refetches on next focus naturally.
+      return created
     },
   })
 }
