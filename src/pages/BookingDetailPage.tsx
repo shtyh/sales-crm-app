@@ -1012,15 +1012,6 @@ export function BookingDetailPage() {
             <h2 className="text-sm font-semibold text-amber-900">
               💰 Finance status
             </h2>
-            <span className="inline-flex items-center gap-1 rounded-full bg-white/70 px-2 py-0.5 text-xs text-gray-700 ring-1 ring-amber-200/70">
-              Deposit:{' '}
-              <span className="font-medium">
-                {depositSummary(
-                  Number(booking.booking_fee) || 0,
-                  booking.status,
-                )}
-              </span>
-            </span>
             <div className="ml-auto flex items-center gap-2">
               <span className="text-xs font-medium text-gray-600">Payment</span>
               {isSalesAdvisor ? (
@@ -1054,6 +1045,12 @@ export function BookingDetailPage() {
                 </span>
               )}
             </div>
+          </div>
+          <div className="mt-2 text-xs text-gray-700">
+            Deposit:{' '}
+            <span className="font-medium">
+              {depositSummary(Number(booking.booking_fee) || 0, booking.status)}
+            </span>
           </div>
         </section>
 
@@ -1303,12 +1300,12 @@ function readonlyInputClass(editable: boolean) {
     : 'w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 outline-none cursor-not-allowed'
 }
 
-/** One-liner deposit status for the compact Finance status row. */
+/** Deposit status line shown in the Finance status card. */
 function depositSummary(fee: number, status: BookingStatus): string {
-  if (fee === 0) return '✅ no booking fee'
+  if (fee === 0) return '✅ no booking fee — nothing to collect'
   if (status === 'confirmed' || status === 'delivered') return '✅ received'
-  if (status === 'cancelled') return '— cancelled'
-  return '⏳ awaiting collection'
+  if (status === 'cancelled') return '— booking cancelled'
+  return '⏳ awaiting admin to collect'
 }
 
 function DepositBadge({
