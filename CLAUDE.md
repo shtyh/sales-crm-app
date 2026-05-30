@@ -1279,8 +1279,15 @@ and LOU rows still `needs_review` (type loan amount → Confirm, off-by->RM1
 warning). Down-payment receipts auto-sum, so they never queue.
 
 ### ✅ Phase E — SA submission cards (DONE)
-`src/components/DocumentSubmissionCards.tsx`, rendered on `/bookings/:id` between
-the attachments block and the Activity log, gated SA+SM+super. 3 cards
+`src/components/DocumentSubmissionCards.tsx`, gated SA+SM+super. **Layout
+(2026-05-30):** the booking detail page's upload area is now ordered Document
+submission (first) → 🏦 Bank transaction (grouped right under it) → then at the
+bottom 💳 Bank statement + ❌ Cancellation form. The old 📃 LOU `AttachmentSection`
+card was **removed** (LOU now lives only in the Document submission card). ⚠️ Note:
+that removed card was the reconciliation LOU source (`booking_attachments`
+kind='lou' → `attachment_extractions`); the doc-verification LOU writes to
+`document_verifications` instead, so reconciliation's LOU upload path is
+currently orphaned unless bridged. 3 cards
 (All-In-One / Down payment / LOU) each show the booking-level status + the
 uploaded DV rows (extracted summary + status pill) + an upload button. LOU card
 shows "Not required" for known cash deals. The down-payment card shows

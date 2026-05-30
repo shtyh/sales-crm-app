@@ -1242,8 +1242,15 @@ export function BookingDetailPage() {
         </div>
       </form>
 
-      {/* Attachments live outside the booking form — they're independent. */}
-      <div className="mt-6 space-y-4">
+      {/* Deal documents — the AI-verified submission cards + the matching
+          bank-in slip, grouped together. (Attachments live outside the form.) */}
+      {(isSalesAdvisor || canApproveDiscount || isSuperAdmin) && (
+        <DocumentSubmissionCards
+          booking={booking}
+          canUpload={isSalesAdvisor || canApproveDiscount || isSuperAdmin}
+        />
+      )}
+      <div className="mt-4 space-y-4">
         <AttachmentSection
           bookingId={booking.id}
           bookingCode={booking.code}
@@ -1253,6 +1260,10 @@ export function BookingDetailPage() {
           items={attachmentsByKind.bank_transaction}
           onChange={refreshAttachments}
         />
+      </div>
+
+      {/* Supporting documents (rarely needed) sit at the bottom. */}
+      <div className="mt-6 space-y-4">
         <AttachmentSection
           bookingId={booking.id}
           bookingCode={booking.code}
@@ -1265,15 +1276,6 @@ export function BookingDetailPage() {
         <AttachmentSection
           bookingId={booking.id}
           bookingCode={booking.code}
-          kind="lou"
-          title="📃 Letter of Undertaking (LOU)"
-          description="Employer LOU, loan undertaking, guarantor letter, etc."
-          items={attachmentsByKind.lou}
-          onChange={refreshAttachments}
-        />
-        <AttachmentSection
-          bookingId={booking.id}
-          bookingCode={booking.code}
           kind="cancellation_form"
           title="❌ Cancellation form"
           description="Signed cancellation form if the customer backs out."
@@ -1281,13 +1283,6 @@ export function BookingDetailPage() {
           onChange={refreshAttachments}
         />
       </div>
-
-      {(isSalesAdvisor || canApproveDiscount || isSuperAdmin) && (
-        <DocumentSubmissionCards
-          booking={booking}
-          canUpload={isSalesAdvisor || canApproveDiscount || isSuperAdmin}
-        />
-      )}
 
       <BookingActivityLog bookingId={booking.id} />
     </AppShell>
