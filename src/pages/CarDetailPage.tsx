@@ -323,7 +323,7 @@ export function CarDetailPage() {
         <section className="rounded-xl border border-purple-200 bg-purple-50/40 p-4 sm:p-5">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-purple-900">
-              🏦 Inventory financing
+              🏦 Floor stock financing
             </h2>
             {!canEditCarFloorStock && (
               <span className="text-xs text-gray-500">
@@ -339,7 +339,12 @@ export function CarDetailPage() {
               <select
                 disabled={!canEditCarFloorStock}
                 value={floorStockBank}
-                onChange={(e) => setFloorStockBank(e.target.value)}
+                onChange={(e) => {
+                  const v = e.target.value
+                  setFloorStockBank(v)
+                  // Cash purchase = no financing, so it's already settled.
+                  if (v === 'Cash') setFloorStockStatus('paid_off')
+                }}
                 className={readonlyInputClass(canEditCarFloorStock)}
               >
                 <option value="">— Select bank —</option>
@@ -356,7 +361,7 @@ export function CarDetailPage() {
             </label>
             <label className="block text-sm">
               <span className="mb-1 block font-medium text-gray-700">
-                Financed amount (MYR)
+                Floor stock amount (MYR)
               </span>
               <input
                 type="number"
@@ -371,7 +376,7 @@ export function CarDetailPage() {
             </label>
             <label className="block text-sm">
               <span className="mb-1 block font-medium text-gray-700">
-                Financing status
+                Floor stock status
               </span>
               <select
                 disabled={!canEditCarFloorStock}
