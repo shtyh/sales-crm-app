@@ -1007,44 +1007,54 @@ export function BookingDetailPage() {
         {/* ---------- Finance Admin: deposit + payment status -----------------
             SAs get a condensed one-line view; everyone else sees the editable
             form (Finance Admin edits, others see disabled inputs). */}
-        <section className="rounded-xl border border-amber-200 bg-amber-50/50 p-4 sm:p-5">
-          <div className="mb-3 flex items-center justify-between">
+        <section className="rounded-xl border border-amber-200 bg-amber-50/50 px-4 py-3">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
             <h2 className="text-sm font-semibold text-amber-900">
               💰 Finance status
             </h2>
-            {!canEditFinanceStatus && (
-              <span className="text-xs text-gray-500">
-                🔒 Finance Admin only
-              </span>
-            )}
-          </div>
-          {isSalesAdvisor ? (
-            <div className="text-sm text-gray-800">
-              Payment:{' '}
+            <span className="inline-flex items-center gap-1 rounded-full bg-white/70 px-2 py-0.5 text-xs text-gray-700 ring-1 ring-amber-200/70">
+              Deposit:{' '}
               <span className="font-medium">
-                {PAYMENT_LABEL[booking.payment_status]}
+                {depositSummary(
+                  Number(booking.booking_fee) || 0,
+                  booking.status,
+                )}
               </span>
-            </div>
-          ) : (
-            <div className="max-w-xs">
-              <Field label="Payment">
-                <select
-                  disabled={!canEditFinanceStatus}
-                  value={paymentStatus}
-                  onChange={(e) =>
-                    setPaymentStatus(e.target.value as PaymentStatus)
-                  }
-                  className={readonlyInputClass(canEditFinanceStatus)}
+            </span>
+            <div className="ml-auto flex items-center gap-2">
+              <span className="text-xs font-medium text-gray-600">Payment</span>
+              {isSalesAdvisor ? (
+                <span className="text-sm font-medium text-gray-900">
+                  {PAYMENT_LABEL[booking.payment_status]}
+                </span>
+              ) : (
+                <div className="w-40">
+                  <select
+                    disabled={!canEditFinanceStatus}
+                    value={paymentStatus}
+                    onChange={(e) =>
+                      setPaymentStatus(e.target.value as PaymentStatus)
+                    }
+                    className={readonlyInputClass(canEditFinanceStatus)}
+                  >
+                    {PAYMENT_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {!canEditFinanceStatus && (
+                <span
+                  className="text-xs text-gray-500"
+                  title="Finance Admin only"
                 >
-                  {PAYMENT_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              </Field>
+                  🔒
+                </span>
+              )}
             </div>
-          )}
+          </div>
         </section>
 
         {/* Owner reassignment UI removed 2026-05-23 per request. owner_id
@@ -1086,18 +1096,6 @@ export function BookingDetailPage() {
             </div>
           ) : (
             <>
-          <div className="mb-3 text-xs text-gray-600">
-            Deposit:{' '}
-            {Number(booking.booking_fee) === 0
-              ? '✅ no booking fee — nothing to collect'
-              : booking.status === 'confirmed' ||
-                  booking.status === 'delivered'
-                ? '✅ received'
-                : booking.status === 'cancelled'
-                  ? '— booking cancelled'
-                  : '⏳ awaiting admin to collect'}
-          </div>
-
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Loan bank">
               <select
@@ -1303,6 +1301,14 @@ function readonlyInputClass(editable: boolean) {
   return editable
     ? inputClass
     : 'w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 outline-none cursor-not-allowed'
+}
+
+/** One-liner deposit status for the compact Finance status row. */
+function depositSummary(fee: number, status: BookingStatus): string {
+  if (fee === 0) return '✅ no booking fee'
+  if (status === 'confirmed' || status === 'delivered') return '✅ received'
+  if (status === 'cancelled') return '— cancelled'
+  return '⏳ awaiting collection'
 }
 
 function DepositBadge({

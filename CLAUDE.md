@@ -95,7 +95,7 @@ These are enforced by `public.guard_booking_field_writes` BEFORE INSERT/UPDATE.
 | `vehicle_color` | now `text[]` (2026-05-28) — multi-select on the booking form. Legacy rows are 1-element arrays. |
 | `owner_id` (lead reassignment) | sales_manager only (UI hidden 2026-05-23) |
 | `loan_bank`, `loan_status`, `loan_notes`, `loan_amount`, `insurance_company`, `insurance_amount` | finance_admin only |
-| `deposit_status`, `payment_status` | finance_admin only. **UI note (2026-05-30):** the booking page's 💰 Finance status section now shows **Payment only** — the Deposit dropdown was removed (nothing reads `deposit_status` outside this page; the column stays). Deposit is still reflected by the status-driven badge/line, which shows **"✓ No booking fee"** when `booking_fee = 0` (nothing to collect). |
+| `deposit_status`, `payment_status` | finance_admin only. **UI note (2026-05-30):** the booking page's 💰 Finance status is now a **compact single row** — a read-only **Deposit** badge (`depositSummary()`; shows "✅ no booking fee" when `booking_fee = 0`) + the **Payment** dropdown. The editable Deposit field was removed (nothing reads `deposit_status` outside this page; the column stays). The deposit line was lifted out of the Loan & Insurance card into this row to tidy both. |
 | `jpj_status`, `jpj_submitted_at`, `jpj_expected_completion` | general_admin only |
 | `status='cancelled'` transition | sales_manager only |
 | `car_id` | general_admin or sales_manager (or super_admin) |
