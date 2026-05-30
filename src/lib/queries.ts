@@ -72,7 +72,11 @@ import {
 import { listTechnicians } from './technicians'
 import { listPayments } from './payments'
 import { listInvoices } from './invoices'
-import { listAuditForRow, listAuditForTable } from './audit'
+import {
+  listAuditForBooking,
+  listAuditForRow,
+  listAuditForTable,
+} from './audit'
 import {
   createPayoutAndAssign,
   createSchedule,
@@ -181,6 +185,7 @@ export const qk = {
   audit: (tableName: string, rowId: string) =>
     ['audit', tableName, rowId] as const,
   auditTable: (tableName: string) => ['audit', 'table', tableName] as const,
+  auditBooking: (bookingId: string) => ['audit', 'booking', bookingId] as const,
   commissionSchedules: ['commission-schedules'] as const,
   commissionPayouts: ['commission-payouts'] as const,
   customers: ['customers'] as const,
@@ -769,6 +774,19 @@ export function useAuditForRow(
     enabled: enabled && !!rowId,
     // Audit data isn't latency-critical; keep it fresh for a minute so we
     // refresh after navigating back from making changes.
+    staleTime: 60_000,
+  })
+}
+
+/**
+ * A booking's audit timeline — its own field changes + document upload/removal
+ * events. `enabled` should usually be the caller's `isSuperAdmin` flag.
+ */
+export function useAuditForBooking(bookingId: string, enabled = true) {
+  return useQuery<AuditLogEntry[]>({
+    queryKey: qk.auditBooking(bookingId),
+    queryFn: () => listAuditForBooking(bookingId),
+    enabled: enabled && !!bookingId,
     staleTime: 60_000,
   })
 }

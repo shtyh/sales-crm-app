@@ -3,7 +3,7 @@ import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { AppShell } from '../components/AppShell'
 import { AttachmentSection } from '../components/AttachmentSection'
-import { AuditLogPanel } from '../components/AuditLogPanel'
+import { BookingActivityLog } from '../components/AuditLogPanel'
 import { useAuth } from '../lib/auth'
 import {
   qk,
@@ -58,21 +58,11 @@ const LOAN_LABEL: Record<LoanStatus, string> = {
   rejected: '✗ Loan rejected',
 }
 
-const DEPOSIT_OPTIONS: { value: DepositStatus; label: string }[] = [
-  { value: 'unpaid', label: 'Unpaid' },
-  { value: 'received', label: 'Received' },
-  { value: 'refunded', label: 'Refunded' },
-]
-
 const PAYMENT_OPTIONS: { value: PaymentStatus; label: string }[] = [
   { value: 'unpaid', label: 'Unpaid' },
   { value: 'partial', label: 'Partially paid' },
   { value: 'paid', label: 'Fully paid' },
 ]
-
-const DEPOSIT_LABEL: Record<DepositStatus, string> = Object.fromEntries(
-  DEPOSIT_OPTIONS.map((o) => [o.value, o.label]),
-) as Record<DepositStatus, string>
 
 const PAYMENT_LABEL: Record<PaymentStatus, string> = Object.fromEntries(
   PAYMENT_OPTIONS.map((o) => [o.value, o.label]),
@@ -178,6 +168,8 @@ export function BookingDetailPage() {
   // refresh after upload/delete without owning the query itself.
   const refreshAttachments = useCallback(async () => {
     await qc.invalidateQueries({ queryKey: qk.attachments(id) })
+    // Upload/remove now lands in the booking Activity log too — refresh it.
+    qc.invalidateQueries({ queryKey: qk.auditBooking(id) })
   }, [qc, id])
 
   const attachmentsByKind = useMemo(() => {
@@ -485,7 +477,10 @@ export function BookingDetailPage() {
               {booking.status}
             </span>
             {booking.status !== 'cancelled' && (
-              <DepositBadge status={booking.status} />
+              <DepositBadge
+                status={booking.status}
+                fee={Number(booking.booking_fee) || 0}
+              />
             )}
             {booking.status !== 'cancelled' &&
               booking.loan_status !== 'not_applicable' && (
@@ -1025,33 +1020,13 @@ export function BookingDetailPage() {
           </div>
           {isSalesAdvisor ? (
             <div className="text-sm text-gray-800">
-              Deposit:{' '}
-              <span className="font-medium">
-                {DEPOSIT_LABEL[booking.deposit_status]}
-              </span>{' '}
-              · Payment:{' '}
+              Payment:{' '}
               <span className="font-medium">
                 {PAYMENT_LABEL[booking.payment_status]}
               </span>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field label="Deposit">
-                <select
-                  disabled={!canEditFinanceStatus}
-                  value={depositStatus}
-                  onChange={(e) =>
-                    setDepositStatus(e.target.value as DepositStatus)
-                  }
-                  className={readonlyInputClass(canEditFinanceStatus)}
-                >
-                  {DEPOSIT_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              </Field>
+            <div className="max-w-xs">
               <Field label="Payment">
                 <select
                   disabled={!canEditFinanceStatus}
@@ -1113,11 +1088,14 @@ export function BookingDetailPage() {
             <>
           <div className="mb-3 text-xs text-gray-600">
             Deposit:{' '}
-            {booking.status === 'confirmed' || booking.status === 'delivered'
-              ? '✅ received'
-              : booking.status === 'cancelled'
-                ? '— booking cancelled'
-                : '⏳ awaiting admin to collect'}
+            {Number(booking.booking_fee) === 0
+              ? '✅ no booking fee — nothing to collect'
+              : booking.status === 'confirmed' ||
+                  booking.status === 'delivered'
+                ? '✅ received'
+                : booking.status === 'cancelled'
+                  ? '— booking cancelled'
+                  : '⏳ awaiting admin to collect'}
           </div>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -1310,7 +1288,7 @@ export function BookingDetailPage() {
         />
       </div>
 
-      <AuditLogPanel tableName="bookings" rowId={booking.id} />
+      <BookingActivityLog bookingId={booking.id} />
     </AppShell>
   )
 }
@@ -1327,7 +1305,21 @@ function readonlyInputClass(editable: boolean) {
     : 'w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 outline-none cursor-not-allowed'
 }
 
-function DepositBadge({ status }: { status: BookingStatus }) {
+function DepositBadge({
+  status,
+  fee,
+}: {
+  status: BookingStatus
+  fee: number
+}) {
+  // No booking fee → nothing to collect, treat the deposit as settled.
+  if (fee === 0) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">
+        ✓ No booking fee
+      </span>
+    )
+  }
   const received = status === 'confirmed' || status === 'delivered'
   return (
     <span
