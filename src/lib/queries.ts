@@ -100,6 +100,15 @@ import {
   type CreateVerificationInput,
 } from './commissionVerifications'
 import {
+  approveAllInOne,
+  confirmLou,
+  listDocumentVerifications,
+  listDocumentVerificationsForBooking,
+  recheckBooking,
+  rejectAllInOne,
+  uploadAndExtractDocument,
+} from './documentVerifications'
+import {
   extractAttachment,
   listReconciliations,
   listStatements,
@@ -146,6 +155,8 @@ import type {
   BookingReconciliationRow,
   CommissionVerification,
   CommissionVerificationRow,
+  DocumentType,
+  DocumentVerificationRow,
   NewStockReceipt,
   StockReceipt,
   StockReceiptRow,
@@ -225,6 +236,9 @@ export const qk = {
   availableSlots: (date: string) =>
     ['service-appointments', 'available-slots', date] as const,
   commissionVerifications: ['commission-verifications'] as const,
+  documentVerifications: ['document-verifications'] as const,
+  documentVerificationsForBooking: (bookingId: string) =>
+    ['document-verifications', bookingId] as const,
   bankStatements: ['bank-statements'] as const,
   reconciliations: ['reconciliations'] as const,
 }
@@ -1092,6 +1106,99 @@ export function useRematchVerification() {
 // Re-export the type so the page can import everything from queries.ts and
 // not have to know about the lower-level module.
 export type { CommissionVerification }
+
+// ---------- Document verifications ----------------------------------------
+
+/** Every document verification visible to the caller (RLS scopes it: SA own;
+ *  FA / SM / super all). Drives the Finance review queue. */
+export function useDocumentVerifications(enabled = true) {
+  return useQuery<DocumentVerificationRow[]>({
+    queryKey: qk.documentVerifications,
+    queryFn: listDocumentVerifications,
+    enabled,
+  })
+}
+
+/** Document verifications for a single booking — the SA's submission cards. */
+export function useDocumentVerificationsForBooking(bookingId: string) {
+  return useQuery<DocumentVerificationRow[]>({
+    queryKey: qk.documentVerificationsForBooking(bookingId),
+    queryFn: () => listDocumentVerificationsForBooking(bookingId),
+    enabled: !!bookingId,
+  })
+}
+
+/** Upload a document image + invoke its extractor edge function. The edge
+ *  function inserts the row and the DB trigger updates the booking, so we just
+ *  invalidate afterwards. */
+export function useUploadDocument() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (params: {
+      userId: string
+      bookingId: string
+      documentType: DocumentType
+      file: File
+    }) => uploadAndExtractDocument(params),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: qk.documentVerifications })
+      qc.invalidateQueries({
+        queryKey: qk.documentVerificationsForBooking(vars.bookingId),
+      })
+      qc.invalidateQueries({ queryKey: qk.booking(vars.bookingId) })
+      qc.invalidateQueries({ queryKey: qk.bookings })
+      qc.invalidateQueries({ queryKey: qk.notifications })
+      qc.invalidateQueries({ queryKey: qk.unreadCount })
+    },
+  })
+}
+
+function invalidateDocReview(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: qk.documentVerifications })
+  qc.invalidateQueries({ queryKey: ['document-verifications'] })
+  qc.invalidateQueries({ queryKey: qk.bookings })
+  qc.invalidateQueries({ queryKey: qk.notifications })
+  qc.invalidateQueries({ queryKey: qk.unreadCount })
+}
+
+export function useApproveAllInOne() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => approveAllInOne(id),
+    onSuccess: () => invalidateDocReview(qc),
+  })
+}
+
+export function useRejectAllInOne() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) =>
+      rejectAllInOne(id, reason),
+    onSuccess: () => invalidateDocReview(qc),
+  })
+}
+
+export function useConfirmLou() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (params: {
+      id: string
+      userId: string
+      loanAmount: number
+      extractedLoanAmount: number | null
+      notes?: string
+    }) => confirmLou(params),
+    onSuccess: () => invalidateDocReview(qc),
+  })
+}
+
+export function useRecheckBooking() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (bookingId: string) => recheckBooking(bookingId),
+    onSuccess: () => invalidateDocReview(qc),
+  })
+}
 
 // ---------- Parts inventory: search + edit -------------------------------
 

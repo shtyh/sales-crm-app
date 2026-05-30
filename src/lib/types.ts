@@ -968,6 +968,21 @@ export type Booking = {
    *  is fully migrated; falls back to the customer_* snapshot fields. */
   customer_id: string | null
 
+  // ── Document-verification system (2026-05-30) ──
+  // All system-managed: written only by recompute_booking_documents() (the
+  // AFTER trigger on document_verifications). Never edited directly by the FE.
+  /** Deal financing type. DISTINCT from payments.payment_type (the payment
+   *  method). Inferred from the All-In-One extraction when null. */
+  payment_type: DealPaymentType | null
+  all_in_one_status: AllInOneStatus
+  down_payment_status: DownPaymentStatus
+  lou_status: LouStatus
+  /** True once the required docs for this booking's payment_type are all
+   *  satisfied. Setting this true is what unlocks the commission. */
+  documents_complete: boolean
+  /** Σ of the extracted_payment_amount on every down-payment receipt. */
+  total_received_down_payment: number
+
   status: BookingStatus
   notes: string | null
 
@@ -1180,6 +1195,132 @@ export type CommissionVerification = {
  *  matched booking's commission so the table can render side-by-side. */
 export type CommissionVerificationRow = CommissionVerification & {
   booking_commission: number | null
+  uploader_name: string | null
+}
+
+// ----- Document verification system (2026-05-30) --------------------------
+//
+// Parallel to commission_verifications (deliberately separate — see
+// 20260530_document_verification_system.sql). The SA uploads three kinds of
+// document on /bookings/:id; Gemini extracts each via its own edge function;
+// Finance Admin reviews; recompute_booking_documents() rolls the result up
+// onto the booking and unlocks commission when everything checks out.
+
+/** Deal financing type carried on bookings.payment_type. */
+export type DealPaymentType = 'cash' | 'loan' | 'floor_stock'
+export type AllInOneStatus = 'pending' | 'approved' | 'rejected'
+export type DownPaymentStatus = 'pending' | 'partial' | 'complete'
+export type LouStatus = 'not_required' | 'pending' | 'verified'
+
+export type DocumentType = 'all_in_one' | 'down_payment' | 'lou'
+
+export const DOCUMENT_TYPE_LABEL: Record<DocumentType, string> = {
+  all_in_one: 'All-In-One form',
+  down_payment: 'Down payment receipt',
+  lou: 'Letter of Undertaking',
+}
+
+export type VerificationStatus =
+  | 'pending'
+  | 'approved'
+  | 'rejected'
+  | 'needs_review'
+
+/** A single uploaded-and-extracted document. Mirrors the
+ *  document_verifications table; most extracted_* fields are only populated
+ *  for one document_type. */
+export type DocumentVerification = {
+  id: string
+  booking_id: string
+  document_type: DocumentType
+  attachment_id: string | null
+  image_path: string
+
+  // All-In-One
+  extracted_otr: number | null
+  extracted_pesb_discount: number | null
+  extracted_own_discount: number | null
+  extracted_insurance: number | null
+  extracted_total_otr: number | null
+  extracted_loan_amount: number | null
+  extracted_down_payment: number | null
+  extracted_balance: number | null
+  extracted_commission: number | null
+  extracted_sa_name: string | null
+  extracted_customer_name: string | null
+  extracted_model: string | null
+  extracted_plate_no: string | null
+  extracted_sm_signature_detected: boolean | null
+  extracted_payment_type: string | null
+
+  // Down payment
+  extracted_payment_amount: number | null
+  extracted_payment_date: string | null
+  extracted_payer_name: string | null
+
+  // LOU
+  extracted_hirer_name: string | null
+  extracted_loan_amount_lou: number | null
+  extracted_handling_fee: number | null
+  extracted_plate_no_lou: string | null
+
+  // Finance Admin review
+  finance_admin_loan_amount: number | null
+  finance_admin_confirmed: boolean
+  finance_admin_confirmed_by: string | null
+  finance_admin_confirmed_at: string | null
+  finance_admin_notes: string | null
+
+  gemini_match: boolean | null
+  verification_status: VerificationStatus
+  rejection_reason: string | null
+
+  uploaded_by: string
+  created_at: string
+  updated_at: string
+}
+
+/** Raw extraction shape returned by each edge function (subset depends on
+ *  the document_type). Numbers may be missing if a cell didn't read. */
+export type ExtractedAllInOneDoc = {
+  customer_name?: string
+  sa_name?: string
+  model?: string
+  plate_no?: string
+  otr?: number
+  pesb_discount?: number
+  own_discount?: number
+  insurance?: number
+  total_otr?: number
+  loan_amount?: number
+  down_payment?: number
+  balance?: number
+  commission?: number
+  payment_type?: string
+  sm_signature_detected?: boolean
+}
+
+export type ExtractedDownPayment = {
+  payment_amount?: number
+  payment_date?: string
+  payer_name?: string
+  plate_no?: string
+}
+
+export type ExtractedLou = {
+  hirer_name?: string
+  loan_amount?: number
+  handling_fee?: number
+  plate_no?: string
+}
+
+/** Joined row for the Finance queue — includes the booking's customer +
+ *  model + owner so the table reads without a second fetch. */
+export type DocumentVerificationRow = DocumentVerification & {
+  booking_code: string | null
+  booking_customer_name: string | null
+  booking_model: string | null
+  booking_payment_type: DealPaymentType | null
   uploader_name: string | null
 }
 

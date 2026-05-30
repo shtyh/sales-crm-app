@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
+import { FinanceDocVerifyQueue } from '../components/FinanceDocVerifyQueue'
 import { useAuth } from '../lib/auth'
 import {
   useBookings,
@@ -243,6 +244,9 @@ export function FinancePage() {
         <StatMoney label="Invoices issued" value={totalInvoices} />
         <StatMoney label="Total commission" value={totalCommission} />
       </div>
+
+      {/* ---------- Document verification queue ---------- */}
+      <FinanceDocVerifyQueue />
 
       {/* ---------- Pending insurance ---------- */}
       <Section title={`🛡️ Pending insurance — ${pendingInsurance.length}`}>

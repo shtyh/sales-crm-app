@@ -83,7 +83,11 @@ Current real users (`select id, full_name, role from public.profiles`):
 ## bookings.* column ownership matrix
 
 These are enforced by `public.guard_booking_field_writes` BEFORE INSERT/UPDATE.
-`super_admin` early-returns and bypasses everything.
+`super_admin` early-returns and bypasses everything. A transaction-local
+`app.system_op='on'` also early-returns the guard (added 2026-05-30, mirroring
+the cars guard) — used by `recompute_booking_documents()` so the
+document-verification system can write system-managed columns without tripping
+role gates or the commission auto-(de)flip.
 
 | Column | Who can write |
 |---|---|
@@ -105,6 +109,7 @@ These are enforced by `public.guard_booking_field_writes` BEFORE INSERT/UPDATE.
 | `commission_amount` | auto = base − discount + special_support (can go negative); sales_manager can override |
 | `commission_status` | system auto-flips to `pending` when delivered+paid (or `approved` if owner is SM). sales_manager flips manually after. |
 | `commission_payout_id` | sales_manager (set when bundling into a payout batch) |
+| `payment_type`, `all_in_one_status`, `down_payment_status`, `lou_status`, `documents_complete`, `total_received_down_payment` | **system-managed** — written ONLY by `recompute_booking_documents()` (the `document_verifications` AFTER trigger), which bypasses this guard via transaction-local `app.system_op='on'`. No UI writes them. See the Document Verification System section. |
 
 ## cars.* column ownership
 
@@ -145,11 +150,11 @@ Trigger `sync_car_status_from_booking` fires AFTER INSERT/UPDATE/DELETE on booki
 | `/` | RoleHome → role-specific dashboard. finance_admin → redirect to `/finance`; general_admin → `GeneralAdminDashboardPage`; workshop roles → service dashboards; everyone else → AdminDashboardPage or DashboardPage. | any auth |
 | `/bookings` | BookingsPage (list) | any auth |
 | `/bookings/new` | NewBookingPage | sales_advisor / sales_manager / super_admin (nav link hidden from others; RLS gates insert to the same three roles) |
-| `/bookings/:id` | BookingDetailPage | any auth (RLS still gates select) |
+| `/bookings/:id` | BookingDetailPage (+ **📄 Document submission cards** for SA/SM/super: All-In-One / down payment / LOU upload → AI extract, 2026-05-30) | any auth (RLS still gates select) |
 | `/cars` | CarsPage (list) | any auth |
 | `/cars/new` | NewCarPage | finance_admin + super_admin (was general_admin until 2026-05-26) |
 | `/cars/:id` | CarDetailPage | any auth; column gates within the page |
-| `/finance` | FinancePage (overview cards + insurance / payment / invoice / commission tables, plus floor-stock + LOU below) | finance_admin + super_admin only |
+| `/finance` | FinancePage (overview cards + **📋 Document verification queue** (All-In-One approve/reject + LOU confirm, 2026-05-30) + insurance / payment / invoice / commission tables, plus floor-stock + LOU below) | finance_admin + super_admin only |
 | `/commissions` | CommissionsPage (SM payout flow) | sales_manager + super_admin |
 | `/admin/commissions` | CommissionSchedulesPage (base rates + a 🕓 Change log of every add/edit/delete, from `audit_log`) | super_admin only |
 | `/admin/users` | AdminUsersPage | super_admin only |
@@ -781,7 +786,8 @@ Files in `supabase/migrations/` (chronological):
 20260530_stock_issued_list_rpc.sql                stock_issued_list(p_from,p_to) SECURITY DEFINER RPC — every part-issue txn in a date range; powers StockIssuedListPage at /service/stock/issued
 20260530_commission_schedule_backfill_bookings.sql  trg_commission_schedule_backfill + backfill_booking_commission() — schedule add/update fills NULL-base bookings (one-time backfill included); guard recomputes commission_amount
 20260530_booking_attachments_audit.sql            trg_booking_attachments_audit → write_audit_log(); document uploads/removals now show in the booking 🕓 Activity (BookingActivityLog merges them in)
-20260530_document_verification_system.sql         DOC-VERIFICATION SYSTEM Phase A (schema). notifications + document_verifications tables (+RLS/grants/policies), bookings +all_in_one_status/down_payment_status/lou_status/documents_complete/total_received_down_payment/payment_type(cash/loan/floor_stock — distinct from payments.payment_type), document-verification/{uid}/ storage policies, notification RPCs. Phases B-F (bell/page, 3 edge fns extract-all-in-one/down-payment/lou on gemini-2.5-flash, finance queue, SA upload UI, check_booking_complete) pending. Handling fee RM600 = edge-fn constant, not a column.
+20260530_document_verification_system.sql         DOC-VERIFICATION SYSTEM Phase A (schema). notifications + document_verifications tables (+RLS/grants/policies), bookings +all_in_one_status/down_payment_status/lou_status/documents_complete/total_received_down_payment/payment_type(cash/loan/floor_stock — distinct from payments.payment_type), document-verification/{uid}/ storage policies, notification RPCs.
+20260530_document_verification_complete.sql       DOC-VERIFICATION SYSTEM Phase F (completion engine). guard_booking_field_writes rewrite + app.system_op bypass; recompute_booking_documents() (source of truth: derives the 3 doc statuses + payment_type + total_received, writes onto booking guard-bypassed, unlocks commission not_eligible→pending on documents_complete false→true, fans out notifications); trg_document_verifications_recompute (AFTER INSERT/UPDATE); check_booking_complete() authenticated re-check wrapper; _dv_notify/_dv_notify_finance. Edge fns extract-all-in-one/extract-down-payment/extract-lou (+_shared/docverify.ts) deployed separately via MCP.
 ```
 
 Some early ones were **applied by hand** in Supabase SQL editor and so don't show up in `supabase_migrations.schema_migrations`. The files are still source of truth for what should exist.
@@ -1135,12 +1141,47 @@ Generated dry-run helpers in `/tmp/parts_import/dry/` —
 Source CSVs at `/Users/khorheeshin/Claude Fun/wms_data/AUTFDJ02.csv`
 and `AUTFDB02.csv` (latin-1 encoded).
 
-## 🚧 Document Verification System — build status (2026-05-30, IN PROGRESS, PAUSED)
+## ✅ Document Verification System — COMPLETE (2026-05-30)
 
 Big multi-part feature (AI doc extraction + Finance-Admin review + in-app
-notifications) from a detailed user spec. Building phase-by-phase. **Phases A
-+ B done; C–F not started.** A design workflow produced the plan; key
-decisions are locked (below).
+notifications) from a detailed user spec. **All phases A–F shipped.** Key
+decisions were locked (below) and held.
+
+### How it flows end-to-end
+1. **SA uploads** on `/bookings/:id` (📄 Document submission cards, gated
+   SA+SM+super) → `document-verification/{uid}/{docType}-{ts}.{ext}` on
+   `booking-files` → invokes the matching extractor edge fn.
+2. **Edge fn** (`extract-all-in-one` / `extract-down-payment` / `extract-lou`,
+   all on `gemini-2.5-flash`) verifies JWT + role + path/booking ownership +
+   rate limit, downloads the image via service-role, calls Gemini, and
+   **inserts a `document_verifications` row** (no-SM-signature All-In-One →
+   `rejected`; otherwise `pending`; down-payment → `approved` auto; LOU →
+   `needs_review`).
+3. **`trg_document_verifications_recompute`** (AFTER INSERT/UPDATE) →
+   `recompute_booking_documents(booking_id)` is the **single source of truth**:
+   it re-derives `all_in_one_status` / `down_payment_status` / `lou_status` /
+   `total_received_down_payment` / `payment_type` from the DV rows, writes them
+   onto the booking (guard bypassed), and on the `documents_complete` false→true
+   transition sets `documents_complete` + **unlocks commission**
+   (`not_eligible`→`pending`, or `approved` if owner is SM) + fans out
+   notifications.
+4. **Finance reviews** on `/finance` (📋 Document verification queue): approve /
+   reject the All-In-One; type the loan amount + confirm the LOU
+   (match-within-RM1 flagged). Each review is a plain UPDATE on
+   `document_verifications` → the same trigger re-derives + notifies.
+
+Completion rule by `payment_type`: **cash/floor_stock** = All-In-One approved +
+down payment complete; **loan** also requires LOU verified. `documents_complete`
+never flips while `payment_type` is still unknown. Down-payment "complete" =
+Σ receipts ≥ (total_otr − loan) within RM1. The all-in-one extraction is what
+auto-sets `payment_type` when it was null.
+
+**Guard interaction solved:** `guard_booking_field_writes` got a
+transaction-local `app.system_op='on'` early-return (mirroring the cars guard);
+`recompute_booking_documents` flips that flag around its UPDATE, so writing
+system-managed columns (incl. `commission_status`) never trips the role gate or
+the pending→not_eligible auto-demotion. recompute is the ONLY thing that writes
+the booking doc-status columns — never the FE directly.
 
 ### Locked decisions (do NOT relitigate)
 - **D1 — Separate `document_verifications` table + new edge fns. Do NOT extend
@@ -1184,45 +1225,72 @@ Files (created/edited):
 - EDIT `src/components/AppShell.tsx` — `<NotificationBell />` before `<UserMenu>`.
 - EDIT `src/App.tsx` — lazy import + `/notifications` route.
 - EDIT `CLAUDE.md` — routes table row + this section.
-- **NOTE:** a live TEST notification row exists for Axelrod Han
-  (id `5bfd1904-b7ff-4cc9-a003-9bca914b7e46`, type `booking_complete`) — delete
-  it or "Mark all read" to clear.
+- (The Phase-B test notification row has since been deleted; notifications
+  table is empty until a real document flow fires one.)
 
-### ⏭️ Next steps — Phases C–F (NOT started)
-- **Phase C — 3 edge functions** (depends on A): `extract-all-in-one`,
-  `extract-down-payment`, `extract-lou` under `supabase/functions/`. Mirror
-  `supabase/functions/extract-allinone/index.ts` (JWT verify, role check, rate
-  limit, service-role Storage download, Gemini `gemini-2.5-flash`, audit_log
-  CALL/ERROR, generic errors). Factor shared boilerplate into
-  `supabase/functions/_shared/`. Logic per spec: all-in-one no-SM-signature →
-  `rejected` + notify SA+FA, else `pending` + notify FA; down-payment →
-  expected = total_otr − loan, sum receipts, within RM1 → complete; lou →
-  `needs_review` + notify FA. `GEMINI_API_KEY` already set in edge secrets
-  (from commission-verify). FE invoke wrappers in a new `src/lib/documentVerifications.ts`.
-- **Phase D — Finance queue** on `/finance` (`src/pages/FinancePage.tsx`): a
-  "Document Verification Queue" Section — All-In-One approve/reject; LOU FA
-  types loan amount, match-within-RM1 → confirm. Hooks in queries.ts.
-- **Phase E — SA "Document Submission" cards** on `/bookings/:id`
-  (`src/pages/BookingDetailPage.tsx` + a new `DocumentSubmissionCards.tsx`):
-  3 upload cards (all_in_one / down_payment / lou), gated SA+SM+super, upload to
-  `document-verification/{uid}/...` → invoke matching edge fn.
-- **Phase F — `check_booking_complete(booking_id)` RPC** + commission unlock
-  (new migration): branch on `payment_type`, evaluate the three statuses → set
-  `documents_complete`, unlock commission, notify; **idempotent** (fire once on
-  transition). Call it from the edge fns + FA queue mutations.
+### ✅ Phase C — 3 edge functions + FE data layer (DONE, deployed to prod)
+- `supabase/functions/_shared/docverify.ts` — `makeExtractor()` factory holding
+  ALL the security boilerplate (JWT verify, SA/SM/super role gate, path +
+  booking-ownership checks, 10/60s rate limit, service-role download, Gemini
+  `gemini-2.5-flash` call, audit_log CALL/ERROR, generic errors, the
+  `document_verifications` insert) + coercers `asNum/asStr/asDate/asBool`.
+- `extract-all-in-one` / `extract-down-payment` / `extract-lou` — thin wrappers
+  (prompt + field-mapping + initial `verification_status`). Request body is
+  `{ file_path, booking_id }`; returns `{ document_verification_id, extracted }`.
+  Deployed via the Supabase MCP (`verify_jwt: true`). `GEMINI_API_KEY` reused
+  from the commission-verify secret.
+- `src/lib/documentVerifications.ts` — `uploadAndExtractDocument`,
+  `listDocumentVerifications(ForBooking)`, FA mutations `approveAllInOne` /
+  `rejectAllInOne` / `confirmLou`, and `recheckBooking` (calls
+  `check_booking_complete`). Hooks in `queries.ts`: `useDocumentVerifications`,
+  `useDocumentVerificationsForBooking`, `useUploadDocument`,
+  `useApproveAllInOne`, `useRejectAllInOne`, `useConfirmLou`, `useRecheckBooking`.
+- Notifications are NOT sent from the edge fns (decision evolved past D6): they
+  fan out from `recompute_booking_documents` on real status transitions, so the
+  recipient + dedup logic lives in one place. `_dv_notify` (owner) +
+  `_dv_notify_finance` (every finance_admin) insert directly (SECURITY DEFINER,
+  RLS-bypassing) rather than via `create_notification`.
 
-### ⚠️ Open items / gotchas for resume
-- **Guard-trigger interaction:** the new `bookings` doc-status columns are NOT
-  gated by `guard_booking_field_writes`, and ANY UPDATE to bookings fires the
-  guard, which can demote `commission_status` (`pending`→`not_eligible`) for a
-  pending-but-not-delivered-paid booking. Phase F updates to bookings must avoid
-  that (e.g. SECURITY DEFINER doc-status setters or a guard bypass). This is why
-  Phase A did **no** `payment_type` backfill (would fire the guard).
-- `payment_type` is null on all existing + new bookings until something sets it.
-  Phase F needs a real value; backfill carefully (check `commission_status`
-  first) or set on the booking form.
-- Storage prefix is `document-verification/{uid}/{ts}.{ext}` (uid-scoped for SA-own
-  RLS), distinct from commission's `commission/{uid}/...`.
+### ✅ Phase D — Finance review queue (DONE)
+`src/components/FinanceDocVerifyQueue.tsx`, rendered on `/finance` above Pending
+insurance. Lists All-In-One rows still `pending` (Approve / Reject-with-reason)
+and LOU rows still `needs_review` (type loan amount → Confirm, off-by->RM1
+warning). Down-payment receipts auto-sum, so they never queue.
+
+### ✅ Phase E — SA submission cards (DONE)
+`src/components/DocumentSubmissionCards.tsx`, rendered on `/bookings/:id` between
+the attachments block and the Activity log, gated SA+SM+super. 3 cards
+(All-In-One / Down payment / LOU) each show the booking-level status + the
+uploaded DV rows (extracted summary + status pill) + an upload button. LOU card
+shows "Not required" for known cash deals.
+
+### ✅ Phase F — completion engine (DONE, applied to prod, verified)
+Migration `20260530_document_verification_complete.sql`:
+`recompute_booking_documents` + `trg_document_verifications_recompute` +
+`check_booking_complete` + `_dv_notify`/`_dv_notify_finance` + the
+`guard_booking_field_writes` rewrite with the `app.system_op` bypass. Verified
+end-to-end against a real booking in a rolled-back tx: cash deal with an approved
+All-In-One + a covering down payment → `documents_complete=true`,
+`commission_status` `not_eligible`→`pending`, and the
+approved/down_payment_complete/booking_complete/commission_unlocked
+notifications all fired; guard never raised; booking restored.
+
+### Implementation notes / gotchas (resolved)
+- **D3 (RM600 handling fee):** the LOU extractor captures whatever
+  `handling_fee` the form states (`extracted_handling_fee`) for the record; no
+  hardcoded constant was needed in the final logic.
+- **`payment_type` auto-set:** `recompute_booking_documents` sets a null
+  `payment_type` from the All-In-One's `extracted_payment_type` (cash/loan).
+  `documents_complete` stays false while it's still null, so nothing unlocks
+  prematurely. No bulk backfill was done — it fills in as docs land.
+- **Only `recompute_booking_documents` writes the booking doc-status columns**
+  (always under `app.system_op='on'`). The FE never PATCHes them. FA review =
+  UPDATE on `document_verifications` → trigger recomputes.
+- Storage prefix `document-verification/{uid}/{docType}-{ts}.{ext}` (uid-scoped
+  for SA-own RLS), distinct from commission's `commission/{uid}/...`.
+- Lint hygiene: `dv_set_updated_at` search_path pinned; `trg_dv_recompute`
+  EXECUTE revoked from anon/authenticated/public. `check_booking_complete`
+  stays authenticated-callable by design (the re-check path).
 
 ## How to resume / hand off
 

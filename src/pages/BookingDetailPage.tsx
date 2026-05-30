@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { AppShell } from '../components/AppShell'
 import { AttachmentSection } from '../components/AttachmentSection'
 import { BookingActivityLog } from '../components/AuditLogPanel'
+import { DocumentSubmissionCards } from '../components/DocumentSubmissionCards'
 import { useAuth } from '../lib/auth'
 import {
   qk,
@@ -1290,6 +1291,13 @@ export function BookingDetailPage() {
           onChange={refreshAttachments}
         />
       </div>
+
+      {(isSalesAdvisor || canApproveDiscount || isSuperAdmin) && (
+        <DocumentSubmissionCards
+          booking={booking}
+          canUpload={isSalesAdvisor || canApproveDiscount || isSuperAdmin}
+        />
+      )}
 
       <BookingActivityLog bookingId={booking.id} />
     </AppShell>
