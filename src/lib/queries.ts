@@ -61,6 +61,7 @@ import {
 } from './serviceAppointments'
 import {
   PARTS_PAGE_SIZE,
+  fetchStockIssued,
   getPartsStats,
   listParts,
   searchParts,
@@ -148,6 +149,7 @@ import type {
   ExtractedAllInOne,
   Invoice,
   Part,
+  StockIssuedRow,
   Payment,
   AvailableSlot,
   Profile,
@@ -619,6 +621,16 @@ export function useParts(enabled = true) {
     enabled,
     refetchInterval: 30_000,
     refetchOnWindowFocus: true,
+  })
+}
+
+/** Stock Issued List rows for a date range (YYYY-MM-DD, inclusive). */
+export function useStockIssued(from: string, to: string, enabled = true) {
+  return useQuery<StockIssuedRow[]>({
+    queryKey: ['stockIssued', from, to],
+    queryFn: () => fetchStockIssued(from, to),
+    enabled: enabled && !!from && !!to,
+    staleTime: 60_000,
   })
 }
 

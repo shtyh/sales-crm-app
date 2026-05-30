@@ -159,6 +159,7 @@ Trigger `sync_car_status_from_booking` fires AFTER INSERT/UPDATE/DELETE on booki
 | `/reconciliation` | ReconciliationPage (3-way reconciliation queue: bank statement + LOU + bank-in + All-In-One; **Bank statements upload section at the top — super_admin only**, moved here from `/finance` 2026-05-30) | finance_admin / sales_manager / super_admin (upload section super_admin only) |
 | `/service/stock/parts` | PartsListPage (browse + inline-edit the ~80k-row parts catalogue) | any workshop role + super_admin |
 | `/service/stock/receive` | StockReceivePage (book in a delivery — header + line items, QR-friendly DO No input) | any workshop role + super_admin |
+| `/service/stock/issued` | StockIssuedListPage (port of legacy "Stock Issued List" — every part-issue transaction in a date range; see below) | any workshop role + super_admin |
 | `/service/inquiry` | InquiryHubPage (WMS-style tile menu for lookups) | any workshop role + super_admin |
 | `/service/inquiry/suppliers` | SuppliersInquiryPage (vendor directory + SST/TIN detail, "+ New supplier" form) | any workshop role + super_admin |
 | `/service/inquiry/receipts` | StockPurchaseHistoryPage (past stock receipts + items drilldown) | any workshop role + super_admin |
@@ -305,8 +306,9 @@ Primary nav links by role:
 - **StockMenuPage** (`/service/stock`) — Stock Control landing,
   ported from the legacy WMS "Stock Menu" screen. Six tiles: Closing
   Stock Report, Parts List (both wired to the closing-stock report),
-  Purchase Order, Stock Received, Stock Issued, FIFO / WIP
-  Re-Calculate (placeholders until a stock-movements ledger lands).
+  Purchase Order, Stock Received, **Stock Issued (wired 2026-05-30 →
+  `/service/stock/issued`)**, FIFO / WIP Re-Calculate (the last two are
+  placeholders until a stock-movements ledger lands).
   Quick-stats strip at the top sums `parts_inventory` for
   catalogued / active counts, total value (Σ stock_qty × unit_cost),
   and at-or-below reorder count.
@@ -325,6 +327,21 @@ Primary nav links by role:
   Received / Issued columns render `—` until a stock-movements ledger
   lands. Print mode toggle hides the AppShell so the page can be sent
   straight to a printer.
+
+- **StockIssuedListPage** (`/service/stock/issued`, 2026-05-30) — port of
+  the legacy WMS "Stock Issued List" report. Lists every part-issue
+  transaction (a `service_order_items` row with `kind='part'`) in a date
+  range, via the **`stock_issued_list(p_from, p_to)`** SECURITY DEFINER RPC
+  (migration `20260530_stock_issued_list_rpc.sql`) — server-side join to
+  `service_orders` (date = `coalesce(opened_at, created_at)`, KL-local; bill
+  no = `order_no`) and `parts_inventory` (code / group / name). **Flat list,
+  no grouping** (we don't store the legacy SubGroup — only `category` +
+  `brand`); **Amount = `line_total` (selling)**, per the user's pick.
+  Columns: No · Date · Type (ISU) · Job/Bill · Group (brand) · Code ·
+  Description · Qty · Amt Issued (RM), with a grand total, date-range +
+  sort (Product / Job) + search, Excel CSV export, and print mode (mirrors
+  StockOnHandPage). **Driven by `service_order_items` — near-empty until the
+  AUTFDB02 service-history import runs**, so it shows little until then.
 
 - **Job Sheet Selection dialog** (in `ServiceOpsPage.tsx`) — 1:1 port
   of the legacy WMS popup. Opens from the **Print Job Sheet** action
@@ -758,6 +775,7 @@ Files in `supabase/migrations/` (chronological):
 20260528_hq_discount_dealer_support_approval.sql   commission_schedules + bookings get hq_discount + dealer_support; bookings +approval_notes; lookup_schedule_for() helper; guard rewrite to snapshot HQ+dealer + auto-flip approval_status on the discount-vs-commission rule (manager's decision sticks once set)
 20260530_commission_schedules_audit.sql           trg_commission_schedules_audit AFTER INSERT/UPDATE/DELETE → reuses generic write_audit_log(); powers the 🕓 Change log on /admin/commissions (super_admin only, via audit_log RLS)
 20260530_bank_statements_original_name.sql        bank_statements +original_name text — operator's uploaded filename, shown (clickable → signed URL) in the Bank statements card on /reconciliation
+20260530_stock_issued_list_rpc.sql                stock_issued_list(p_from,p_to) SECURITY DEFINER RPC — every part-issue txn in a date range; powers StockIssuedListPage at /service/stock/issued
 ```
 
 Some early ones were **applied by hand** in Supabase SQL editor and so don't show up in `supabase_migrations.schema_migrations`. The files are still source of truth for what should exist.

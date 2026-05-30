@@ -136,6 +136,11 @@ const StockOnHandPage = lazy(() =>
     default: m.StockOnHandPage,
   })),
 )
+const StockIssuedListPage = lazy(() =>
+  import('./pages/StockIssuedListPage').then((m) => ({
+    default: m.StockIssuedListPage,
+  })),
+)
 const StockMenuPage = lazy(() =>
   import('./pages/StockMenuPage').then((m) => ({
     default: m.StockMenuPage,
@@ -498,6 +503,14 @@ function App() {
           element={
             <ProtectedRoute>
               <StockOnHandPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/service/stock/issued"
+          element={
+            <ProtectedRoute>
+              <StockIssuedListPage />
             </ProtectedRoute>
           }
         />

@@ -1,5 +1,23 @@
 import { supabase } from './supabase'
-import type { Part } from './types'
+import type { Part, StockIssuedRow } from './types'
+
+/**
+ * Stock Issued List — every part-issue transaction between two dates
+ * (inclusive), via the `stock_issued_list` RPC. Server-side join + date
+ * filter so it scales past the PostgREST 1000-row cap once the service
+ * history is imported. `from` / `to` are YYYY-MM-DD.
+ */
+export async function fetchStockIssued(
+  from: string,
+  to: string,
+): Promise<StockIssuedRow[]> {
+  const { data, error } = await supabase.rpc('stock_issued_list', {
+    p_from: from,
+    p_to: to,
+  })
+  if (error) throw error
+  return (data as StockIssuedRow[]) ?? []
+}
 
 /**
  * Every part in the inventory master, sorted by part_no. Used by the

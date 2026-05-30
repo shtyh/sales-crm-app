@@ -68,9 +68,9 @@ export function StockMenuPage() {
     },
     {
       title: 'Stock Issued',
-      subtitle: 'Issue parts against an open job sheet',
+      subtitle: 'Parts issued to jobs, by date range',
       icon: '📤',
-      badge: 'Coming soon',
+      to: '/service/stock/issued',
     },
     {
       title: 'FIFO / WIP Re-Calculate',

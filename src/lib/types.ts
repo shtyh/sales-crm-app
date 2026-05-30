@@ -612,6 +612,20 @@ export type Part = {
   updated_at: string
 }
 
+/** One row of the Stock Issued List report (a single part-issue transaction).
+ *  Returned by the `stock_issued_list(from, to)` RPC. Numeric columns arrive
+ *  as strings via PostgREST — coerce with Number() at the call site. */
+export type StockIssuedRow = {
+  issued_at: string
+  order_no: string | null
+  part_no: string
+  part_name: string | null
+  brand: string | null
+  category: PartCategory | null
+  qty: number | string
+  amount: number | string
+}
+
 /** Intake checkboxes on the WMS-style Job Sheet dialog. */
 export type ServiceType =
   | 'maintenance'
