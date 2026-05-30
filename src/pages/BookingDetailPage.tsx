@@ -228,7 +228,15 @@ export function BookingDetailPage() {
       booking.loan_amount != null ? String(booking.loan_amount) : '',
     )
     setDepositStatus(booking.deposit_status ?? 'unpaid')
-    setPaymentStatus(booking.payment_status ?? 'unpaid')
+    // No booking fee → default the Payment pull-down to Fully paid (there's
+    // no deposit owed). Only overrides the 'unpaid' default, so a finance
+    // admin's explicit partial/paid choice is preserved.
+    setPaymentStatus(
+      Number(booking.booking_fee) === 0 &&
+        (booking.payment_status ?? 'unpaid') === 'unpaid'
+        ? 'paid'
+        : (booking.payment_status ?? 'unpaid'),
+    )
     setCarId(booking.car_id ?? '')
   }, [booking, customerQuery.data])
 
