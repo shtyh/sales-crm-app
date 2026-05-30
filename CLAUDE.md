@@ -220,7 +220,10 @@ Primary nav links by role:
   existing Inventory financing (floor stock) + Pending LOU sections.
   Pending insurance = `insurance_company is null OR insurance_amount is
   null/zero`. Pending payment = `OTR - (Σ payments + loan_amount) > 0`
-  (only rows with a positive shortfall are listed).
+  (only rows with a positive shortfall are listed). **🪙 Pending down
+  payment (2026-05-30)** = bookings where `down_payment > 0` and
+  `down_payment − total_received_down_payment > RM1` (agreed vs received
+  receipts). Also hosts the **📋 Document verification queue** (above).
 
 - **ServiceDashboardPage** (`/` for workshop roles + super_admin in
   Service workspace) — rebuilt 2026-05-26 as a 6-tile main menu
@@ -801,6 +804,7 @@ Files in `supabase/migrations/` (chronological):
 20260530_reconcile_on_booking_change.sql          trg_booking_reconcile AFTER UPDATE on bookings → re-run reconcile_booking when loan_amount/booking_fee/otr_price/commission_amount/loan_bank changes (gated to bookings already reconciled). Fixes stale LOU/bank-in diffs when finance fills fields after docs were uploaded. Includes one-time refresh of all existing reconciliations.
 20260530_lou_handling_fee_tolerance.sql           reconcile_booking: LOU loan-amount diff now accepts loan_amount OR loan_amount + RM600 handling fee (within RM1) as a match — the bank LOU states principal + handling fee, so the RM600 is no longer a false discrepancy. Handling fee = `v_handling_fee constant numeric := 600` (D3). Re-runs all existing reconciliations.
 20260530_booking_down_payment.sql                 bookings +down_payment numeric(12,2) not null default 0 — manual down payment figure in the booking Pricing form (NewBookingPage + BookingDetailPage). Not guard-gated; distinct from total_received_down_payment. Same migration batch removed the Special support input from the Pricing form (column kept).
+20260530_down_payment_expected.sql                recompute_booking_documents: use bookings.down_payment as the EXPECTED down payment when set (>0), else fall back to total_otr−loan. + trg_booking_dv_recompute AFTER UPDATE OF down_payment/loan_amount/otr_price on bookings → re-run recompute (gated to bookings already in the doc-verification flow; does NOT watch recompute-written cols → no recursion). FinancePage gains a "🪙 Pending down payment" section (agreed vs received).
 20260530_document_verification_complete.sql       DOC-VERIFICATION SYSTEM Phase F (completion engine). guard_booking_field_writes rewrite + app.system_op bypass; recompute_booking_documents() (source of truth: derives the 3 doc statuses + payment_type + total_received, writes onto booking guard-bypassed, unlocks commission not_eligible→pending on documents_complete false→true, fans out notifications); trg_document_verifications_recompute (AFTER INSERT/UPDATE); check_booking_complete() authenticated re-check wrapper; _dv_notify/_dv_notify_finance. Edge fns extract-all-in-one/extract-down-payment/extract-lou (+_shared/docverify.ts) deployed separately via MCP.
 ```
 
@@ -1187,8 +1191,11 @@ decisions were locked (below) and held.
 Completion rule by `payment_type`: **cash/floor_stock** = All-In-One approved +
 down payment complete; **loan** also requires LOU verified. `documents_complete`
 never flips while `payment_type` is still unknown. Down-payment "complete" =
-Σ receipts ≥ (total_otr − loan) within RM1. The all-in-one extraction is what
-auto-sets `payment_type` when it was null.
+Σ receipts ≥ **expected** within RM1, where **expected = `bookings.down_payment`
+when set (>0), else `total_otr − loan`** (2026-05-30 — the manual agreed down
+payment from the Pricing form takes priority; `trg_booking_dv_recompute` re-runs
+recompute when down_payment/loan_amount/otr_price change). The all-in-one
+extraction is what auto-sets `payment_type` when it was null.
 
 **Guard interaction solved:** `guard_booking_field_writes` got a
 transaction-local `app.system_op='on'` early-return (mirroring the cars guard);

@@ -108,6 +108,21 @@ export function FinancePage() {
       .sort((a, b) => b.__outstanding - a.__outstanding)
   }, [activeBookings, paidByBooking])
 
+  // Down-payment collection: the SA's agreed down_payment vs what's actually
+  // been received (Σ down-payment receipts = total_received_down_payment, from
+  // the doc-verification flow). Lists bookings still short by > RM1.
+  type DpRow = (typeof activeBookings)[number] & { __dpOutstanding: number }
+  const pendingDownPayment = useMemo<DpRow[]>(() => {
+    return activeBookings
+      .map((b) => {
+        const expected = Number(b.down_payment ?? 0)
+        const received = Number(b.total_received_down_payment ?? 0)
+        return { ...b, __dpOutstanding: expected - received }
+      })
+      .filter((b) => Number(b.down_payment ?? 0) > 0 && b.__dpOutstanding > 1)
+      .sort((a, b) => b.__dpOutstanding - a.__dpOutstanding)
+  }, [activeBookings])
+
   // Invoices, newest first (the table itself is already paginated visually
   // — we cap the rows below).
   const invoiceRows = useMemo(
@@ -374,6 +389,62 @@ export function FinancePage() {
                     </tr>
                   )
                 })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Section>
+
+      {/* ---------- Pending down payment ---------- */}
+      <Section
+        title={`🪙 Pending down payment — ${pendingDownPayment.length}`}
+        right={
+          <span className="text-xs text-gray-500">
+            agreed down payment − received receipts
+          </span>
+        }
+      >
+        {pendingDownPayment.length === 0 ? (
+          <Empty>
+            Every booking with an agreed down payment has received it in full.
+          </Empty>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200 text-sm">
+              <thead className="bg-gray-50 text-xs uppercase tracking-wider text-gray-500">
+                <tr>
+                  <Th>Booking</Th>
+                  <Th>Customer</Th>
+                  <Th>Vehicle</Th>
+                  <Th alignRight>Agreed</Th>
+                  <Th alignRight>Received</Th>
+                  <Th alignRight>Outstanding</Th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {pendingDownPayment.map((b) => (
+                  <tr key={b.id} className="hover:bg-gray-50">
+                    <td className="whitespace-nowrap px-3 py-2">
+                      <Link
+                        to={`/bookings/${b.id}`}
+                        className="font-mono text-xs text-gray-900 hover:underline"
+                      >
+                        {b.code}
+                      </Link>
+                    </td>
+                    <td className="px-3 py-2 text-gray-700">{b.customer_name}</td>
+                    <td className="px-3 py-2 text-gray-700">{b.vehicle_model}</td>
+                    <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-gray-700">
+                      {formatMYR(Number(b.down_payment ?? 0))}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-gray-700">
+                      {formatMYR(Number(b.total_received_down_payment ?? 0))}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums font-semibold text-amber-700">
+                      {formatMYR(b.__dpOutstanding)}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
