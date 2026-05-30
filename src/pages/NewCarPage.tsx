@@ -62,7 +62,7 @@ export function NewCarPage() {
     setError(null)
     try {
       // Funding choice maps directly to two floor-stock columns:
-      //   * cash        → no bank, mark paid_off so the showroom can
+      //   * cash        → bank = 'Cash', mark paid_off so the showroom can
       //                    deliver immediately (no settlement step).
       //   * floor_stock → record the bank, leave status at the default
       //                    'locked' until finance settles.
@@ -74,7 +74,7 @@ export function NewCarPage() {
         color: color.trim() || null,
         arrived_at: arrivedAt,
         status,
-        floor_stock_bank: isCash ? null : bank,
+        floor_stock_bank: isCash ? 'Cash' : bank,
         floor_stock_status: isCash ? 'paid_off' : 'locked',
       })
       navigate(`/cars/${created.id}`, { replace: true })

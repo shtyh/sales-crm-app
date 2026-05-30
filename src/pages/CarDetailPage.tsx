@@ -6,7 +6,6 @@ import { useAuth } from '../lib/auth'
 import { useCar, useDeleteCar, useUpdateCar } from '../lib/queries'
 import { formatError } from '../lib/errors'
 import { PROTON_MODELS, variantsFor } from '../data/proton-models'
-import { LOAN_BANKS } from '../data/banks-and-insurers'
 import {
   CAR_STATUS_LABEL,
   FLOOR_STOCK_LABEL,
@@ -35,6 +34,9 @@ const FS_OPTIONS: FloorStockStatus[] = [
   'overdue',
   'paid_off',
 ]
+// Inventory (floor-stock) financing is only ever Public Bank or paid cash —
+// the 13-bank customer hire-purchase list doesn't apply here, so keep it tight.
+const FLOOR_STOCK_BANKS = ['Public Bank', 'Cash'] as const
 
 export function CarDetailPage() {
   const { id = '' } = useParams<{ id: string }>()
@@ -321,7 +323,7 @@ export function CarDetailPage() {
         <section className="rounded-xl border border-purple-200 bg-purple-50/40 p-4 sm:p-5">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-purple-900">
-              🏦 Floor stock financing
+              🏦 Inventory financing
             </h2>
             {!canEditCarFloorStock && (
               <span className="text-xs text-gray-500">
@@ -341,14 +343,14 @@ export function CarDetailPage() {
                 className={readonlyInputClass(canEditCarFloorStock)}
               >
                 <option value="">— Select bank —</option>
-                {LOAN_BANKS.map((b) => (
+                {FLOOR_STOCK_BANKS.map((b) => (
                   <option key={b} value={b}>
                     {b}
                   </option>
                 ))}
                 {floorStockBank &&
-                  !LOAN_BANKS.includes(
-                    floorStockBank as (typeof LOAN_BANKS)[number],
+                  !FLOOR_STOCK_BANKS.includes(
+                    floorStockBank as (typeof FLOOR_STOCK_BANKS)[number],
                   ) && <option value={floorStockBank}>{floorStockBank}</option>}
               </select>
             </label>
@@ -369,7 +371,7 @@ export function CarDetailPage() {
             </label>
             <label className="block text-sm">
               <span className="mb-1 block font-medium text-gray-700">
-                Floor-stock status
+                Financing status
               </span>
               <select
                 disabled={!canEditCarFloorStock}
