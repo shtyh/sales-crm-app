@@ -117,23 +117,14 @@ export function QrScannerModal({
             // so more decode attempts per second = better catch rate.
             // QR mode doesn't need it (a steady QR decodes in 1-2
             // frames).
-            fps: mode === 'barcode' ? 20 : 10,
-            // QR mode → near-square viewfinder; barcode mode → very
-            // wide so a horizontal label fills almost the whole frame
-            // width. Sized responsively from the camera feed.
-            qrbox: (vw, vh) => {
-              const w = Math.min(vw, vh)
-              if (mode === 'barcode') {
-                return {
-                  width: Math.floor(w * 0.95),
-                  height: Math.floor(w * 0.35),
-                }
-              }
-              return {
-                width: Math.floor(w * 0.8),
-                height: Math.floor(w * 0.8),
-              }
-            },
+            fps: mode === 'barcode' ? 15 : 10,
+            // NB: no `qrbox` on purpose. Its shaded-region overlay
+            // mis-renders when the camera stream aspect doesn't match the
+            // square preview — it squashes the QR box into a wide strip
+            // and collapses the barcode band into a thin, unscannable
+            // line. We scan the whole frame and draw our own centred
+            // guide box (square for QR, wide band for barcode) below, so
+            // what the operator aligns to always matches what we decode.
             aspectRatio: 1.0,
             // 1D barcodes look the same flipped — skip the extra
             // mirror-image pass html5-qrcode does by default.
@@ -217,10 +208,23 @@ export function QrScannerModal({
             </div>
           ) : (
             <>
-              <div
-                id={SCANNER_ELEMENT_ID}
-                className="aspect-square w-full overflow-hidden rounded-xl bg-black"
-              />
+              <div className="relative aspect-square w-full overflow-hidden rounded-xl bg-black">
+                {/* html5-qrcode injects its <video> here; the global rule
+                    in index.css forces it to object-fit:cover this square
+                    so the preview keeps its true aspect (no stretch). */}
+                <div id={SCANNER_ELEMENT_ID} className="h-full w-full" />
+                {/* Our own centred guide box — a real square for QR, a
+                    wide band for barcodes — drawn over the feed. */}
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                  <div
+                    className={
+                      mode === 'barcode'
+                        ? 'h-[34%] w-[88%] rounded-lg border-2 border-white/90 shadow-[0_0_0_2px_rgba(0,0,0,0.25)]'
+                        : 'aspect-square w-[72%] rounded-lg border-2 border-white/90 shadow-[0_0_0_2px_rgba(0,0,0,0.25)]'
+                    }
+                  />
+                </div>
+              </div>
               <p className="mt-3 text-xs text-gray-500">
                 {mode === 'barcode'
                   ? 'Hold the barcode horizontally inside the wide frame so it fills most of the width. The scanner auto-detects when the lines are sharp and steady.'

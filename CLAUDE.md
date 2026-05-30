@@ -926,11 +926,20 @@ so a fresh session doesn't have to re-derive context.
 - **QR / barcode scanner** (`QrScannerModal` lazy-loaded
   ~370 KB chunk). Two modes:
   - `mode='qr'` for DO codes: QR + Data Matrix + Aztec + PDF 417,
-    square viewfinder, fps=10, flip-detect on.
+    fps=10, flip-detect on.
   - `mode='barcode'` for part labels: CODE_128/93/39, CODABAR, ITF,
-    EAN, UPC, wide rectangular viewfinder (95% × 35% of frame),
-    fps=20, flip-detect off. Uses native `BarcodeDetector` API when
-    available (Chrome Android, Safari iOS 17+).
+    EAN, UPC, fps=15, flip-detect off. Uses native `BarcodeDetector`
+    API when available (Chrome Android, Safari iOS 17+).
+  - **Viewfinder (fixed 2026-05-30):** html5-qrcode's built-in `qrbox`
+    shaded region was dropped — it mis-rendered when the camera stream
+    aspect didn't match the square preview, squashing the QR box into a
+    wide strip and collapsing the barcode band into a thin, unscannable
+    line. Now: scan the **whole frame** (no `qrbox`), force the injected
+    `<video>` to `object-fit:cover` the square preview via a global rule
+    in `src/index.css` (`#qr-scanner-region video`), and draw our **own**
+    centred guide box over the feed — a real square (`72%`) for QR, a
+    wide band (`88% × 34%`) for barcode. So the guide always matches what
+    actually decodes.
 - **Uniqueness rails on Stock Receive**:
   - DB: partial UNIQUE INDEX on `stock_receipts.do_no WHERE do_no IS
     NOT NULL` (`stock_receipts_do_no_unique`).

@@ -20,3 +20,14 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+/* html5-qrcode injects a <video> into #qr-scanner-region. Force it to
+   cover the square preview so a non-square camera stream is cropped, not
+   stretched — without this the feed (and any frame drawn over it) gets
+   distorted, squashing the QR guide into a wide box and the barcode band
+   into a thin line. See src/components/QrScannerModal.tsx. */
+#qr-scanner-region video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover;
+}
