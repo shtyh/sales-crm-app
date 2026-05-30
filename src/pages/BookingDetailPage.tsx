@@ -1243,24 +1243,23 @@ export function BookingDetailPage() {
       </form>
 
       {/* Deal documents — the AI-verified submission cards + the matching
-          bank-in slip, grouped together. (Attachments live outside the form.) */}
-      {(isSalesAdvisor || canApproveDiscount || isSuperAdmin) && (
-        <DocumentSubmissionCards
-          booking={booking}
-          canUpload={isSalesAdvisor || canApproveDiscount || isSuperAdmin}
-        />
-      )}
-      <div className="mt-4 space-y-4">
-        <AttachmentSection
-          bookingId={booking.id}
-          bookingCode={booking.code}
-          kind="bank_transaction"
-          title="🏦 Bank transaction"
-          description="Deposit / payment slips, online transfer screenshots, etc."
-          items={attachmentsByKind.bank_transaction}
-          onChange={refreshAttachments}
-        />
-      </div>
+          bank-in slip, all in one box. (Attachments live outside the form.) */}
+      <DocumentSubmissionCards
+        booking={booking}
+        canUpload={isSalesAdvisor || canApproveDiscount || isSuperAdmin}
+        showDocCards={isSalesAdvisor || canApproveDiscount || isSuperAdmin}
+        bankSlot={
+          <AttachmentSection
+            bookingId={booking.id}
+            bookingCode={booking.code}
+            kind="bank_transaction"
+            title="🏦 Bank transaction"
+            description="Deposit / payment slips, online transfer screenshots, etc."
+            items={attachmentsByKind.bank_transaction}
+            onChange={refreshAttachments}
+          />
+        }
+      />
 
       {/* Supporting documents (rarely needed) sit at the bottom. */}
       <div className="mt-6 space-y-4">

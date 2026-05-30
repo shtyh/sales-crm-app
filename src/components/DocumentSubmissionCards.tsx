@@ -1,4 +1,4 @@
-import { useState, type ChangeEvent } from 'react'
+import { useState, type ChangeEvent, type ReactNode } from 'react'
 import {
   useDocumentVerificationsForBooking,
   useUploadDocument,
@@ -188,9 +188,17 @@ function DocCard({
 export function DocumentSubmissionCards({
   booking,
   canUpload,
+  showDocCards = true,
+  bankSlot,
 }: {
   booking: Booking
   canUpload: boolean
+  /** Hide the AI doc cards (e.g. for roles that don't submit them) while still
+   *  showing the section + bank-transaction slot. */
+  showDocCards?: boolean
+  /** Rendered inside the same box, under the doc cards — used to nest the
+   *  Bank transaction attachment section here. */
+  bankSlot?: ReactNode
 }) {
   const { data: rows } = useDocumentVerificationsForBooking(booking.id)
   const upload = useUploadDocument()
@@ -243,20 +251,27 @@ export function DocumentSubmissionCards({
           </span>
         )}
       </div>
-      <div className="grid gap-3 md:grid-cols-3">
-        {TYPES.map((t) => (
-          <DocCard
-            key={t}
-            docType={t}
-            booking={booking}
-            rows={rowsFor(t)}
-            canUpload={canUpload}
-            uploading={upload.isPending && activeType === t}
-            onPick={handlePick}
-            error={errors[t] ?? null}
-          />
-        ))}
-      </div>
+      {showDocCards && (
+        <div className="grid gap-3 md:grid-cols-3">
+          {TYPES.map((t) => (
+            <DocCard
+              key={t}
+              docType={t}
+              booking={booking}
+              rows={rowsFor(t)}
+              canUpload={canUpload}
+              uploading={upload.isPending && activeType === t}
+              onPick={handlePick}
+              error={errors[t] ?? null}
+            />
+          ))}
+        </div>
+      )}
+      {bankSlot && (
+        <div className={showDocCards ? 'mt-3 border-t border-gray-200 pt-3' : ''}>
+          {bankSlot}
+        </div>
+      )}
     </section>
   )
 }

@@ -1281,9 +1281,12 @@ warning). Down-payment receipts auto-sum, so they never queue.
 
 ### ✅ Phase E — SA submission cards (DONE)
 `src/components/DocumentSubmissionCards.tsx`, gated SA+SM+super. **Layout
-(2026-05-30):** the booking detail page's upload area is now ordered Document
-submission (first) → 🏦 Bank transaction (grouped right under it) → then at the
-bottom 💳 Bank statement + ❌ Cancellation form. The old 📃 LOU `AttachmentSection`
+(2026-05-30):** the booking detail page's upload area leads with the Document
+submission box, which now **nests the 🏦 Bank transaction AttachmentSection
+inside it** (via the `bankSlot` prop, under a divider below the AI cards) — so
+it's one box. The box always renders (so finance/general keep Bank transaction);
+the AI doc cards are gated to SA/SM/super via `showDocCards`. Then at the bottom:
+💳 Bank statement + ❌ Cancellation form. The old 📃 LOU `AttachmentSection`
 card was **removed** (LOU now lives only in the Document submission card).
 **Reconciliation reads the LOU from there too** — `reconcile_booking` falls back
 to the latest `document_verifications` LOU (`extracted_loan_amount_lou`) when
