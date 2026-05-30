@@ -108,8 +108,8 @@ function DocCard({
   }
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4">
-      <div className="mb-2 flex items-start justify-between gap-2">
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
+      <div className="mb-3 flex items-start justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold text-gray-900">
             {DOCUMENT_TYPE_LABEL[docType]}
@@ -117,8 +117,8 @@ function DocCard({
           <p className={`mt-0.5 text-xs font-medium ${status.cls}`}>{status.text}</p>
         </div>
         {canUpload && !louNotRequired && (
-          <label className="inline-flex cursor-pointer items-center rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-gray-800">
-            {uploading ? 'Reading…' : rows.length ? '+ Add' : 'Upload'}
+          <label className="shrink-0 cursor-pointer rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 transition hover:bg-gray-50">
+            {uploading ? 'Uploading…' : '+ Upload'}
             <input
               type="file"
               accept="image/jpeg,image/png,image/heic,image/heif"
@@ -131,21 +131,24 @@ function DocCard({
       </div>
 
       {error && (
-        <p className="mb-2 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs text-rose-700">
+        <div
+          role="alert"
+          className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700"
+        >
           {error}
-        </p>
+        </div>
       )}
 
       {rows.length === 0 ? (
-        <p className="text-xs text-gray-400">
+        <div className="rounded-lg border border-dashed border-gray-200 p-4 text-center text-xs text-gray-400">
           {louNotRequired ? 'No LOU needed for a cash deal.' : 'Nothing uploaded yet.'}
-        </p>
+        </div>
       ) : (
-        <ul className="space-y-1.5">
+        <ul className="divide-y divide-gray-100">
           {rows.map((r) => (
             <li
               key={r.id}
-              className="flex items-center justify-between gap-2 rounded-md bg-gray-50 px-2.5 py-1.5 text-xs"
+              className="flex items-center justify-between gap-2 py-2 text-xs first:pt-0 last:pb-0"
             >
               <span className="min-w-0 truncate text-gray-600">
                 {docType === 'all_in_one' && (
