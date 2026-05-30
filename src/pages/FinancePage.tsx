@@ -1,15 +1,13 @@
-import { useMemo, useState, type ChangeEvent } from 'react'
+import { useMemo } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
 import { useAuth } from '../lib/auth'
 import {
-  useBankStatements,
   useBookings,
   useCars,
   useInvoices,
   usePayments,
   useProfiles,
-  useUploadStatement,
 } from '../lib/queries'
 import { formatError } from '../lib/errors'
 import { formatMYR } from '../lib/format'
@@ -48,39 +46,13 @@ function daysSince(anchor: string | null): number {
 }
 
 export function FinancePage() {
-  const { user, isFinanceAdmin, isSuperAdmin, loading } = useAuth()
+  const { isFinanceAdmin, loading } = useAuth()
 
   const { data: cars, error: carsErr } = useCars()
   const { data: bookings, error: bookingsErr } = useBookings()
   const { data: profiles } = useProfiles()
   const { data: payments, error: paymentsErr } = usePayments(isFinanceAdmin)
   const { data: invoices, error: invoicesErr } = useInvoices(isFinanceAdmin)
-  const { data: statements } = useBankStatements(isFinanceAdmin)
-  const uploadStatement = useUploadStatement()
-  const [statementMsg, setStatementMsg] = useState<string | null>(null)
-  const [statementErr, setStatementErr] = useState<string | null>(null)
-
-  function handleStatementChange(e: ChangeEvent<HTMLInputElement>) {
-    setStatementMsg(null)
-    setStatementErr(null)
-    const file = e.target.files?.[0]
-    e.target.value = ''
-    if (!file || !user) return
-
-    uploadStatement.mutate(
-      { userId: user.id, file },
-      {
-        onSuccess: (res) => {
-          setStatementMsg(
-            `Uploaded — extracted ${res.lines_inserted} credit line${
-              res.lines_inserted === 1 ? '' : 's'
-            } from the statement.`,
-          )
-        },
-        onError: (err) => setStatementErr(formatError(err)),
-      },
-    )
-  }
 
   const profileById = useMemo(() => {
     const m = new Map<string, Profile>()
@@ -639,82 +611,6 @@ export function FinancePage() {
         )}
       </Section>
 
-      {/* ───── Bank statement upload (super_admin only) ───── */}
-      {/*  FA / SM can still read the list of uploaded statements for
-           reconciliation context, but only super_admin can upload new
-           ones — that matches the DB RLS + edge-function policy. */}
-      <Section
-        title="Bank statements"
-        right={
-          <Link
-            to="/reconciliation"
-            className="text-xs text-gray-500 underline-offset-2 hover:text-gray-900 hover:underline"
-          >
-            Open reconciliation queue →
-          </Link>
-        }
-      >
-        {isSuperAdmin ? (
-          <>
-            <div className="flex flex-wrap items-center gap-3">
-              <label className="inline-flex cursor-pointer items-center rounded-lg bg-gray-900 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-gray-800">
-                {uploadStatement.isPending ? 'Uploading…' : 'Upload statement PDF'}
-                <input
-                  type="file"
-                  accept="application/pdf,.pdf"
-                  onChange={handleStatementChange}
-                  disabled={uploadStatement.isPending}
-                  className="hidden"
-                />
-              </label>
-              <span className="text-xs text-gray-500">
-                PDF · max 20 MB · AI extracts each credit line for matching
-              </span>
-            </div>
-            {uploadStatement.isPending && (
-              <p className="mt-3 text-sm text-gray-600">
-                Reading statement — usually 10-30 seconds…
-              </p>
-            )}
-            {statementErr && (
-              <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-                {statementErr}
-              </p>
-            )}
-            {statementMsg && (
-              <p className="mt-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
-                {statementMsg}
-              </p>
-            )}
-          </>
-        ) : (
-          <p className="text-xs text-gray-500">
-            Only super admins can upload bank statements. You'll see new ones
-            here once they're added.
-          </p>
-        )}
-        {statements && statements.length > 0 && (
-          <ul className="mt-4 space-y-1 text-sm text-gray-700">
-            {statements.slice(0, 5).map((s) => (
-              <li key={s.id} className="flex items-center justify-between">
-                <span>
-                  Uploaded{' '}
-                  {new Date(s.uploaded_at).toLocaleDateString('en-MY', {
-                    day: '2-digit',
-                    month: 'short',
-                    year: 'numeric',
-                  })}
-                </span>
-                <span className="text-xs text-gray-500">
-                  {s.period_start && s.period_end
-                    ? `${s.period_start} → ${s.period_end}`
-                    : '—'}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Section>
     </AppShell>
   )
 }

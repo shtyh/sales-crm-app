@@ -1,10 +1,12 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ChangeEvent } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
 import { useAuth } from '../lib/auth'
 import {
+  useBankStatements,
   useReconciliations,
   useRunReconcile,
+  useUploadStatement,
 } from '../lib/queries'
 import { formatError } from '../lib/errors'
 import { formatMYR } from '../lib/format'
@@ -47,7 +49,7 @@ function formatDiffValue(v: number | string | null): string {
 // ─── Page ──────────────────────────────────────────────────────────────────
 
 export function ReconciliationPage() {
-  const { role, isFinanceAdmin, isSuperAdmin } = useAuth()
+  const { user, role, isFinanceAdmin, isSuperAdmin } = useAuth()
 
   // FA, super_admin, and sales_manager get the queue. Everyone else bounces.
   const allowed = isSuperAdmin || isFinanceAdmin || role === 'sales_manager'
@@ -57,6 +59,34 @@ export function ReconciliationPage() {
 
   const { data: rows, error } = useReconciliations()
   const rematch = useRunReconcile()
+
+  // Bank statement upload (super_admin only). It lives here because the
+  // statement's credit lines are what populate this queue. The hooks run
+  // for every allowed viewer; the section itself only renders for super_admin.
+  const { data: statements } = useBankStatements(isSuperAdmin)
+  const uploadStatement = useUploadStatement()
+  const [statementMsg, setStatementMsg] = useState<string | null>(null)
+  const [statementErr, setStatementErr] = useState<string | null>(null)
+
+  function handleStatementChange(e: ChangeEvent<HTMLInputElement>) {
+    setStatementMsg(null)
+    setStatementErr(null)
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file || !user) return
+    uploadStatement.mutate(
+      { userId: user.id, file },
+      {
+        onSuccess: (res) =>
+          setStatementMsg(
+            `Uploaded — extracted ${res.lines_inserted} credit line${
+              res.lines_inserted === 1 ? '' : 's'
+            } from the statement.`,
+          ),
+        onError: (err) => setStatementErr(formatError(err)),
+      },
+    )
+  }
 
   const [filterStatus, setFilterStatus] = useState<'' | ReconciliationStatus>('')
   const [filterText, setFilterText] = useState('')
@@ -104,6 +134,72 @@ export function ReconciliationPage() {
             </p>
           </div>
         </header>
+
+        {/* Bank statement upload — super_admin only. Feeds this queue:
+            the extracted credit lines are matched against each booking. */}
+        {isSuperAdmin && (
+          <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+            <h2 className="mb-3 text-sm font-semibold text-gray-900">
+              Bank statements
+            </h2>
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="inline-flex cursor-pointer items-center rounded-lg bg-gray-900 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-gray-800">
+                {uploadStatement.isPending
+                  ? 'Uploading…'
+                  : 'Upload statement PDF'}
+                <input
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  onChange={handleStatementChange}
+                  disabled={uploadStatement.isPending}
+                  className="hidden"
+                />
+              </label>
+              <span className="text-xs text-gray-500">
+                PDF · max 20 MB · AI extracts each credit line for matching
+              </span>
+            </div>
+            {uploadStatement.isPending && (
+              <p className="mt-3 text-sm text-gray-600">
+                Reading statement — usually 10-30 seconds…
+              </p>
+            )}
+            {statementErr && (
+              <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                {statementErr}
+              </p>
+            )}
+            {statementMsg && (
+              <p className="mt-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+                {statementMsg}
+              </p>
+            )}
+            {statements && statements.length > 0 && (
+              <ul className="mt-4 space-y-1 text-sm text-gray-700">
+                {statements.slice(0, 5).map((s) => (
+                  <li
+                    key={s.id}
+                    className="flex items-center justify-between"
+                  >
+                    <span>
+                      Uploaded{' '}
+                      {new Date(s.uploaded_at).toLocaleDateString('en-MY', {
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric',
+                      })}
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      {s.period_start && s.period_end
+                        ? `${s.period_start} → ${s.period_end}`
+                        : '—'}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
 
         {/* Counts strip */}
         <div className="grid grid-cols-3 gap-3">
