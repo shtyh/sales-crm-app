@@ -804,6 +804,7 @@ Files in `supabase/migrations/` (chronological):
 20260530_reconcile_on_booking_change.sql          trg_booking_reconcile AFTER UPDATE on bookings → re-run reconcile_booking when loan_amount/booking_fee/otr_price/commission_amount/loan_bank changes (gated to bookings already reconciled). Fixes stale LOU/bank-in diffs when finance fills fields after docs were uploaded. Includes one-time refresh of all existing reconciliations.
 20260530_lou_handling_fee_tolerance.sql           reconcile_booking: LOU loan-amount diff now accepts loan_amount OR loan_amount + RM600 handling fee (within RM1) as a match — the bank LOU states principal + handling fee, so the RM600 is no longer a false discrepancy. Handling fee = `v_handling_fee constant numeric := 600` (D3). Re-runs all existing reconciliations.
 20260530_booking_down_payment.sql                 bookings +down_payment numeric(12,2) not null default 0 — manual down payment figure in the booking Pricing form (NewBookingPage + BookingDetailPage). Not guard-gated; distinct from total_received_down_payment. Same migration batch removed the Special support input from the Pricing form (column kept).
+20260530_reconcile_lou_from_docverify.sql         reconcile_booking: LOU falls back to the document_verifications LOU (extracted_loan_amount_lou) when there's no attachment_extractions LOU — the booking page's LOU upload moved to Document submission, so one upload feeds both. + trg_document_verifications_reconcile (AFTER INS/UPD on document_verifications, gated to bookings already reconciled). Re-runs all reconciliations.
 20260530_down_payment_expected.sql                recompute_booking_documents: use bookings.down_payment as the EXPECTED down payment when set (>0), else fall back to total_otr−loan. + trg_booking_dv_recompute AFTER UPDATE OF down_payment/loan_amount/otr_price on bookings → re-run recompute (gated to bookings already in the doc-verification flow; does NOT watch recompute-written cols → no recursion). FinancePage gains a "🪙 Pending down payment" section (agreed vs received).
 20260530_document_verification_complete.sql       DOC-VERIFICATION SYSTEM Phase F (completion engine). guard_booking_field_writes rewrite + app.system_op bypass; recompute_booking_documents() (source of truth: derives the 3 doc statuses + payment_type + total_received, writes onto booking guard-bypassed, unlocks commission not_eligible→pending on documents_complete false→true, fans out notifications); trg_document_verifications_recompute (AFTER INSERT/UPDATE); check_booking_complete() authenticated re-check wrapper; _dv_notify/_dv_notify_finance. Edge fns extract-all-in-one/extract-down-payment/extract-lou (+_shared/docverify.ts) deployed separately via MCP.
 ```
@@ -1283,11 +1284,13 @@ warning). Down-payment receipts auto-sum, so they never queue.
 (2026-05-30):** the booking detail page's upload area is now ordered Document
 submission (first) → 🏦 Bank transaction (grouped right under it) → then at the
 bottom 💳 Bank statement + ❌ Cancellation form. The old 📃 LOU `AttachmentSection`
-card was **removed** (LOU now lives only in the Document submission card). ⚠️ Note:
-that removed card was the reconciliation LOU source (`booking_attachments`
-kind='lou' → `attachment_extractions`); the doc-verification LOU writes to
-`document_verifications` instead, so reconciliation's LOU upload path is
-currently orphaned unless bridged. 3 cards
+card was **removed** (LOU now lives only in the Document submission card).
+**Reconciliation reads the LOU from there too** — `reconcile_booking` falls back
+to the latest `document_verifications` LOU (`extracted_loan_amount_lou`) when
+there's no `attachment_extractions` LOU, and `trg_document_verifications_reconcile`
+re-runs reconciliation when a Document submission doc lands (gated to bookings
+already in the reconciliation flow). So one LOU upload feeds both systems
+(migration `20260530_reconcile_lou_from_docverify.sql`). 3 cards
 (All-In-One / Down payment / LOU) each show the booking-level status + the
 uploaded DV rows (extracted summary + status pill) + an upload button. LOU card
 shows "Not required" for known cash deals. The down-payment card shows
