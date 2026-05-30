@@ -20,3 +20,20 @@ export async function listAuditForRow(
   if (error) throw error
   return data as AuditLogEntry[]
 }
+
+/**
+ * Recent audit entries for a whole table (any row), newest first. Used for
+ * table-level change logs where per-row history isn't enough — e.g. so a
+ * DELETE still shows up after its row is gone. RLS restricts SELECT to
+ * super_admin, so non-super callers get an empty list (no error).
+ */
+export async function listAuditForTable(tableName: string, limit = 50) {
+  const { data, error } = await supabase
+    .from('audit_log')
+    .select('*')
+    .eq('table_name', tableName)
+    .order('occurred_at', { ascending: false })
+    .limit(limit)
+  if (error) throw error
+  return data as AuditLogEntry[]
+}

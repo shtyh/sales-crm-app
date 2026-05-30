@@ -69,7 +69,7 @@ Current real users (`select id, full_name, role from public.profiles`):
 | `cars` | per-column gated by trigger; delete super only (UI exposed at `/cars/:id` ★ Delete; two-step chassis-typed confirm; bookings.car_id is `on delete set null` so deletion never blocks) | `chassis_no unique`, `floor_stock_*`, `status enum(in_stock/reserved/delivered/returned)` |
 | `commission_schedules` | super_admin | `(model, variant) → base_commission` (variant nullable as catch-all) |
 | `commission_payouts` | sales_manager + super_admin | batch label, paid_at, paid_by |
-| `audit_log` | trigger only (postgres) | reads = super_admin only; one row per INSERT/UPDATE/DELETE on bookings + cars |
+| `audit_log` | trigger only (postgres) | reads = super_admin only; one row per INSERT/UPDATE/DELETE on bookings + cars + **commission_schedules** (2026-05-30). All three use the generic `write_audit_log()` trigger fn (keys off `TG_TABLE_NAME` + row `id`). Surfaced via `AuditLogPanel` (per-row) + `TableActivityLog` (table-wide). |
 | storage bucket `booking-files` | matches `booking_attachments` ownership | private |
 | `attendance` | own row write/read; is_admin reads all; super_admin delete | one row per `(profile_id, work_date)`. check_in_* required at insert (lat/lng/distance_m + timestamp); check_out_* set later via UPDATE. **Lunch (2026-05-27)**: lunch_out_* and lunch_in_* (timestamptz + lat/lng/distance_m, all nullable). work_date is Asia/KL local YYYY-MM-DD, FE-supplied. |
 | `commission_verifications` | SA writes own; SM + super UPDATE any; super DELETE. SELECT visible to SA on own, SM/FA/super on all. | `booking_id` FK (set null on delete), `uploaded_by` FK→profiles, `image_path` (Storage path), `extracted_*` fields from the Gemini extraction, `matched` boolean, `discrepancy_notes`. Populated by the `/commission-verify` upload flow + `match_commission_verification(id)` RPC. |
@@ -149,7 +149,7 @@ Trigger `sync_car_status_from_booking` fires AFTER INSERT/UPDATE/DELETE on booki
 | `/cars/:id` | CarDetailPage | any auth; column gates within the page |
 | `/finance` | FinancePage (overview cards + insurance / payment / invoice / commission tables, plus floor-stock + LOU below) | finance_admin + super_admin only |
 | `/commissions` | CommissionsPage (SM payout flow) | sales_manager + super_admin |
-| `/admin/commissions` | CommissionSchedulesPage (base rates) | super_admin only |
+| `/admin/commissions` | CommissionSchedulesPage (base rates + a 🕓 Change log of every add/edit/delete, from `audit_log`) | super_admin only |
 | `/admin/users` | AdminUsersPage | super_admin only |
 | `/account` | AccountPage (personal display name) | any auth |
 | `/clock-in` | ClockInPage (GPS-gated check in / out) | any auth |
@@ -756,6 +756,7 @@ Files in `supabase/migrations/` (chronological):
 20260529_reconciliation.sql                        4 tables: bank_statements + bank_statement_lines + attachment_extractions + booking_reconciliations. reconcile_booking(uuid) SECURITY DEFINER RPC. Triggers on commission_verifications + attachment_extractions + bank_statement_lines auto-fire reconciliation when any source doc changes. Storage policies for statements/{uid}/* prefix on booking-files.
 20260528_booking_vehicle_color_multi.sql           bookings.vehicle_color text → text[] (legacy single-colour rows become 1-element arrays). Multi-select pill picker in NewBookingPage + BookingDetailPage.
 20260528_hq_discount_dealer_support_approval.sql   commission_schedules + bookings get hq_discount + dealer_support; bookings +approval_notes; lookup_schedule_for() helper; guard rewrite to snapshot HQ+dealer + auto-flip approval_status on the discount-vs-commission rule (manager's decision sticks once set)
+20260530_commission_schedules_audit.sql           trg_commission_schedules_audit AFTER INSERT/UPDATE/DELETE → reuses generic write_audit_log(); powers the 🕓 Change log on /admin/commissions (super_admin only, via audit_log RLS)
 ```
 
 Some early ones were **applied by hand** in Supabase SQL editor and so don't show up in `supabase_migrations.schema_migrations`. The files are still source of truth for what should exist.

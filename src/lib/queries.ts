@@ -71,7 +71,7 @@ import {
 import { listTechnicians } from './technicians'
 import { listPayments } from './payments'
 import { listInvoices } from './invoices'
-import { listAuditForRow } from './audit'
+import { listAuditForRow, listAuditForTable } from './audit'
 import {
   createPayoutAndAssign,
   createSchedule,
@@ -178,6 +178,7 @@ export const qk = {
   car: (id: string) => ['cars', id] as const,
   audit: (tableName: string, rowId: string) =>
     ['audit', tableName, rowId] as const,
+  auditTable: (tableName: string) => ['audit', 'table', tableName] as const,
   commissionSchedules: ['commission-schedules'] as const,
   commissionPayouts: ['commission-payouts'] as const,
   customers: ['customers'] as const,
@@ -383,6 +384,9 @@ export function useCreateSchedule() {
     mutationFn: (input: CommissionScheduleInsert) => createSchedule(input),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.commissionSchedules })
+      qc.invalidateQueries({
+        queryKey: qk.auditTable('commission_schedules'),
+      })
     },
   })
 }
@@ -399,6 +403,9 @@ export function useUpdateSchedule() {
     }) => updateSchedule(id, patch),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.commissionSchedules })
+      qc.invalidateQueries({
+        queryKey: qk.auditTable('commission_schedules'),
+      })
     },
   })
 }
@@ -409,6 +416,9 @@ export function useDeleteSchedule() {
     mutationFn: (id: string) => deleteSchedule(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.commissionSchedules })
+      qc.invalidateQueries({
+        queryKey: qk.auditTable('commission_schedules'),
+      })
     },
   })
 }
@@ -747,6 +757,23 @@ export function useAuditForRow(
     enabled: enabled && !!rowId,
     // Audit data isn't latency-critical; keep it fresh for a minute so we
     // refresh after navigating back from making changes.
+    staleTime: 60_000,
+  })
+}
+
+/**
+ * Recent audit entries for a whole table (any row) — table-level change log.
+ * `enabled` should usually be the caller's `isSuperAdmin` flag.
+ */
+export function useAuditForTable(
+  tableName: string,
+  enabled = true,
+  limit = 50,
+) {
+  return useQuery<AuditLogEntry[]>({
+    queryKey: qk.auditTable(tableName),
+    queryFn: () => listAuditForTable(tableName, limit),
+    enabled,
     staleTime: 60_000,
   })
 }

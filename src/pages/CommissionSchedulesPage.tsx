@@ -1,6 +1,7 @@
-import { useState, type FormEvent } from 'react'
+import { useMemo, useState, type FormEvent } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
+import { TableActivityLog } from '../components/AuditLogPanel'
 import { useAuth } from '../lib/auth'
 import {
   useCommissionSchedules,
@@ -11,7 +12,7 @@ import {
 import { formatError } from '../lib/errors'
 import { formatMYR } from '../lib/format'
 import { PROTON_MODELS, variantsFor } from '../data/proton-models'
-import type { CommissionSchedule } from '../lib/types'
+import type { AuditLogEntry, CommissionSchedule } from '../lib/types'
 
 const inputClass =
   'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10'
@@ -44,6 +45,16 @@ export function CommissionSchedulesPage() {
       }
     >
   >({})
+
+  // model · variant label per row id, so the change log can name which row
+  // each entry touched. Must run before the early returns (rules of hooks).
+  const scheduleLabelById = useMemo(() => {
+    const m = new Map<string, string>()
+    schedules?.forEach((s) =>
+      m.set(s.id, `${s.model}${s.variant ? ` · ${s.variant}` : ''}`),
+    )
+    return m
+  }, [schedules])
 
   if (loading) {
     return (
@@ -152,6 +163,22 @@ export function CommissionSchedulesPage() {
 
   const showError = error ?? (listErr ? formatError(listErr) : null)
   const variantsForNew = variantsFor(newModel)
+
+  // Resolve a model · variant label for a change-log entry. Live rows come
+  // from the map above; deleted rows fall back to the entry's own snapshot
+  // (INSERT/DELETE store the full row; an UPDATE that didn't touch
+  // model/variant won't have them, so it lands on '—').
+  const labelForEntry = (e: AuditLogEntry): string => {
+    const known = scheduleLabelById.get(e.row_id)
+    if (known) return known
+    const model = (e.changed?.model ?? e.old_values?.model) as
+      | string
+      | undefined
+    const variant = (e.changed?.variant ?? e.old_values?.variant) as
+      | string
+      | undefined
+    return model ? `${model}${variant ? ` · ${variant}` : ''}` : '—'
+  }
 
   return (
     <AppShell>
@@ -487,6 +514,14 @@ export function CommissionSchedulesPage() {
           </table>
         )}
       </div>
+
+      {/* Who changed what, when — INSERT / UPDATE / DELETE on this table.
+          Super-admin only (audit_log RLS); the panel self-hides otherwise. */}
+      <TableActivityLog
+        tableName="commission_schedules"
+        title="🕓 Change log"
+        labelOf={labelForEntry}
+      />
     </AppShell>
   )
 }
