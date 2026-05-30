@@ -99,7 +99,7 @@ These are enforced by `public.guard_booking_field_writes` BEFORE INSERT/UPDATE.
 | `jpj_status`, `jpj_submitted_at`, `jpj_expected_completion` | general_admin only |
 | `status='cancelled'` transition | sales_manager only |
 | `car_id` | general_admin or sales_manager (or super_admin) |
-| `base_commission` | system trigger only (snapshot on INSERT from `commission_schedules`); super_admin can override |
+| `base_commission` | system trigger: snapshot on INSERT from `commission_schedules`; super_admin can override. **Retro-fill (2026-05-30):** a schedule INSERT/UPDATE now also backfills existing bookings whose `base_commission` IS NULL via `trg_commission_schedule_backfill` → `backfill_booking_commission()` — so adding a schedule after the booking makes it pick up the value automatically (the guard recomputes `commission_amount` on that UPDATE). Already-snapshotted bookings are never rewritten. |
 | `commission_amount` | auto = base − discount + special_support (can go negative); sales_manager can override |
 | `commission_status` | system auto-flips to `pending` when delivered+paid (or `approved` if owner is SM). sales_manager flips manually after. |
 | `commission_payout_id` | sales_manager (set when bundling into a payout batch) |
@@ -776,6 +776,7 @@ Files in `supabase/migrations/` (chronological):
 20260530_commission_schedules_audit.sql           trg_commission_schedules_audit AFTER INSERT/UPDATE/DELETE → reuses generic write_audit_log(); powers the 🕓 Change log on /admin/commissions (super_admin only, via audit_log RLS)
 20260530_bank_statements_original_name.sql        bank_statements +original_name text — operator's uploaded filename, shown (clickable → signed URL) in the Bank statements card on /reconciliation
 20260530_stock_issued_list_rpc.sql                stock_issued_list(p_from,p_to) SECURITY DEFINER RPC — every part-issue txn in a date range; powers StockIssuedListPage at /service/stock/issued
+20260530_commission_schedule_backfill_bookings.sql  trg_commission_schedule_backfill + backfill_booking_commission() — schedule add/update fills NULL-base bookings (one-time backfill included); guard recomputes commission_amount
 ```
 
 Some early ones were **applied by hand** in Supabase SQL editor and so don't show up in `supabase_migrations.schema_migrations`. The files are still source of truth for what should exist.
@@ -786,7 +787,7 @@ Schema drift noted earlier: `delivered_at` (in migrations) vs `expected_delivery
 
 - **6.5 Excel/CSV upload** for commission_schedules (user wanted this in original spec but we built manual-row UI first to validate the flow).
 - **Half-monthly payout batch detail page** — past batches list exists, but no drill-in view of which bookings were included in a given batch.
-- **Re-snapshot existing bookings' `base_commission`** when a schedule row is added/updated (currently only INSERT snapshots; existing bookings stay null until manually re-saved).
+- ~~Re-snapshot existing bookings' `base_commission` when a schedule row is added/updated~~ **DONE 2026-05-30** (`20260530_commission_schedule_backfill_bookings.sql`) — schedule INSERT/UPDATE backfills bookings with NULL `base_commission`; never rewrites already-snapshotted ones.
 - **Drop `accountant` enum value** properly (requires PG type recreation; deferred because zero users are on it and the value is filtered from UI).
 - **car_status returned flow** — when a delivered car physically comes back, currently general_admin sets it manually. No auto-trigger.
 

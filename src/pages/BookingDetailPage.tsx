@@ -905,8 +905,8 @@ export function BookingDetailPage() {
                 {booking.vehicle_model}
                 {booking.vehicle_variant ? ` · ${booking.vehicle_variant}` : ''}
               </span>
-              . Super admin can add a row at /admin/commissions; existing
-              bookings will need to be re-saved to pick up the new value.
+              . Super admin can add a row at /admin/commissions — this booking
+              picks it up automatically (refresh the page).
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4 sm:gap-4">
