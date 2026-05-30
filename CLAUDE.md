@@ -469,7 +469,10 @@ Primary nav links by role:
   Matching policy is **strict**: statement line ↔ bank-in receipt
   must have the same amount AND the same `line_date`. Any drift is
   flagged. (Tunable later by relaxing the join in `reconcile_booking`.)
-  LOU is auto-satisfied when `bookings.loan_bank = 'cash'`.
+  LOU is auto-satisfied when `bookings.loan_bank = 'cash'`. **LOU loan
+  amount (2026-05-30):** the bank LOU states principal + the RM600
+  handling fee, so the diff accepts `loan_amount` OR `loan_amount + 600`
+  (within RM1) as a match — the RM600 is not flagged.
 
   `/reconciliation` (FA + SM + super_admin) renders the queue with a
   status pill per booking + a click-in detail panel showing the
@@ -796,6 +799,7 @@ Files in `supabase/migrations/` (chronological):
 20260530_booking_attachments_audit.sql            trg_booking_attachments_audit → write_audit_log(); document uploads/removals now show in the booking 🕓 Activity (BookingActivityLog merges them in)
 20260530_document_verification_system.sql         DOC-VERIFICATION SYSTEM Phase A (schema). notifications + document_verifications tables (+RLS/grants/policies), bookings +all_in_one_status/down_payment_status/lou_status/documents_complete/total_received_down_payment/payment_type(cash/loan/floor_stock — distinct from payments.payment_type), document-verification/{uid}/ storage policies, notification RPCs.
 20260530_reconcile_on_booking_change.sql          trg_booking_reconcile AFTER UPDATE on bookings → re-run reconcile_booking when loan_amount/booking_fee/otr_price/commission_amount/loan_bank changes (gated to bookings already reconciled). Fixes stale LOU/bank-in diffs when finance fills fields after docs were uploaded. Includes one-time refresh of all existing reconciliations.
+20260530_lou_handling_fee_tolerance.sql           reconcile_booking: LOU loan-amount diff now accepts loan_amount OR loan_amount + RM600 handling fee (within RM1) as a match — the bank LOU states principal + handling fee, so the RM600 is no longer a false discrepancy. Handling fee = `v_handling_fee constant numeric := 600` (D3). Re-runs all existing reconciliations.
 20260530_document_verification_complete.sql       DOC-VERIFICATION SYSTEM Phase F (completion engine). guard_booking_field_writes rewrite + app.system_op bypass; recompute_booking_documents() (source of truth: derives the 3 doc statuses + payment_type + total_received, writes onto booking guard-bypassed, unlocks commission not_eligible→pending on documents_complete false→true, fans out notifications); trg_document_verifications_recompute (AFTER INSERT/UPDATE); check_booking_complete() authenticated re-check wrapper; _dv_notify/_dv_notify_finance. Edge fns extract-all-in-one/extract-down-payment/extract-lou (+_shared/docverify.ts) deployed separately via MCP.
 ```
 
