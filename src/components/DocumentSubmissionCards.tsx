@@ -87,6 +87,7 @@ function DocCard({
   uploading,
   onPick,
   error,
+  wide,
 }: {
   docType: DocumentType
   booking: Booking
@@ -95,6 +96,7 @@ function DocCard({
   uploading: boolean
   onPick: (docType: DocumentType, file: File) => void
   error: string | null
+  wide?: boolean
 }) {
   const status = bookingStatusLine(docType, booking)
   const louNotRequired =
@@ -108,7 +110,11 @@ function DocCard({
   }
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4">
+    <div
+      className={`rounded-lg border border-gray-200 bg-white p-4${
+        wide ? ' md:col-span-2' : ''
+      }`}
+    >
       <div className="mb-2 flex items-start justify-between gap-2">
         <div>
           <h3 className="text-sm font-semibold text-gray-900">
@@ -252,7 +258,7 @@ export function DocumentSubmissionCards({
         )}
       </div>
       {showDocCards && (
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-4">
           {TYPES.map((t) => (
             <DocCard
               key={t}
@@ -263,6 +269,7 @@ export function DocumentSubmissionCards({
               uploading={upload.isPending && activeType === t}
               onPick={handlePick}
               error={errors[t] ?? null}
+              wide={t === 'all_in_one'}
             />
           ))}
         </div>
