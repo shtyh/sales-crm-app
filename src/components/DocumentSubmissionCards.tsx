@@ -57,7 +57,17 @@ function bookingStatusLine(
   }
   if (docType === 'down_payment') {
     const s = booking.down_payment_status
-    const got = formatMYR(booking.total_received_down_payment || 0)
+    const expected = Number(booking.down_payment || 0)
+    const received = Number(booking.total_received_down_payment || 0)
+    const got = formatMYR(received)
+    if (expected > 0) {
+      // Agreed figure set on the booking — show received / agreed.
+      const pair = `${got} / ${formatMYR(expected)}`
+      const toGo = formatMYR(Math.max(expected - received, 0))
+      if (s === 'complete') return { cls: 'text-green-700', text: `Complete — ${pair} received` }
+      if (s === 'partial') return { cls: 'text-amber-700', text: `${pair} — ${toGo} to go` }
+      return { cls: 'text-amber-700', text: `Agreed ${formatMYR(expected)} — no receipts yet` }
+    }
     if (s === 'complete') return { cls: 'text-green-700', text: `Complete — ${got} received` }
     if (s === 'partial') return { cls: 'text-amber-700', text: `Partial — ${got} received` }
     return { cls: 'text-gray-500', text: 'No receipts yet' }

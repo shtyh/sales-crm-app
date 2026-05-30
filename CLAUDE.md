@@ -1283,7 +1283,9 @@ warning). Down-payment receipts auto-sum, so they never queue.
 the attachments block and the Activity log, gated SA+SM+super. 3 cards
 (All-In-One / Down payment / LOU) each show the booking-level status + the
 uploaded DV rows (extracted summary + status pill) + an upload button. LOU card
-shows "Not required" for known cash deals.
+shows "Not required" for known cash deals. The down-payment card shows
+**received / agreed** (`total_received_down_payment` vs `down_payment`) + how
+much is left when an agreed figure is set.
 
 ### ✅ Phase F — completion engine (DONE, applied to prod, verified)
 Migration `20260530_document_verification_complete.sql`:
