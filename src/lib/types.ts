@@ -1161,6 +1161,7 @@ export type BankStatement = {
   uploaded_by: string
   uploaded_at: string
   file_path: string
+  original_name: string | null
   period_start: string | null
   period_end: string | null
   notes: string | null

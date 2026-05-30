@@ -51,7 +51,7 @@ export async function uploadAndExtractStatement(
 
   const { data: inserted, error: insertErr } = await supabase
     .from('bank_statements')
-    .insert({ uploaded_by: userId, file_path: path })
+    .insert({ uploaded_by: userId, file_path: path, original_name: file.name })
     .select('*')
     .single()
   if (insertErr) {
@@ -82,6 +82,16 @@ export async function listStatements(): Promise<BankStatement[]> {
     .order('uploaded_at', { ascending: false })
   if (error) throw error
   return (data as BankStatement[]) ?? []
+}
+
+/** Short-lived signed URL to view/download a stored statement PDF (private
+ *  bucket). Storage RLS scopes the `statements/` prefix to FA + super_admin. */
+export async function getStatementSignedUrl(filePath: string): Promise<string> {
+  const { data, error } = await supabase.storage
+    .from(BUCKET)
+    .createSignedUrl(filePath, 60)
+  if (error) throw error
+  return data.signedUrl
 }
 
 // ----- Attachment extraction (LOU + bank-in) ------------------------------

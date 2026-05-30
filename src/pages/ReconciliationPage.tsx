@@ -8,9 +8,11 @@ import {
   useRunReconcile,
   useUploadStatement,
 } from '../lib/queries'
+import { getStatementSignedUrl } from '../lib/reconciliation'
 import { formatError } from '../lib/errors'
 import { formatMYR } from '../lib/format'
 import type {
+  BankStatement,
   BookingReconciliationRow,
   ReconciliationDiff,
   ReconciliationStatus,
@@ -88,6 +90,16 @@ export function ReconciliationPage() {
     )
   }
 
+  // Open the stored PDF in a new tab via a short-lived signed URL.
+  async function openStatement(s: BankStatement) {
+    try {
+      const url = await getStatementSignedUrl(s.file_path)
+      window.open(url, '_blank', 'noopener,noreferrer')
+    } catch (err) {
+      setStatementErr(formatError(err))
+    }
+  }
+
   const [filterStatus, setFilterStatus] = useState<'' | ReconciliationStatus>('')
   const [filterText, setFilterText] = useState('')
   const [openId, setOpenId] = useState<string | null>(null)
@@ -134,72 +146,6 @@ export function ReconciliationPage() {
             </p>
           </div>
         </header>
-
-        {/* Bank statement upload — super_admin only. Feeds this queue:
-            the extracted credit lines are matched against each booking. */}
-        {isSuperAdmin && (
-          <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-            <h2 className="mb-3 text-sm font-semibold text-gray-900">
-              Bank statements
-            </h2>
-            <div className="flex flex-wrap items-center gap-3">
-              <label className="inline-flex cursor-pointer items-center rounded-lg bg-gray-900 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-gray-800">
-                {uploadStatement.isPending
-                  ? 'Uploading…'
-                  : 'Upload statement PDF'}
-                <input
-                  type="file"
-                  accept="application/pdf,.pdf"
-                  onChange={handleStatementChange}
-                  disabled={uploadStatement.isPending}
-                  className="hidden"
-                />
-              </label>
-              <span className="text-xs text-gray-500">
-                PDF · max 20 MB · AI extracts each credit line for matching
-              </span>
-            </div>
-            {uploadStatement.isPending && (
-              <p className="mt-3 text-sm text-gray-600">
-                Reading statement — usually 10-30 seconds…
-              </p>
-            )}
-            {statementErr && (
-              <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-                {statementErr}
-              </p>
-            )}
-            {statementMsg && (
-              <p className="mt-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
-                {statementMsg}
-              </p>
-            )}
-            {statements && statements.length > 0 && (
-              <ul className="mt-4 space-y-1 text-sm text-gray-700">
-                {statements.slice(0, 5).map((s) => (
-                  <li
-                    key={s.id}
-                    className="flex items-center justify-between"
-                  >
-                    <span>
-                      Uploaded{' '}
-                      {new Date(s.uploaded_at).toLocaleDateString('en-MY', {
-                        day: '2-digit',
-                        month: 'short',
-                        year: 'numeric',
-                      })}
-                    </span>
-                    <span className="text-xs text-gray-500">
-                      {s.period_start && s.period_end
-                        ? `${s.period_start} → ${s.period_end}`
-                        : '—'}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        )}
 
         {/* Counts strip */}
         <div className="grid grid-cols-3 gap-3">
@@ -283,6 +229,80 @@ export function ReconciliationPage() {
             </tbody>
           </table>
         </div>
+
+        {/* Bank statement upload — super_admin only, at the bottom. This is
+            the input that feeds the queue above; click a file to view it. */}
+        {isSuperAdmin && (
+          <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+            <h2 className="mb-3 text-sm font-semibold text-gray-900">
+              Bank statements
+            </h2>
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="inline-flex cursor-pointer items-center rounded-lg bg-gray-900 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-gray-800">
+                {uploadStatement.isPending
+                  ? 'Uploading…'
+                  : 'Upload statement PDF'}
+                <input
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  onChange={handleStatementChange}
+                  disabled={uploadStatement.isPending}
+                  className="hidden"
+                />
+              </label>
+              <span className="text-xs text-gray-500">
+                PDF · max 20 MB · AI extracts each credit line for matching
+              </span>
+            </div>
+            {uploadStatement.isPending && (
+              <p className="mt-3 text-sm text-gray-600">
+                Reading statement — usually 10-30 seconds…
+              </p>
+            )}
+            {statementErr && (
+              <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                {statementErr}
+              </p>
+            )}
+            {statementMsg && (
+              <p className="mt-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+                {statementMsg}
+              </p>
+            )}
+            {statements && statements.length > 0 && (
+              <ul className="mt-4 divide-y divide-gray-100 text-sm text-gray-700">
+                {statements.slice(0, 8).map((s) => (
+                  <li
+                    key={s.id}
+                    className="flex items-center justify-between gap-3 py-2"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => openStatement(s)}
+                      title="Open the uploaded PDF in a new tab"
+                      className="truncate text-left font-medium text-gray-900 underline-offset-2 hover:text-gray-600 hover:underline"
+                    >
+                      📄{' '}
+                      {s.original_name ||
+                        s.file_path.split('/').pop() ||
+                        'statement.pdf'}
+                    </button>
+                    <span className="shrink-0 text-xs text-gray-500">
+                      {new Date(s.uploaded_at).toLocaleDateString('en-MY', {
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric',
+                      })}
+                      {s.period_start && s.period_end
+                        ? ` · ${s.period_start} → ${s.period_end}`
+                        : ''}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
       </div>
     </AppShell>
   )
