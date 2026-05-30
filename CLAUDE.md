@@ -806,7 +806,8 @@ Files in `supabase/migrations/` (chronological):
 20260530_booking_down_payment.sql                 bookings +down_payment numeric(12,2) not null default 0 — manual down payment figure in the booking Pricing form (NewBookingPage + BookingDetailPage). Not guard-gated; distinct from total_received_down_payment. Same migration batch removed the Special support input from the Pricing form (column kept).
 20260530_reconcile_lou_from_docverify.sql         reconcile_booking: LOU falls back to the document_verifications LOU (extracted_loan_amount_lou) when there's no attachment_extractions LOU — the booking page's LOU upload moved to Document submission, so one upload feeds both. + trg_document_verifications_reconcile (AFTER INS/UPD on document_verifications, gated to bookings already reconciled). Re-runs all reconciliations.
 20260530_down_payment_expected.sql                recompute_booking_documents: use bookings.down_payment as the EXPECTED down payment when set (>0), else fall back to total_otr−loan.
-20260530_bank_txn_feeds_down_payment.sql          recompute_booking_documents: total_received_down_payment now ALSO sums attachment_extractions bank_transaction amounts (the 🏦 Bank transaction slip counts as down payment received). + trg_attext_dv_recompute (AFTER INS/UPD on attachment_extractions, bank_transaction only, gated to bookings with down_payment>0 or a DV row). ⚠️ don't upload the same slip to both Bank transaction AND Down payment receipt (double count). + trg_booking_dv_recompute AFTER UPDATE OF down_payment/loan_amount/otr_price on bookings → re-run recompute (gated to bookings already in the doc-verification flow; does NOT watch recompute-written cols → no recursion). FinancePage gains a "🪙 Pending down payment" section (agreed vs received).
+20260530_bank_txn_feeds_down_payment.sql          (REVERTED — see next) briefly made bank_transaction amounts feed total_received_down_payment.
+20260530_revert_bank_txn_down_payment.sql         Revert: Bank transaction = the BOOKING FEE slip, NOT the down payment. recompute_booking_documents sums total_received_down_payment from document_verifications down_payment rows ONLY; trg_attext_dv_recompute dropped. Down payment = the "Down payment receipt" card only; Bank transaction stays in reconciliation (vs booking_fee). + trg_booking_dv_recompute AFTER UPDATE OF down_payment/loan_amount/otr_price on bookings → re-run recompute (gated to bookings already in the doc-verification flow; does NOT watch recompute-written cols → no recursion). FinancePage gains a "🪙 Pending down payment" section (agreed vs received).
 20260530_document_verification_complete.sql       DOC-VERIFICATION SYSTEM Phase F (completion engine). guard_booking_field_writes rewrite + app.system_op bypass; recompute_booking_documents() (source of truth: derives the 3 doc statuses + payment_type + total_received, writes onto booking guard-bypassed, unlocks commission not_eligible→pending on documents_complete false→true, fans out notifications); trg_document_verifications_recompute (AFTER INSERT/UPDATE); check_booking_complete() authenticated re-check wrapper; _dv_notify/_dv_notify_finance. Edge fns extract-all-in-one/extract-down-payment/extract-lou (+_shared/docverify.ts) deployed separately via MCP.
 ```
 
@@ -1193,10 +1194,12 @@ decisions were locked (below) and held.
 Completion rule by `payment_type`: **cash/floor_stock** = All-In-One approved +
 down payment complete; **loan** also requires LOU verified. `documents_complete`
 never flips while `payment_type` is still unknown. Down-payment "complete" =
-Σ **received** ≥ **expected** within RM1, where **received = Document-submission
-down-payment receipts + 🏦 Bank-transaction attachment amounts** (the bank-in
-slip counts as down payment, 2026-05-30), and **expected = `bookings.down_payment`
-when set (>0), else `total_otr − loan`** (2026-05-30 — the manual agreed down
+Σ **received** ≥ **expected** within RM1, where **received = ONLY the
+Document-submission "Down payment receipt" rows** (`document_verifications`
+down_payment). The 🏦 Bank transaction slip is the **booking-fee** payment, NOT
+the down payment — it stays in reconciliation (compared vs `booking_fee`) and
+does NOT feed the down-payment sum. **expected = `bookings.down_payment` when
+set (>0), else `total_otr − loan`** (2026-05-30 — the manual agreed down
 payment from the Pricing form takes priority; `trg_booking_dv_recompute` re-runs
 recompute when down_payment/loan_amount/otr_price change). The all-in-one
 extraction is what auto-sets `payment_type` when it was null.
