@@ -928,7 +928,7 @@ so a fresh session doesn't have to re-derive context.
   - `mode='qr'` for DO codes: QR + Data Matrix + Aztec + PDF 417,
     fps=10, flip-detect on.
   - `mode='barcode'` for part labels: CODE_128/93/39, CODABAR, ITF,
-    EAN, UPC, fps=15, flip-detect off. Uses native `BarcodeDetector`
+    EAN, UPC, fps=12, flip-detect off. Uses native `BarcodeDetector`
     API when available (Chrome Android, Safari iOS 17+).
   - **Viewfinder (fixed 2026-05-30):** html5-qrcode's built-in `qrbox`
     shaded region was dropped — it mis-rendered when the camera stream
@@ -938,8 +938,19 @@ so a fresh session doesn't have to re-derive context.
     `<video>` to `object-fit:cover` the square preview via a global rule
     in `src/index.css` (`#qr-scanner-region video`), and draw our **own**
     centred guide box over the feed — a real square (`72%`) for QR, a
-    wide band (`88% × 34%`) for barcode. So the guide always matches what
+    wide band (`70% × 26%`) for barcode. So the guide always matches what
     actually decodes.
+  - **Focus / blur fix (2026-05-30):** filling the box made operators hold
+    the phone closer than the lens can focus → blurry bars that won't
+    decode. Fix: request a high-res rear stream via
+    `videoConstraints: { facingMode:'environment', width:{ideal:1280},
+    height:{ideal:720} }` (passed in the *config* arg — html5-qrcode's
+    validator only bans audio keys, so width/height/advanced are fine),
+    so a barcode that fills only part of the frame still has enough pixels
+    to decode and can be held at a sharp distance. Plus a best-effort
+    `track.applyConstraints({ advanced:[{ focusMode:'continuous' }] })`
+    after `start()` (no-ops on iOS Safari, never fatal) and copy that
+    tells the operator to hold ~15–20 cm away and **not** fill the box.
 - **Uniqueness rails on Stock Receive**:
   - DB: partial UNIQUE INDEX on `stock_receipts.do_no WHERE do_no IS
     NOT NULL` (`stock_receipts_do_no_unique`).

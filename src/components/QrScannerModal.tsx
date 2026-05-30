@@ -107,25 +107,27 @@ export function QrScannerModal({
         scannerRef.current = scanner
 
         await scanner.start(
-          // html5-qrcode rejects the standard MediaTrackConstraints
-          // { ideal: ... } shape; it wants a bare string or { exact: ... }.
-          // Plain string asks for the rear camera with a soft preference
-          // (falls back to whatever camera exists on a workshop PC).
+          // First arg is required but ignored once `videoConstraints`
+          // (below) is set — camera selection happens there instead.
           { facingMode: 'environment' },
           {
-            // Bump fps for barcode mode — 1D scans are angle-sensitive
-            // so more decode attempts per second = better catch rate.
-            // QR mode doesn't need it (a steady QR decodes in 1-2
-            // frames).
-            fps: mode === 'barcode' ? 15 : 10,
-            // NB: no `qrbox` on purpose. Its shaded-region overlay
-            // mis-renders when the camera stream aspect doesn't match the
-            // square preview — it squashes the QR box into a wide strip
-            // and collapses the barcode band into a thin, unscannable
-            // line. We scan the whole frame and draw our own centred
-            // guide box (square for QR, wide band for barcode) below, so
-            // what the operator aligns to always matches what we decode.
-            aspectRatio: 1.0,
+            fps: mode === 'barcode' ? 12 : 10,
+            // No `qrbox`: its shaded-region overlay mis-renders when the
+            // stream aspect doesn't match the square preview (it squashed
+            // the QR box into a strip and the barcode band into a thin
+            // line). We scan the whole frame and draw our own guide box
+            // below, so what the operator aligns to matches what decodes.
+            //
+            // Ask for a high-res rear stream. The blur the operator hit is
+            // a focus problem: filling the frame means holding the phone
+            // closer than the lens can focus. A ~1280px capture keeps
+            // enough detail to decode a barcode that fills only part of
+            // the frame, so they can hold it at a sharp distance.
+            videoConstraints: {
+              facingMode: 'environment',
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+            },
             // 1D barcodes look the same flipped — skip the extra
             // mirror-image pass html5-qrcode does by default.
             disableFlip: mode === 'barcode',
@@ -144,6 +146,26 @@ export function QrScannerModal({
           },
           undefined,
         )
+        // Best-effort: nudge the camera into continuous autofocus so a
+        // barcode held at a readable distance stays sharp. Unsupported on
+        // most iOS Safari builds — failures are swallowed, never fatal.
+        try {
+          const video = document.querySelector<HTMLVideoElement>(
+            `#${SCANNER_ELEMENT_ID} video`,
+          )
+          const track = (
+            video?.srcObject as MediaStream | null
+          )?.getVideoTracks?.()[0]
+          if (track) {
+            await track
+              .applyConstraints({
+                advanced: [{ focusMode: 'continuous' }],
+              } as unknown as MediaTrackConstraints)
+              .catch(() => {})
+          }
+        } catch {
+          /* focus tuning is best-effort */
+        }
         if (cancelled) {
           await scanner.stop().catch(() => {})
         }
@@ -219,7 +241,7 @@ export function QrScannerModal({
                   <div
                     className={
                       mode === 'barcode'
-                        ? 'h-[34%] w-[88%] rounded-lg border-2 border-white/90 shadow-[0_0_0_2px_rgba(0,0,0,0.25)]'
+                        ? 'h-[26%] w-[70%] rounded-lg border-2 border-white/90 shadow-[0_0_0_2px_rgba(0,0,0,0.25)]'
                         : 'aspect-square w-[72%] rounded-lg border-2 border-white/90 shadow-[0_0_0_2px_rgba(0,0,0,0.25)]'
                     }
                   />
@@ -227,7 +249,7 @@ export function QrScannerModal({
               </div>
               <p className="mt-3 text-xs text-gray-500">
                 {mode === 'barcode'
-                  ? 'Hold the barcode horizontally inside the wide frame so it fills most of the width. The scanner auto-detects when the lines are sharp and steady.'
+                  ? 'Hold the label flat about 15–20 cm away so the bars look sharp — it doesn’t need to fill the box. Keep steady; it scans on its own.'
                   : 'Hold the QR code steady inside the square frame. The scanner auto-detects and closes when it reads a code.'}
               </p>
             </>
