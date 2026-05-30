@@ -60,6 +60,7 @@ export function NewBookingPage() {
     '' | 'cash' | 'qr' | 'transfer'
   >('')
   const [officialReceiptNo, setOfficialReceiptNo] = useState('')
+  const [downPayment, setDownPayment] = useState('')
   const [discountAmount, setDiscountAmount] = useState('')
 
   const [bookingDate, setBookingDate] = useState(today())
@@ -171,6 +172,7 @@ export function NewBookingPage() {
         booking_fee: Number(bookingFee) || 0,
         booking_fee_method: bookingFeeMethod || null,
         official_receipt_no: officialReceiptNo.trim() || null,
+        down_payment: Number(downPayment) || 0,
         discount_amount: Number(discountAmount) || 0,
         booking_date: bookingDate,
         notes: notes.trim() || null,
@@ -475,6 +477,18 @@ export function NewBookingPage() {
               onChange={(e) => setOfficialReceiptNo(e.target.value)}
               className={inputClass}
               placeholder="OR-#####"
+            />
+          </Field>
+          <Field label="Downpayment (MYR)">
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              value={downPayment}
+              onChange={(e) => setDownPayment(e.target.value)}
+              className={inputClass}
+              inputMode="decimal"
+              placeholder="0"
             />
           </Field>
           <Field label="SA discount (MYR)">

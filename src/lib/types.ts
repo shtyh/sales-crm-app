@@ -905,9 +905,14 @@ export type Booking = {
 
   otr_price: number
   booking_fee: number
+  /** Agreed/recorded customer down payment (MYR), entered on the booking form.
+   *  Distinct from total_received_down_payment (auto-summed from receipts). */
+  down_payment: number
   /** MYR off OTR. Free for SA to set; no manager approval required. */
   discount_amount: number
-  /** Manager-granted RM bonus on top of base commission. SM-only write. */
+  /** Manager-granted RM bonus on top of base commission. SM-only write.
+   *  No longer editable on the booking form (2026-05-30) — column + commission
+   *  math retained for legacy rows. */
   special_support: number
   /**
    * Legacy: pre-2026-05-23 discount approval state. New bookings default
@@ -1070,6 +1075,8 @@ export type BookingInsert = {
   vehicle_color: string[]
   otr_price: number
   booking_fee: number
+  /** Agreed customer down payment (MYR). */
+  down_payment?: number
   discount_amount?: number
   /** sales_manager-only; bumps commission up by this much. */
   special_support?: number

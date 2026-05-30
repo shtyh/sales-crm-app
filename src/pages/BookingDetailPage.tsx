@@ -143,7 +143,7 @@ export function BookingDetailPage() {
   // was stored alone on save (no patch sent).
   const [bookingFee, setBookingFee] = useState('')
   const [discountAmount, setDiscountAmount] = useState('')
-  const [specialSupport, setSpecialSupport] = useState('')
+  const [downPayment, setDownPayment] = useState('')
   const [bookingDate, setBookingDate] = useState('')
   const [notes, setNotes] = useState('')
   const [loanBank, setLoanBank] = useState('')
@@ -218,7 +218,7 @@ export function BookingDetailPage() {
     }
     setBookingFee(String(booking.booking_fee))
     setDiscountAmount(String(booking.discount_amount ?? 0))
-    setSpecialSupport(String(booking.special_support ?? 0))
+    setDownPayment(String(booking.down_payment ?? 0))
     setBookingDate(booking.booking_date)
     setNotes(booking.notes ?? '')
     setLoanBank(booking.loan_bank ?? '')
@@ -299,16 +299,10 @@ export function BookingDetailPage() {
             return vehicleColor.length > 0 ? vehicleColor : fromFree
           })(),
           booking_fee: Number(bookingFee) || 0,
+          down_payment: Number(downPayment) || 0,
           discount_amount: Number(discountAmount) || 0,
           booking_date: bookingDate,
           notes: notes.trim() || null,
-          // special_support is SM-only; non-SM callers must omit it from the
-          // patch entirely or the DB guard will reject the whole PATCH.
-          ...(canApproveDiscount &&
-          Number(specialSupport || 0) !==
-            Number(booking?.special_support ?? 0)
-            ? { special_support: Number(specialSupport) || 0 }
-            : {}),
           // Send each role-gated bucket of fields ONLY when the caller is
           // allowed to write them; otherwise the DB trigger will reject the
           // whole PATCH because something is "distinct from" the old value.
@@ -726,23 +720,17 @@ export function BookingDetailPage() {
               placeholder="0"
             />
           </Field>
-          <Field label="Special support (MYR)">
+          <Field label="Downpayment (MYR)">
             <input
               type="number"
               min={0}
               step="0.01"
-              disabled={!canApproveDiscount}
-              value={specialSupport}
-              onChange={(e) => setSpecialSupport(e.target.value)}
-              className={readonlyInputClass(canApproveDiscount)}
+              value={downPayment}
+              onChange={(e) => setDownPayment(e.target.value)}
+              className={inputClass}
               inputMode="decimal"
               placeholder="0"
             />
-            <span className="mt-1 block text-xs text-gray-500">
-              {canApproveDiscount
-                ? 'Manager-granted bonus added on top of SA commission.'
-                : '🔒 Sales Manager only — bumps the SA commission up.'}
-            </span>
           </Field>
         </Section>
 
@@ -930,14 +918,16 @@ export function BookingDetailPage() {
                   −{formatMYR(Number(booking.discount_amount ?? 0))}
                 </div>
               </div>
-              <div className="rounded-lg border border-gray-200 bg-white p-3">
-                <div className="text-[10px] uppercase tracking-wider text-gray-500">
-                  + Special support
+              {Number(booking.special_support ?? 0) !== 0 && (
+                <div className="rounded-lg border border-gray-200 bg-white p-3">
+                  <div className="text-[10px] uppercase tracking-wider text-gray-500">
+                    + Special support
+                  </div>
+                  <div className="mt-1 tabular-nums text-emerald-700">
+                    +{formatMYR(Number(booking.special_support ?? 0))}
+                  </div>
                 </div>
-                <div className="mt-1 tabular-nums text-emerald-700">
-                  +{formatMYR(Number(booking.special_support ?? 0))}
-                </div>
-              </div>
+              )}
               {(() => {
                 const saEarns = Number(booking.commission_amount ?? 0)
                 const negative = saEarns < 0
