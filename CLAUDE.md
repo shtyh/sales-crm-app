@@ -159,6 +159,7 @@ Trigger `sync_car_status_from_booking` fires AFTER INSERT/UPDATE/DELETE on booki
 | `/admin/attendance` | TeamAttendancePage (today + month-by-employee, **org-chart scoped**) | super_admin / sales_manager / service_manager only (others redirected to `/attendance`) |
 | `/commission-verify` | CommissionVerifyPage (upload All-In-One photo → Gemini extracts → auto-match to booking → discrepancy table) | sales_advisor / sales_manager / super_admin (nav link shown to SA+SM only) |
 | `/reconciliation` | ReconciliationPage (3-way reconciliation queue: bank statement + LOU + bank-in + All-In-One; **Bank statements upload section at the top — super_admin only**, moved here from `/finance` 2026-05-30) | finance_admin / sales_manager / super_admin (upload section super_admin only) |
+| `/notifications` | NotificationsPage (full in-app notification list + read/type filters + mark-all-read). Bell 🔔 in the top nav (`NotificationBell`, all roles) shows the unread badge (polled 60s) + latest 10. Doc-verification system Phase B (2026-05-30). | any auth (RLS scopes to own rows; super sees all) |
 | `/service/stock/parts` | PartsListPage (browse + inline-edit the ~80k-row parts catalogue) | any workshop role + super_admin |
 | `/service/stock/receive` | StockReceivePage (book in a delivery — header + line items, QR-friendly DO No input) | any workshop role + super_admin |
 | `/service/stock/issued` | StockIssuedListPage (port of legacy "Stock Issued List" — every part-issue transaction in a date range; see below) | any workshop role + super_admin |
@@ -1133,6 +1134,95 @@ Generated dry-run helpers in `/tmp/parts_import/dry/` —
 `order_nos.txt`, `makes.txt`, `codes.txt`, `q_makes.sql`, `q_codes.sql`.
 Source CSVs at `/Users/khorheeshin/Claude Fun/wms_data/AUTFDJ02.csv`
 and `AUTFDB02.csv` (latin-1 encoded).
+
+## 🚧 Document Verification System — build status (2026-05-30, IN PROGRESS, PAUSED)
+
+Big multi-part feature (AI doc extraction + Finance-Admin review + in-app
+notifications) from a detailed user spec. Building phase-by-phase. **Phases A
++ B done; C–F not started.** A design workflow produced the plan; key
+decisions are locked (below).
+
+### Locked decisions (do NOT relitigate)
+- **D1 — Separate `document_verifications` table + new edge fns. Do NOT extend
+  the existing `commission_verifications`/`extract-allinone` system.** They are
+  deliberately PARALLEL pipelines that both read the "All In One" form. The
+  commission/`/commission-verify`/reconciliation flow stays untouched.
+- **D2 — `bookings.payment_type`** = deal financing type `cash`/`loan`/`floor_stock`
+  (added, nullable, no backfill yet). DISTINCT from `payments.payment_type`
+  (deposit/full/partial = payment method).
+- **D3 — RM600 handling fee = a constant in the edge fn** (`HANDLING_FEE = 600`),
+  not a DB column.
+- **D4 — Gemini model = `gemini-2.5-flash`** (the spec said 1.5; prod runs 2.5 —
+  use 2.5, matching `extract-allinone/index.ts`).
+- **D5 — HEIC** passed inline to Gemini; 10 MB cap enforced client + server.
+- **D6 — Notification fan-out via the `create_notification()` RPC** (single
+  audited, RLS-bypassing path); edge fns call it with the service-role client.
+
+### ✅ Phase A — schema (DONE, applied to prod, committed `66b0eb4`)
+Migration `supabase/migrations/20260530_document_verification_system.sql`:
+- Tables `notifications` + `document_verifications` (+RLS/grants/policies — see
+  the Tables section above for columns). updated_at trigger `dv_set_updated_at`.
+- `bookings` += `all_in_one_status`, `down_payment_status`, `lou_status`,
+  `documents_complete`, `total_received_down_payment`, `payment_type`.
+- Storage policies `bf_docverif_*` for the `document-verification/{uid}/...`
+  prefix on `booking-files`.
+- RPCs `get_unread_notification_count`, `mark_notification_read`,
+  `mark_all_notifications_read`, `create_notification` (Part 7). Verified:
+  notification RPC round-trip works.
+
+### ✅ Phase B — notification bell + page (DONE, builds green; committed + pushed
+alongside this status note at the pause point)
+Files (created/edited):
+- CREATE `src/lib/notifications.ts` — list/getUnreadCount/markRead/markAllRead.
+- CREATE `src/components/NotificationBell.tsx` — top-nav 🔔 + badge + dropdown
+  (exports `NOTIFICATION_ICON`, `notifTimeAgo`).
+- CREATE `src/pages/NotificationsPage.tsx` — `/notifications` full list + filters.
+- EDIT `src/lib/types.ts` — `AppNotification` + `NotificationType`.
+- EDIT `src/lib/queries.ts` — imports, `qk.notifications`/`qk.unreadCount`,
+  hooks `useNotifications`/`useUnreadCount` (60s poll)/`useMarkNotificationRead`/
+  `useMarkAllNotificationsRead`.
+- EDIT `src/components/AppShell.tsx` — `<NotificationBell />` before `<UserMenu>`.
+- EDIT `src/App.tsx` — lazy import + `/notifications` route.
+- EDIT `CLAUDE.md` — routes table row + this section.
+- **NOTE:** a live TEST notification row exists for Axelrod Han
+  (id `5bfd1904-b7ff-4cc9-a003-9bca914b7e46`, type `booking_complete`) — delete
+  it or "Mark all read" to clear.
+
+### ⏭️ Next steps — Phases C–F (NOT started)
+- **Phase C — 3 edge functions** (depends on A): `extract-all-in-one`,
+  `extract-down-payment`, `extract-lou` under `supabase/functions/`. Mirror
+  `supabase/functions/extract-allinone/index.ts` (JWT verify, role check, rate
+  limit, service-role Storage download, Gemini `gemini-2.5-flash`, audit_log
+  CALL/ERROR, generic errors). Factor shared boilerplate into
+  `supabase/functions/_shared/`. Logic per spec: all-in-one no-SM-signature →
+  `rejected` + notify SA+FA, else `pending` + notify FA; down-payment →
+  expected = total_otr − loan, sum receipts, within RM1 → complete; lou →
+  `needs_review` + notify FA. `GEMINI_API_KEY` already set in edge secrets
+  (from commission-verify). FE invoke wrappers in a new `src/lib/documentVerifications.ts`.
+- **Phase D — Finance queue** on `/finance` (`src/pages/FinancePage.tsx`): a
+  "Document Verification Queue" Section — All-In-One approve/reject; LOU FA
+  types loan amount, match-within-RM1 → confirm. Hooks in queries.ts.
+- **Phase E — SA "Document Submission" cards** on `/bookings/:id`
+  (`src/pages/BookingDetailPage.tsx` + a new `DocumentSubmissionCards.tsx`):
+  3 upload cards (all_in_one / down_payment / lou), gated SA+SM+super, upload to
+  `document-verification/{uid}/...` → invoke matching edge fn.
+- **Phase F — `check_booking_complete(booking_id)` RPC** + commission unlock
+  (new migration): branch on `payment_type`, evaluate the three statuses → set
+  `documents_complete`, unlock commission, notify; **idempotent** (fire once on
+  transition). Call it from the edge fns + FA queue mutations.
+
+### ⚠️ Open items / gotchas for resume
+- **Guard-trigger interaction:** the new `bookings` doc-status columns are NOT
+  gated by `guard_booking_field_writes`, and ANY UPDATE to bookings fires the
+  guard, which can demote `commission_status` (`pending`→`not_eligible`) for a
+  pending-but-not-delivered-paid booking. Phase F updates to bookings must avoid
+  that (e.g. SECURITY DEFINER doc-status setters or a guard bypass). This is why
+  Phase A did **no** `payment_type` backfill (would fire the guard).
+- `payment_type` is null on all existing + new bookings until something sets it.
+  Phase F needs a real value; backfill carefully (check `commission_status`
+  first) or set on the booking form.
+- Storage prefix is `document-verification/{uid}/{ts}.{ext}` (uid-scoped for SA-own
+  RLS), distinct from commission's `commission/{uid}/...`.
 
 ## How to resume / hand off
 

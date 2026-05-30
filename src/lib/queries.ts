@@ -78,6 +78,12 @@ import {
   listAuditForTable,
 } from './audit'
 import {
+  getUnreadCount,
+  listNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
+} from './notifications'
+import {
   createPayoutAndAssign,
   createSchedule,
   deleteSchedule,
@@ -152,6 +158,7 @@ import type {
   CustomerInsert,
   ExtractedAllInOne,
   Invoice,
+  AppNotification,
   Part,
   StockIssuedRow,
   Payment,
@@ -186,6 +193,8 @@ export const qk = {
     ['audit', tableName, rowId] as const,
   auditTable: (tableName: string) => ['audit', 'table', tableName] as const,
   auditBooking: (bookingId: string) => ['audit', 'booking', bookingId] as const,
+  notifications: ['notifications'] as const,
+  unreadCount: ['notifications', 'unread'] as const,
   commissionSchedules: ['commission-schedules'] as const,
   commissionPayouts: ['commission-payouts'] as const,
   customers: ['customers'] as const,
@@ -805,6 +814,52 @@ export function useAuditForTable(
     queryFn: () => listAuditForTable(tableName, limit),
     enabled,
     staleTime: 60_000,
+  })
+}
+
+// ---------- Notifications ----------------------------------------------------
+
+/** The caller's notifications (RLS: own + super_admin all), newest first. */
+export function useNotifications(limit = 50, enabled = true) {
+  return useQuery<AppNotification[]>({
+    queryKey: qk.notifications,
+    queryFn: () => listNotifications(limit),
+    enabled,
+    staleTime: 30_000,
+    refetchOnWindowFocus: true,
+  })
+}
+
+/** Unread count for the bell badge — polled so it stays fresh across tabs. */
+export function useUnreadCount(enabled = true) {
+  return useQuery<number>({
+    queryKey: qk.unreadCount,
+    queryFn: getUnreadCount,
+    enabled,
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
+  })
+}
+
+export function useMarkNotificationRead() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => markNotificationRead(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.notifications })
+      qc.invalidateQueries({ queryKey: qk.unreadCount })
+    },
+  })
+}
+
+export function useMarkAllNotificationsRead() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => markAllNotificationsRead(),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.notifications })
+      qc.invalidateQueries({ queryKey: qk.unreadCount })
+    },
   })
 }
 

@@ -141,6 +141,11 @@ const StockIssuedListPage = lazy(() =>
     default: m.StockIssuedListPage,
   })),
 )
+const NotificationsPage = lazy(() =>
+  import('./pages/NotificationsPage').then((m) => ({
+    default: m.NotificationsPage,
+  })),
+)
 const StockMenuPage = lazy(() =>
   import('./pages/StockMenuPage').then((m) => ({
     default: m.StockMenuPage,
@@ -551,6 +556,14 @@ function App() {
           element={
             <ProtectedRoute>
               <ReconciliationPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/notifications"
+          element={
+            <ProtectedRoute>
+              <NotificationsPage />
             </ProtectedRoute>
           }
         />

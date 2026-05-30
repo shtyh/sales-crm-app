@@ -7,6 +7,7 @@ import {
 } from 'react-router-dom'
 import { useAuth, signOut } from '../lib/auth'
 import { useOnlineStatus } from '../lib/online'
+import { NotificationBell } from './NotificationBell'
 
 /** URL prefixes that mean "we're on the workshop / service side." Used to
  *  flip the nav into Service mode without needing a separate workspace
@@ -162,6 +163,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 />
               </div>
             )}
+            <NotificationBell />
             <UserMenu
               displayName={displayName}
               email={isSuperAdmin ? '' : email}

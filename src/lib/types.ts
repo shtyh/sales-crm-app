@@ -626,6 +626,27 @@ export type StockIssuedRow = {
   amount: number | string
 }
 
+export type NotificationType =
+  | 'no_sm_signature'
+  | 'all_in_one_pending'
+  | 'all_in_one_approved'
+  | 'all_in_one_rejected'
+  | 'down_payment_complete'
+  | 'lou_pending'
+  | 'lou_verified'
+  | 'booking_complete'
+  | 'commission_unlocked'
+
+export type AppNotification = {
+  id: string
+  user_id: string
+  booking_id: string | null
+  type: NotificationType
+  message: string
+  is_read: boolean
+  created_at: string
+}
+
 /** Intake checkboxes on the WMS-style Job Sheet dialog. */
 export type ServiceType =
   | 'maintenance'
