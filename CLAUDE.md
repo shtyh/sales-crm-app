@@ -965,6 +965,19 @@ so a fresh session doesn't have to re-derive context.
     locally (Vite `?url` + `setZXingModuleOverrides({ locateFile })`, no
     CDN dependency), lives in the lazy `QrScannerModal` chunk, loads on
     first scan, and is **not** in the SW precache.
+  - **Full-resolution decode pass (2026-05-30):** the polyfill helped but
+    some dense labels still failed — because html5-qrcode hands its decoder
+    a canvas scaled to the *preview* size (~300px on a phone), blurring thin
+    bars. Fix: in **barcode mode only**, we run an **additive** decode loop
+    (`src/lib/zxingReader.ts`, `decodeBarcodeFromImageData` via
+    `zxing-wasm/reader` with `tryHarder/tryRotate/tryInvert`) over the
+    camera's **native-resolution** frame — grab html5-qrcode's own `<video>`,
+    `drawImage` it to a full-res offscreen canvas, decode the `ImageData`
+    every ~200 ms. html5-qrcode still runs the camera/preview + its own
+    decode unchanged, so this can only *add* catches (whichever path reads
+    first wins; `handleHit` de-dupes). Same locally-bundled
+    `zxing_reader.wasm` (one shared asset). If a label still won't read,
+    the operator can type the `part_no` (the Stock Receive field accepts it).
 - **Uniqueness rails on Stock Receive**:
   - DB: partial UNIQUE INDEX on `stock_receipts.do_no WHERE do_no IS
     NOT NULL` (`stock_receipts_do_no_unique`).

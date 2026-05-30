@@ -4,6 +4,7 @@ import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode'
 // html5-qrcode then uses as its primary decoder — pure-JS ZXing couldn't read
 // many dense Code 128 / Code 39 part labels. See the module for details.
 import '../lib/barcodeDetectorPolyfill'
+import { decodeBarcodeFromImageData } from '../lib/zxingReader'
 
 // Modal wrapper around html5-qrcode's camera scanner. Lives in its own
 // file so any page that wants a "scan this code" button can drop it in
@@ -84,7 +85,20 @@ export function QrScannerModal({
 
     let cancelled = false
     let scanner: Html5Qrcode | null = null
+    let loopTimer: ReturnType<typeof setTimeout> | undefined
     setError(null)
+
+    // Fire the scan result once, de-duped — shared by html5-qrcode's own
+    // decoder and our full-resolution barcode pass below.
+    function handleHit(decoded: string) {
+      const now = Date.now()
+      const last = lastDecodeRef.current
+      if (last.text === decoded && now - last.at < 1500) return
+      lastDecodeRef.current = { text: decoded, at: now }
+      onScanRef.current(decoded)
+      if (typeof navigator.vibrate === 'function') navigator.vibrate(60)
+      onCloseRef.current()
+    }
 
     async function start() {
       // Give React one frame to paint the scanner region <div> before
@@ -136,18 +150,7 @@ export function QrScannerModal({
             // mirror-image pass html5-qrcode does by default.
             disableFlip: mode === 'barcode',
           },
-          (decoded) => {
-            // Dedupe — html5-qrcode fires per-frame; same code in 1.5s = skip.
-            const now = Date.now()
-            const last = lastDecodeRef.current
-            if (last.text === decoded && now - last.at < 1500) return
-            lastDecodeRef.current = { text: decoded, at: now }
-            onScanRef.current(decoded)
-            if (typeof navigator.vibrate === 'function') {
-              navigator.vibrate(60)
-            }
-            onCloseRef.current()
-          },
+          (decoded) => handleHit(decoded),
           undefined,
         )
         // Best-effort: nudge the camera into continuous autofocus so a
@@ -170,6 +173,45 @@ export function QrScannerModal({
         } catch {
           /* focus tuning is best-effort */
         }
+
+        // Full-resolution barcode pass (barcode mode only). html5-qrcode
+        // decodes a canvas scaled to the on-screen preview size (~300px),
+        // which blurs thin part-label bars; here we decode the camera's
+        // native-res frame ourselves with WASM ZXing. Purely additive —
+        // whichever path reads the code first wins (handleHit de-dupes).
+        if (mode === 'barcode' && !cancelled) {
+          const liveVideo = document.querySelector<HTMLVideoElement>(
+            `#${SCANNER_ELEMENT_ID} video`,
+          )
+          if (liveVideo) {
+            const canvas = document.createElement('canvas')
+            const ctx = canvas.getContext('2d', { willReadFrequently: true })
+            const tick = async () => {
+              if (cancelled || !ctx) return
+              const w = liveVideo.videoWidth
+              const h = liveVideo.videoHeight
+              if (w && h) {
+                canvas.width = w
+                canvas.height = h
+                ctx.drawImage(liveVideo, 0, 0, w, h)
+                try {
+                  const text = await decodeBarcodeFromImageData(
+                    ctx.getImageData(0, 0, w, h),
+                  )
+                  if (!cancelled && text) {
+                    handleHit(text)
+                    return
+                  }
+                } catch {
+                  /* ignore a bad frame; the next tick retries */
+                }
+              }
+              if (!cancelled) loopTimer = setTimeout(tick, 200)
+            }
+            void tick()
+          }
+        }
+
         if (cancelled) {
           await scanner.stop().catch(() => {})
         }
@@ -187,6 +229,7 @@ export function QrScannerModal({
 
     return () => {
       cancelled = true
+      if (loopTimer) clearTimeout(loopTimer)
       const s = scannerRef.current
       scannerRef.current = null
       if (s && s.isScanning) {
