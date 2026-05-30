@@ -952,6 +952,19 @@ so a fresh session doesn't have to re-derive context.
     `track.applyConstraints({ advanced:[{ focusMode:'continuous' }] })`
     after `start()` (no-ops on iOS Safari, never fatal) and copy that
     tells the operator to hold ~15–20 cm away and **not** fill the box.
+  - **WASM decoder polyfill (2026-05-30):** the real blocker for dense
+    Code 128 / Code 39 Proton part labels was the *decoder*. html5-qrcode
+    uses `window.BarcodeDetector` as its primary decoder when present (we
+    enable `useBarCodeDetectorIfSupported`); iOS Safari has no native one,
+    so it fell back to pure-JS ZXing, which is weak on 1-D codes — "few
+    OK, most fail". Fix: `src/lib/barcodeDetectorPolyfill.ts` (side-effect
+    import in `QrScannerModal`) installs a **WASM-backed** `BarcodeDetector`
+    (`barcode-detector` → `zxing-wasm`) **only when there's no native one**
+    (Android Chrome keeps its native detector). html5-qrcode then uses the
+    WASM engine automatically. The ~1 MB `zxing_reader.wasm` is bundled
+    locally (Vite `?url` + `setZXingModuleOverrides({ locateFile })`, no
+    CDN dependency), lives in the lazy `QrScannerModal` chunk, loads on
+    first scan, and is **not** in the SW precache.
 - **Uniqueness rails on Stock Receive**:
   - DB: partial UNIQUE INDEX on `stock_receipts.do_no WHERE do_no IS
     NOT NULL` (`stock_receipts_do_no_unique`).

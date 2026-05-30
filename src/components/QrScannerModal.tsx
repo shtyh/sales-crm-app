@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode'
+// Installs a WASM-backed BarcodeDetector on iOS Safari (no native one), which
+// html5-qrcode then uses as its primary decoder — pure-JS ZXing couldn't read
+// many dense Code 128 / Code 39 part labels. See the module for details.
+import '../lib/barcodeDetectorPolyfill'
 
 // Modal wrapper around html5-qrcode's camera scanner. Lives in its own
 // file so any page that wants a "scan this code" button can drop it in
