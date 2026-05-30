@@ -1291,10 +1291,11 @@ warning). Down-payment receipts auto-sum, so they never queue.
 submission box, which now **nests the 🏦 Bank transaction AttachmentSection
 inside it** (via the `bankSlot` prop, under a divider below the AI cards) — so
 it's one box. The box always renders (so finance/general keep Bank transaction);
-the AI doc cards are gated to SA/SM/super via `showDocCards`. The cards sit in a
-`md:grid-cols-4` row where **All-In-One spans 2 cols (wider)** and Down payment +
-LOU take 1 each (`wide` prop on DocCard). Then at the bottom:
-💳 Bank statement + ❌ Cancellation form. The old 📃 LOU `AttachmentSection`
+the AI doc cards are gated to SA/SM/super via `showDocCards`. Layout inside the
+box: **All-In-One spans the full width** (its own row), then **Down payment · LOU
+· 🏦 Bank transaction share a `md:grid-cols-3` row** (the bank slot sits in the
+3rd column). When `showDocCards` is false (finance/general) only the bank slot
+renders. Then at the bottom: 💳 Bank statement + ❌ Cancellation form. The old 📃 LOU `AttachmentSection`
 card was **removed** (LOU now lives only in the Document submission card).
 **Reconciliation reads the LOU from there too** — `reconcile_booking` falls back
 to the latest `document_verifications` LOU (`extracted_loan_amount_lou`) when

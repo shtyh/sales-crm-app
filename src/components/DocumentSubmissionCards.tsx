@@ -87,7 +87,6 @@ function DocCard({
   uploading,
   onPick,
   error,
-  wide,
 }: {
   docType: DocumentType
   booking: Booking
@@ -96,7 +95,6 @@ function DocCard({
   uploading: boolean
   onPick: (docType: DocumentType, file: File) => void
   error: string | null
-  wide?: boolean
 }) {
   const status = bookingStatusLine(docType, booking)
   const louNotRequired =
@@ -110,11 +108,7 @@ function DocCard({
   }
 
   return (
-    <div
-      className={`rounded-lg border border-gray-200 bg-white p-4${
-        wide ? ' md:col-span-2' : ''
-      }`}
-    >
+    <div className="rounded-lg border border-gray-200 bg-white p-4">
       <div className="mb-2 flex items-start justify-between gap-2">
         <div>
           <h3 className="text-sm font-semibold text-gray-900">
@@ -239,7 +233,17 @@ export function DocumentSubmissionCards({
     )
   }
 
-  const TYPES: DocumentType[] = ['all_in_one', 'down_payment', 'lou']
+  const renderCard = (t: DocumentType) => (
+    <DocCard
+      docType={t}
+      booking={booking}
+      rows={rowsFor(t)}
+      canUpload={canUpload}
+      uploading={upload.isPending && activeType === t}
+      onPick={handlePick}
+      error={errors[t] ?? null}
+    />
+  )
 
   return (
     <section className="mt-6 rounded-lg border border-gray-200 bg-gray-50/60 p-4">
@@ -257,27 +261,19 @@ export function DocumentSubmissionCards({
           </span>
         )}
       </div>
-      {showDocCards && (
-        <div className="grid gap-3 md:grid-cols-4">
-          {TYPES.map((t) => (
-            <DocCard
-              key={t}
-              docType={t}
-              booking={booking}
-              rows={rowsFor(t)}
-              canUpload={canUpload}
-              uploading={upload.isPending && activeType === t}
-              onPick={handlePick}
-              error={errors[t] ?? null}
-              wide={t === 'all_in_one'}
-            />
-          ))}
+      {showDocCards ? (
+        <div className="space-y-3">
+          {/* All-In-One spans the full width */}
+          {renderCard('all_in_one')}
+          {/* Down payment · LOU · Bank transaction share a row */}
+          <div className="grid gap-3 md:grid-cols-3">
+            {renderCard('down_payment')}
+            {renderCard('lou')}
+            {bankSlot}
+          </div>
         </div>
-      )}
-      {bankSlot && (
-        <div className={showDocCards ? 'mt-3 border-t border-gray-200 pt-3' : ''}>
-          {bankSlot}
-        </div>
+      ) : (
+        bankSlot && <div>{bankSlot}</div>
       )}
     </section>
   )
